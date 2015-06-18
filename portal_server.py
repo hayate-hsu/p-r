@@ -352,13 +352,18 @@ class PageHandler(BaseHandler):
                 return self.redirect_to_bidong()
                 # return self.redirect('http://58.241.41.148/index.html')
             self.parse_ac_parameters(kwargs)
+            
+            # check mac address
+            if self.login_auto_by_mac(**kwargs):
+                return
+
             # get cookie setting and auto login
-            p_user = self.get_secure_cookie('p_user')
-            p_expire = self.get_secure_cookie('p_expire')
-            if p_user and p_expire:
-                if self.login_auto_by_cookie(p_user, p_expire, **kwargs):
-                    # if return True, return
-                    return
+            # p_user = self.get_secure_cookie('p_user')
+            # p_expire = self.get_secure_cookie('p_expire')
+            # if p_user and p_expire:
+            #     if self.login_auto_by_cookie(p_user, p_expire, **kwargs):
+            #         # if return True, return
+            #         return
             url = self.get_argument('wlanuserfirsturl', '') or self.get_argument('url', '')
             if url.find('m_web/onetonet') != -1:
                 # user from weixin, parse code & and get openid
@@ -390,7 +395,7 @@ class PageHandler(BaseHandler):
         return self.render(page, openid='', **kwargs)
 
     def get_user_by_mac(self, mac):
-        ends, records = store.get_mac_records(mac)
+        records = store.get_mac_records(mac)
         records = {record['mac']:record for record in records}
         if mac in records:
             return records['mac']['user']
@@ -416,6 +421,34 @@ class PageHandler(BaseHandler):
             kwargs['user_mac'] = ':'.join([mac[:2],mac[2:4],mac[4:6],mac[6:8],mac[8:10],mac[10:12]])
         else:
             raise HTTPError(400, reason='Unknown AC: {}'.format(kwargs['ac_ip']))
+    
+    def login_auto_by_mac(self, **kwargs):
+        user = self.get_user_by_mac(kwargs['user_mac'])
+        if not user:
+            return False
+
+        _user = store.get_bd_user(user)
+        if not _user:
+            return False
+        # check billing
+        self.expired, self.rejected = False, False
+        self._check_account(_user)
+        if self.rejected:
+            # raise HTTPError(403, reason='Account has no left time')
+            return False
+        onlines = store.count_online(_user['user'])
+        if onlines >= _user['ends']:
+            # allow user logout ends 
+            return False
+            # raise HTTPError(403, reason='Over the limit ends')
+        try:
+            logger.info('Progress {} (mac: {}) auto login'.format(user, kwargs['user_mac']))
+            self.login(_user, kwargs['ac_ip'], socket.inet_aton(kwargs['user_ip']), kwargs['user_mac'])
+        except:
+            logger.warning('auto login error', exc_info=True)
+            return False
+
+        return True
 
     def login_auto_by_cookie(self, p_user, p_expire, **kwargs):
         now = utility.now('%Y-%m-%d')
@@ -730,6 +763,8 @@ class PortalHandler(BaseHandler):
             # portal-radius server doesn't check password, so send a 
             # no-meaning value
             self.login(ac_ip, user_ip, user_mac)
+            # update mac address
+            self.update_mac_record(self.user['user'], user_mac)
         else:
             self.logout(ac_ip, user_ip, user_mac)
 
@@ -837,7 +872,7 @@ class PortalHandler(BaseHandler):
         # self.update_mac_record(user, _user_mac)
         time.sleep(1.5)
 
-        self.set_login_cookie(user)
+        # self.set_login_cookie(user)
         token = utility.token(user)
         self.render_json_response(User=user, Token=token, Code=200, Msg='OK')
         # self.redirect('http://www.bidongwifi.com/account/{}?token={}'.format(user, token))
@@ -925,16 +960,16 @@ class PortalHandler(BaseHandler):
             self.rejected = self._check_left_time(_user)
 
     def update_mac_record(self, user, mac):
-        ends, records = store.get_mac_records(user)
+        records = store.get_mac_records(user['user'])
         if records:
-            records = {record['mac']:record for record in records}
-        if mac not in records:
+            m_records = {record['mac']:record for record in records}
+        if mac not in m_records:
             # update mac record 
-            if (not records) or len(records) < ends:
-                store.update_mac_record(user, mac, '', self.user_agent, False)
+            if (not records) or len(records) < user['ends']:
+                store.update_mac_record(user['user'], mac, '', self.user_agent, False)
             else:
-                records = sorted(records.values(), key=lambda item: item['datetime'])
-                store.update_mac_record(user, mac, records[0]['mac'], self.user_agent, True)
+                # records = sorted(records.values(), key=lambda item: item['datetime'])
+                store.update_mac_record(user['user'], mac, records[0]['mac'], self.user_agent, True)
 
     def set_login_cookie(self, user, days=7):
         '''

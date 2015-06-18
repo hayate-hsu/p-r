@@ -270,11 +270,20 @@ class Store():
 
     def get_bd_user(self, user, password=None):
         '''
+            support auto login, user may be mac address or user account
+            user:
+                account
+                mac : [##:##:##:##:##:##]
         '''
         with Cursor(self.dbpool) as cur:
-            sql = 'select * from bd_account where user = "{}"'.format(user)
-            if password:
-                sql = 'select * from bd_account where user = "{}" and password = "{}"'.format(user, password)
+            sql = ''
+            if user.count[':'] == 5:
+                sql = '''select bd_account.* from mac_history, bd_account 
+                where mac_history.mac = "{}" and mac_history.user = bd_account.user'''.format(user)
+            else:
+                sql = 'select * from bd_account where user = "{}"'.format(user)
+                if password:
+                    sql = 'select * from bd_account where user = "{}" and password = "{}"'.format(user, password)
             cur.execute(sql)
             user = cur.fetchone()
             if user and user['mask'] & 1<<5:
@@ -311,10 +320,10 @@ class Store():
             now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             sql = ''
             if isupdate:
-                sql = '''update mac_history set mac = "{}", datetime = "{}", agent = "{}" 
+                sql = '''update mac_history set mac = "{}", tlogin = {}, agent = "{}" 
                 where user = "{}" and mac = "{}" '''.format(new_mac, now, agent, user, old_mac)
             else:
-                sql = '''insert into mac_history (user, mac, datetime, platform) 
+                sql = '''insert into mac_history (user, mac, tlogin, platform) 
                 values('{}', '{}', '{}', '{}')'''.format(user, new_mac, now, agent)
             cur.execute(sql)
             conn.commit()
@@ -323,13 +332,10 @@ class Store():
         '''
         '''
         with Cursor(self.dbpool) as cur:
-            sql = 'select ends from bd_account where user = "{}"'.format(user)
-            cur.execute(sql)
-            ends = cur.fetchone()[0]
-            sql = 'select user, mac, datetime from mac_history where user = "{}" order by datetime'.format(user)
+            sql = 'select user, mac, tlogin from mac_history where user = "{}" order by datetime'.format(user)
             cur.execute(sql)
             records = cur.fetchall()
-            return ends, records if records else []
+            return records if records else []
 
     def is_online(self, nas_addr, acct_session_id):
         '''

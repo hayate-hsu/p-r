@@ -764,7 +764,7 @@ class PortalHandler(BaseHandler):
             # no-meaning value
             self.login(ac_ip, user_ip, user_mac)
             # update mac address
-            self.update_mac_record(self.user['user'], user_mac)
+            self.update_mac_record(self.user, user_mac)
         else:
             self.logout(ac_ip, user_ip, user_mac)
 
@@ -960,16 +960,17 @@ class PortalHandler(BaseHandler):
             self.rejected = self._check_left_time(_user)
 
     def update_mac_record(self, user, mac):
+        agent_str = self.request.headers.get('User-Agent', '')
         records = store.get_mac_records(user['user'])
-        if records:
-            m_records = {record['mac']:record for record in records}
+        m_records = {record['mac']:record for record in records}
+        logger.info(records, m_records, mac)
         if mac not in m_records:
             # update mac record 
             if (not records) or len(records) < user['ends']:
-                store.update_mac_record(user['user'], mac, '', self.user_agent, False)
+                store.update_mac_record(user['user'], mac, '', agent_str, False)
             else:
                 # records = sorted(records.values(), key=lambda item: item['datetime'])
-                store.update_mac_record(user['user'], mac, records[0]['mac'], self.user_agent, True)
+                store.update_mac_record(user['user'], mac, records[0]['mac'], agent_str, True)
 
     def set_login_cookie(self, user, days=7):
         '''

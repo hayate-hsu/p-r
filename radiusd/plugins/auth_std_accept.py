@@ -26,7 +26,7 @@ def process(req=None, resp=None, user=None, **kwargs):
         _expire_datetime = datetime.datetime.strptime(user['expire_date']+' 00:00:00',"%Y-%m-%d %H:%M:%S")
         _datetime = datetime.datetime.now()
         if _datetime > _expire_datetime:
-            session_timeout += (_expire_datatime - _datetime).seconds
+            session_timeout += (_expire_datetime - _datetime).seconds
     else:
         session_timeout = 0
 

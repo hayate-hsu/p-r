@@ -277,7 +277,7 @@ class Store():
         '''
         with Cursor(self.dbpool) as cur:
             sql = ''
-            if user.count[':'] == 5:
+            if user.count(':') == 5:
                 sql = '''select bd_account.* from mac_history, bd_account 
                 where mac_history.mac = "{}" and mac_history.user = bd_account.user'''.format(user)
             else:
@@ -332,7 +332,7 @@ class Store():
         '''
         '''
         with Cursor(self.dbpool) as cur:
-            sql = 'select user, mac, tlogin from mac_history where user = "{}" order by datetime'.format(user)
+            sql = 'select user, mac, tlogin from mac_history where user = "{}" order by tlogin'.format(user)
             cur.execute(sql)
             records = cur.fetchall()
             return records if records else []

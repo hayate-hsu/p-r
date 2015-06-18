@@ -176,7 +176,7 @@ class MacHistory(DeclarativesBase):
 
     user = Column('user', VARCHAR(length=32), primary_key=True, nullable=False, doc='bd_account\'s user')
     mac = Column('mac', VARCHAR(length=17), primary_key=True, nullable=False, doc='mac addr')
-    datetime = Column('datetime', VARCHAR(length=32), doc='the datetime client login')
+    datetime = Column('datetime', DATETIME(), doc='the datetime client login')
 
 class Online(DeclarativeBase):
     '''

@@ -33,6 +33,31 @@ import six
 import os
 
 __verson__ = '0.7'
+
+def _check_expire_date(_user): 
+    '''
+    '''
+    if not _user['expire_date']:
+        return True
+    now = datetime.datetime.now()
+    _expire_datetime = datetime.datetime.strptime(_user['expire_date'], '%Y-%m-%d')
+    if now > _expire_datetime:
+        return True
+    return False
+
+def _check_left_time(_user):
+    return _user['coin'] <= 0
+
+def check_account_balance(_user):
+    '''
+        check account expired & left time
+    '''
+    # if (_user['mask']>>8 & 1):
+    expired, rejected = False, False
+    expired = _check_expire_date(_user)
+    if expired:
+        rejected = _check_left_time(_user)
+    return expired, rejected
         
 class PacketError(Exception):pass
 
@@ -173,6 +198,13 @@ class RADIUSAccess(RADIUS):
         # user = store.get_bd_user_by_mac(req.get_user_name())
         # print(user, req.get_user_name())
         user = store.get_bd_user(req.get_user_name())
+        if user:
+            expired, rejected = check_account_balance(user)
+            if rejected:
+                # if go to this branch, (req.get_user_name()) is mac address
+                # user has no time left, set user=None
+                # goto portal authenication
+                user = None
         if user:
             self.user_trace.push(user['user'],req)
         # middleware execute

@@ -48,6 +48,7 @@ import utility
 import config
 import user_agents
 from radiusd.store import store
+from bd_err import bd_errs
 
 portal_config = config['portal_config']
 
@@ -431,8 +432,7 @@ class PageHandler(BaseHandler):
         if not _user:
             return False
         # check billing
-        self.expired, self.rejected = False, False
-        self._check_account(_user)
+        self.expired, self.rejected = utility.check_account_balance(_user)
         if self.rejected:
             # raise HTTPError(403, reason='Account has no left time')
             return False
@@ -459,8 +459,7 @@ class PageHandler(BaseHandler):
         if not _user:
             return False
         # check billing
-        self.expired, self.rejected = False, False
-        self._check_account(_user)
+        self.expired, self.rejected = utility.check_account_balance(_user)
         if self.rejected:
             # raise HTTPError(403, reason='Account has no left time')
             return False
@@ -605,8 +604,7 @@ class PageHandler(BaseHandler):
             raise HTTPError(401, reason='Password error')
 
         # check billing
-        self.expired, self.rejected = False, False
-        self._check_account(_user)
+        self.expired, self.rejected = utility.check_account_balance(_user)
         if self.rejected:
             raise HTTPError(403, reason='Account has no left time')
 
@@ -625,44 +623,6 @@ class PageHandler(BaseHandler):
         header.err = 0x01
         packet = Packet(header, Attributes(mac=user_mac))
         sock.sendto(packet.pack(), (ac_ip, BAS_PORT))
-
-    def _calculate_left_time(self, _user):
-        date, time = _user['expire_date'], '00:00'
-        if _user['expire_date']:
-            now = datetime.datetime.now()
-            _expire_datetime = datetime.datetime.strptime(_user['expire_date'] + ' 23:59:59', 
-                                                          '%Y-%m-%d %H:%M:%S')
-            if now > _expire_datetime:
-                date = ''
-
-        if _user['coin']>0:
-            times = _user['coin']*3*60
-            time = '{:02d}:{:02d}'.format(int(times/3600), int(times%3600/60))
-
-        _user['left_time'] = ' + '.join([date, time])
-
-    def _check_expire_date(self, _user):
-        '''
-        '''
-        if not _user['expire_date']:
-            return True
-        now = datetime.datetime.now()
-        _expire_datetime = datetime.datetime.strptime(_user['expire_date'], '%Y-%m-%d')
-        if now > _expire_datetime:
-            return True
-        return False
-
-    def _check_left_time(self, _user):
-        return _user['coin'] <= 0
-
-    def _check_account(self, _user):
-        '''
-            bd_account
-        '''
-        # if (_user['mask']>>8 & 1):
-        self.expired = self._check_expire_date(_user)
-        if self.expired:
-            self.rejected = self._check_left_time(_user)
 
 class SerialNo:
     def __init__(self):
@@ -706,7 +666,8 @@ class PortalHandler(BaseHandler):
             _user = store.get_user(openid)
             if not _user:
                 # create new account
-                raise HTTPError(404, reason='Can\'t found account')
+                # raise HTTPError(404, reason='Can\'t found account')
+                raise HTTPError(404, reason=bd_errs[430])
             else:
                 # user unsubscribe, the account will be forbid
                 if _user['mask']>>31 & 1:
@@ -729,25 +690,28 @@ class PortalHandler(BaseHandler):
             user = str(holder) + user
         _user = store.get_bd_user(user, password)
         if not _user:
-            raise HTTPError(401, reason='Please check your input account or password')
-        if password != _user['password']:
-            raise HTTPError(401, reason='Password error')
+            # raise HTTPError(401, reason='Please check your input account or password')
+            raise HTTPError(401, reason=bd_errs[431])
+        # if password != _user['password']:
+        #     raise HTTPError(401, reason='Password error')
 
         # check account status & account ends number on networt
         if _user['mask']>>30 & 1:
-            raise HTTPError(403, reason='Account has been frozened')
+            # raise HTTPError(403, reason='Account has been frozened')
+            raise HTTPError(403, reason=bd_errs[434])
         onlines = store.count_online(_user['user'])
         if onlines >= _user['ends']:
             # allow user logout ends 
-            raise HTTPError(403, reason='Over the limit ends')
+            # raise HTTPError(403, reason='Over the limit ends')
+            raise HTTPError(403, reason=bd_errs[451])
 
         self.user = _user
 
         # check billing
-        self.expired, self.rejected = False, False
-        self._check_account(self.user)
+        self.expired, self.rejected = utility.check_account_balance(self.user)
         if self.rejected:
-            raise HTTPError(403, reason='Account has no left time')
+            # raise HTTPError(403, reason='Account has no left time')
+            raise HTTPError(403, reason=bd_errs[450])
 
         ap_mac = self.get_argument('ap_mac')
         user_mac = self.get_argument('user_mac')
@@ -791,21 +755,24 @@ class PortalHandler(BaseHandler):
             logger.warning('Challenge timeout')
             self.timeout(sock, ac_ip, header, user_mac)
             sock.close()
-            raise HTTPError(400, reason='challenge timeout, retry')
+            # raise HTTPError(400, reason='challenge timeout, retry')
+            raise HTTPError(400, reason=bd_errs[530])
             # return self.render_json_response(Code=400, Msg='challenge timeout, retry')
 
         header = Header.unpack(data)
         if header.type != 0x02 or header.err:
             logger.info('0x%x error, errno: 0x%x', header.type, header.err)
             sock.close()
-            raise HTTPError(400, reason='challenge timeout, retry')
+            # raise HTTPError(400, reason='challenge timeout, retry')
+            raise HTTPError(400, reason=bd_errs[530])
             # return self.render_json_response(Code=400, Msg='challenge error')
         # parse challenge value
         attrs = Attributes.unpack(header.num, data[16:])
         if not attrs.challenge:
             logger.warning('Abnormal challenge value, 0x%x, 0x%x', header.err, header.num)
             sock.close()
-            raise HTTPError(400, reason='abnormal challenge value')
+            # raise HTTPError(400, reason='abnormal challenge value')
+            raise HTTPError(400, reason=bd_errs[530])
             # return self.render_json_response(Code=400, Msg='abnormal challenge value')
         if attrs.mac:
             assert user_mac == attrs.mac
@@ -828,38 +795,16 @@ class PortalHandler(BaseHandler):
             # send timeout package
             self.timeout(sock, ac_ip, header, user_mac)
             sock.close()
-            raise HTTPError(408, reason='auth timeout, retry')
+            # raise HTTPError(408, reason='auth timeout, retry')
+            raise HTTPError(408, reason=bd_errs[530])
             # return self.render_json_response(Code=408, Msg='auth timeout, retry')
         header = Header.unpack(data)
         if header.type != 0x04 or header.err:
             logger.info('0x%x error, errno: 0x%x', header.type, header.err)
             sock.close()
             attrs = Attributes.unpack(header.num, data[16:])
-            raise HTTPError(403, reason='auth error')
-        # self.finish('auth successfully')
-        # generate token
-
-        # if self.user['mask'] | 1<<3:
-        #     # self._calculate_left_time(self.user)
-        #     print('http://www.bidongwifi.com/account/{}?token={}'.format(user, token))
-        #     self.redirect('http://www.bidongwifi.com/account/{}?token={}'.format(user, token))
-        #     # self.render('account.html', token=token, **self.user)
-        # else:
-        #     url = self.get_argument('firsturl', '')
-        #     if url:
-        #         if self.expired:
-        #             # prompt account renewal
-        #             pass
-        #         self.set_header('Access-Control-Allow-Origin', '*')
-        #         urlparam = self.get_argument('urlparam', '')
-        #         if urlparam:
-        #             url = url + '?' + urlparam
-        #         self.redirect(url)
-        #     else:
-        #         token = utility.token(user)
-        #         self.render_json_response(Code=200, Msg='auth successfully', 
-        #                                   # ac_ip=ac_ip, user_mac=mac_addr, 
-        #                               Account=self.user, Token=token, Expired=self.expired)
+            # raise HTTPError(403, reason='auth error')
+            raise HTTPError(403, reason=bd_errs[531])
 
         # send aff_ack_auth to ac 
         header.type = 0x07
@@ -907,57 +852,6 @@ class PortalHandler(BaseHandler):
             query holder id by ap_mac
         '''
         return store.get_holder_by_mac(ap_mac)
-
-    def _calculate_left_time(self, _user):
-        date, time = self.user['expire_date'], '00:00'
-        # if (_user['mask']>>8 & 1) and date:
-        #     now = datetime.datetime.now()
-        #     _expire_datetime = datetime.datetime.strptime(_user['expire_date'] + ' 23:59:59', 
-        #                                                   '%Y-%m-%d %H:%M:%S')
-        #     if now > _expire_datetime:
-        #         date = ''
-        # if _user['mask']>>9 & 1:
-        #     if _user['time_length']:
-        #         left = int(_user['time_length'])
-        #         time = '{:02d}:{:02d}:{:02d}'.format(int(left/3600),
-        #                                              int(left/60),
-        #                                              int(left%60))
-        if _user['expire_date']:
-            now = datetime.datetime.now()
-            _expire_datetime = datetime.datetime.strptime(_user['expire_date'] + ' 23:59:59', 
-                                                          '%Y-%m-%d %H:%M:%S')
-            if now > _expire_datetime:
-                date = ''
-
-        if _user['coin']>0:
-            times = _user['coin']*3*60
-            time = '{:02d}:{:02d}'.format(int(times/3600), int(times%3600/60))
-
-        _user['left_time'] = ' + '.join([date, time])
-
-    def _check_expire_date(self, _user): 
-
-        '''
-        '''
-        if not _user['expire_date']:
-            return True
-        now = datetime.datetime.now()
-        _expire_datetime = datetime.datetime.strptime(_user['expire_date'], '%Y-%m-%d')
-        if now > _expire_datetime:
-            return True
-        return False
-
-    def _check_left_time(self, _user):
-        return _user['coin'] <= 0
-
-    def _check_account(self, _user):
-        '''
-            bd_account
-        '''
-        # if (_user['mask']>>8 & 1):
-        self.expired = self._check_expire_date(_user)
-        if self.expired:
-            self.rejected = self._check_left_time(_user)
 
     def update_mac_record(self, user, mac):
         agent_str = self.request.headers.get('User-Agent', '')

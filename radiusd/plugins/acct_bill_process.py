@@ -39,6 +39,10 @@ def process(req=None, user=None, runstat=None, coa_clients=None, **kwargs):
 
     log.msg('{} > Prepaid long time billing '.format(req.get_user_name()),level=logging.INFO)
 
+    if user['mask'] & 1<<4:
+        # nansha wireless account doesn't billing
+        return
+
     # check user pay type, only pay by times account record billing 
     #    2**8 : day
     #    2**9 : times

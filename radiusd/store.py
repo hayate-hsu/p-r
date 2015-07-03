@@ -98,7 +98,7 @@ class Store():
             mask = 0 + 2**1 + [2**8]
         '''
         with Connect(self.dbpool) as conn:
-            cur = conn.cursor()
+            cur = conn.cursor(MySQLdb.cursors.DictCursor)
             now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             mask = 0 + 2**1
             # if weixin:
@@ -122,10 +122,10 @@ class Store():
             time_length, flow_length, expire_date, coin, 
             mac, ip, holder) values("{}", "{}", {}, 
             {}, 0, "{}", 0, "", "", {})
-            '''.format(str(user[0]), password, mask, time_length, expire_date, user[0])
+            '''.format(str(user['id']), password, mask, time_length, expire_date, user['id'])
             cur.execute(sql)
             conn.commit()
-            return user[0]
+            return user['id']
 
     def add_holder_aps(self, holder, aps):
         '''
@@ -211,7 +211,7 @@ class Store():
                 # 4 : web                         token & account
         '''
         with Connect(self.dbpool) as conn:
-            cur = conn.cursor()
+            cur = conn.cursor(MySQLdb.cursors.DictCursor)
             now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             column = 'weixin'
             weixin, uuid = user, ''
@@ -236,10 +236,42 @@ class Store():
             sql = '''insert into bd_account (user, password, mask, 
             time_length, flow_length, expire_date, coin, 
             mac, ip, holder, ends) values("{}", "{}", {}, 0, 0, "", {}, "", "", 0, 2)
-            '''.format(str(user[0]), password, mask, coin)
+            '''.format(str(user['id']), password, mask, coin)
             cur.execute(sql)
             conn.commit()
-            return user[0]# , password, mask, time_length
+            return user['id']# , password, mask, time_length
+
+    def add_user_by_mac(self, mac, password):
+        '''
+            create user account by mac (remove ':') 
+        '''
+        with Connect(self.dbpool) as conn:
+            cur = conn.cursor(MySQLdb.cursors.DictCursor)
+            # now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            # mask = 0 + 2**4
+            # sql = '''insert into account 
+            # (mobile, weixin, uuid, email, mask, address, realname, create_time) 
+            # values("", "", "{}", "", {}, "", "", "{}")
+            # '''.format(uuid, mask, now)
+            # cur.execute(sql)
+
+            # sql = 'select id from account where uuid = "{}"'.format(uuid)
+            # cur.execute(sql)
+            # user = cur.fetchone()
+    
+            # nansha holder is 10002
+            holder = 10002
+
+            mask = 4
+
+            coin = 60
+            sql = '''insert into bd_account (user, password, mask, 
+            time_length, flow_length, expire_date, coin, 
+            mac, ip, holder, ends) values("{}", "{}", {}, 0, 0, "", {}, "", "", {}, 2)
+            '''.format(mac, password, mask, coin, holder)
+            cur.execute(sql)
+            conn.commit()
+            return mac
 
     def get_user(self, user, ends=2**8):
         '''

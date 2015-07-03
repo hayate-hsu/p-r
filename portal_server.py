@@ -393,6 +393,8 @@ class PageHandler(BaseHandler):
         # if self.is_mobile() and page == 'login.html':
         #     return self.render('login.html', openid='', **kwargs)
         # else:
+        if kwargs['ac_ip'] in RJ_AC:
+            return self.render('rj_login.html', openid='', **kwargs)
         return self.render(page, openid='', **kwargs)
 
     def get_user_by_mac(self, mac):
@@ -419,7 +421,8 @@ class PageHandler(BaseHandler):
             kwargs['user_ip'] = self.get_argument('wlanuserip')
             kwargs['ap_mac'] = self.get_argument('wlanapmac', '')
             mac = self.get_argument('mac').upper()
-            kwargs['user_mac'] = ':'.join([mac[:2],mac[2:4],mac[4:6],mac[6:8],mac[8:10],mac[10:12]])
+            # kwargs['user_mac'] = ':'.join([mac[:2],mac[2:4],mac[4:6],mac[6:8],mac[8:10],mac[10:12]])
+            kwargs['user_mac'] = ':'.join([mac[:2],mac[2:4],mac[5:7],mac[7:9],mac[10:12],mac[12:14]])
         else:
             raise HTTPError(400, reason='Unknown AC: {}'.format(kwargs['ac_ip']))
     
@@ -681,9 +684,13 @@ class PortalHandler(BaseHandler):
         if ac_ip not in BAS_IP:
             logger.error('not avaiable ac & ap')
             raise HTTPError(403, reason='AC ip error')
+        
+        if ac_ip in RJ_AC:
+            user = self.check_mac_account(self.get_argument('user_mac'))
+        elif not password:
+            logger.error('Password can\'t null')
+            raise HTTPError(403, 'Password can\'t null')
 
-        # ap_mac = self.get_argument('ap_mac')
-        # check account & password
         if len(user) == 4:
             # room number
             holder = self.get_holder(self.get_argument('ap_mac'))
@@ -708,10 +715,12 @@ class PortalHandler(BaseHandler):
         self.user = _user
 
         # check billing
-        self.expired, self.rejected = utility.check_account_balance(self.user)
-        if self.rejected:
-            # raise HTTPError(403, reason='Account has no left time')
-            raise HTTPError(403, reason=bd_errs[450])
+        # nanshan account user network freedom (check by ac_ip)
+        if ac_ip in HM_AC:
+            self.expired, self.rejected = utility.check_account_balance(self.user)
+            if self.rejected:
+                # raise HTTPError(403, reason='Account has no left time')
+                raise HTTPError(403, reason=bd_errs[450])
 
         ap_mac = self.get_argument('ap_mac')
         user_mac = self.get_argument('user_mac')
@@ -731,7 +740,6 @@ class PortalHandler(BaseHandler):
             self.update_mac_record(self.user, user_mac)
         else:
             self.logout(ac_ip, user_ip, user_mac)
-
 
     def login(self, ac_ip, user_ip, user_mac):
         '''
@@ -846,6 +854,32 @@ class PortalHandler(BaseHandler):
         packet = Packet(header, Attributes(mac=user_mac))
         sock.sendto(packet.pack(), (ac_ip, BAS_PORT))
         # ignore response
+
+    def get_user_by_mac(self, mac):
+        records = store.get_mac_records(mac)
+        records = {record['mac']:record for record in records}
+        if mac in records:
+            return records['mac']['user']
+        return ''
+
+    def check_mac_account(self, mac):
+        '''
+            # only ruijie ac go to this branch
+            check mac address binded acocunt
+            not found : 
+                reate bd_account by mac
+        '''
+        user = self.get_user_by_mac(mac)
+        if not user:
+            # uuid = utility.md5(mac).hexdigest()
+            # create user
+            user = store.add_user_by_mac(mac.replace(':', ''), utility.generate_password())
+        return user
+
+    def create_account_by_mac(self, mac):
+        '''
+        '''
+        pass
 
     def get_holder(self, ap_mac):
         '''

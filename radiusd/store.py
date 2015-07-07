@@ -262,7 +262,7 @@ class Store():
             # nansha holder is 10002
             holder = 10002
 
-            mask = 4
+            mask = 1<<4
 
             coin = 60
             sql = '''insert into bd_account (user, password, mask, 
@@ -331,15 +331,6 @@ class Store():
                         user['expire_date'] = ret['expire_date']
             return user
 
-    def get_bd_user_by_mac(self, user_mac):
-        with Cursor(self.dbpool) as cur:
-            sql = '''select bd_account.*, online.mac_addr from bd_account, 
-            online where bd_account.user = online.user and 
-            online.mac_addr = "{}"'''.format(user_mac)
-            cur.execute(sql)
-            user = cur.fetchone()
-            return user
-
     def get_block_user(self, mac):
         '''
             mac : mac address
@@ -352,13 +343,20 @@ class Store():
             now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             sql = ''
             if isupdate:
-                sql = '''update mac_history set mac = "{}", tlogin = {}, agent = "{}" 
+                sql = '''update mac_history set mac = "{}", tlogin = "{}", agent = "{}" 
                 where user = "{}" and mac = "{}" '''.format(new_mac, now, agent, user, old_mac)
             else:
                 sql = '''insert into mac_history (user, mac, tlogin, platform) 
                 values('{}', '{}', '{}', '{}')'''.format(user, new_mac, now, agent)
             cur.execute(sql)
             conn.commit()
+
+    def get_user_records_by_mac(self, mac):
+        with Cursor(self.dbpool) as cur:
+            sql = 'select user, mac, tlogin from mac_history where mac = "{}" order by tlogin'.format(mac)
+            cur.execute(sql)
+            records = cur.fetchall()
+            return records if records else []
 
     def get_mac_records(self, user):
         '''

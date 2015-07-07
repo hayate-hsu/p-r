@@ -173,8 +173,8 @@ class BaseHandler(tornado.web.RequestHandler):
         '''
             Render the template with the given arguments
         '''
-        if not os.path.exists(os.path.join(TEMPLATE_PATH, filename)):
-            raise HTTPError(404, 'File Not Found')
+        # if not os.path.exists(os.path.join(TEMPLATE_PATH, filename)):
+        #     raise HTTPError(404, 'File Not Found')
 
         self.finish(self.render_string(filename, **kwargs))
 
@@ -338,6 +338,9 @@ class PageHandler(BaseHandler):
         print(self.request)
         page = page.lower()
 
+        if page == 'nansha.html':
+            return self.render('nansha.html')
+
         if page not in ('login.html'):
             return self.redirect_to_bidong()
             # return self.redirect('http://58.241.41.148/index.html')
@@ -394,15 +397,29 @@ class PageHandler(BaseHandler):
         #     return self.render('login.html', openid='', **kwargs)
         # else:
         if kwargs['ac_ip'] in RJ_AC:
-            return self.render('rj_login.html', openid='', **kwargs)
+            logger.info('{}'.format(kwargs))
+            return self.render('nansha_login.html', openid='', user=kwargs['user_mac'], password='', **kwargs)
         return self.render(page, openid='', **kwargs)
 
-    def get_user_by_mac(self, mac):
-        records = store.get_mac_records(mac)
-        records = {record['mac']:record for record in records}
-        if mac in records:
-            return records['mac']['user']
-        return ''
+    # def get_user_by_mac(self, mac):
+    #     records = store.get_user_records_by_mac(mac)
+    #     if records:
+    #         return records[-1]['user']
+    #     return ''
+    #     records = {record['mac']:record for record in records}
+    #     if mac in records:
+    #         return records['mac']['user']
+    #     return ''
+
+    def get_user_by_mac(self, mac, ac):
+        if ac in RJ_AC:
+            return mac.replace(':', '')
+        else:
+            records = store.get_user_records_by_mac(mac)
+            if records:
+                return records[-1]['user']
+            return ''
+
 
     def parse_ac_parameters(self, kwargs):
         if kwargs['ac_ip'] in HM_AC:
@@ -427,18 +444,19 @@ class PageHandler(BaseHandler):
             raise HTTPError(400, reason='Unknown AC: {}'.format(kwargs['ac_ip']))
     
     def login_auto_by_mac(self, **kwargs):
-        user = self.get_user_by_mac(kwargs['user_mac'])
+        user = self.get_user_by_mac(kwargs['user_mac'], kwargs['ac_ip'])
         if not user:
             return False
 
         _user = store.get_bd_user(user)
         if not _user:
             return False
-        # check billing
-        self.expired, self.rejected = utility.check_account_balance(_user)
-        if self.rejected:
-            # raise HTTPError(403, reason='Account has no left time')
-            return False
+        if kwargs['ac_ip'] in HM_AC:
+            # check billing
+            self.expired, self.rejected = utility.check_account_balance(_user)
+            if self.rejected:
+                # raise HTTPError(403, reason='Account has no left time')
+                return False
         onlines = store.count_online(_user['user'])
         if onlines >= _user['ends']:
             # allow user logout ends 
@@ -520,7 +538,8 @@ class PageHandler(BaseHandler):
             sock.close()
             raise HTTPError(400, reason='abnormal challenge value')
             # return self.render_error(Code=400, Msg='abnormal challenge value')
-        assert user_mac == attrs.mac
+        if attrs.mac:
+            assert user_mac == attrs.mac
 
         header.type = 0x03
         # header.serial = PortalHandler._SERIAL_NO_.pop()
@@ -660,6 +679,7 @@ class PortalHandler(BaseHandler):
     @_parse_body
     def post(self):
         # parse request data
+        logger.info('{}'.format(self.request.arguments))
         openid = self.get_argument('openid', None)
         user = self.get_argument('user', '')
         password = self.get_argument('password', '')
@@ -737,7 +757,8 @@ class PortalHandler(BaseHandler):
             # no-meaning value
             self.login(ac_ip, user_ip, user_mac)
             # update mac address
-            self.update_mac_record(self.user, user_mac)
+            if ac_ip  in HM_AC:
+                self.update_mac_record(self.user, user_mac)
         else:
             self.logout(ac_ip, user_ip, user_mac)
 
@@ -855,13 +876,6 @@ class PortalHandler(BaseHandler):
         sock.sendto(packet.pack(), (ac_ip, BAS_PORT))
         # ignore response
 
-    def get_user_by_mac(self, mac):
-        records = store.get_mac_records(mac)
-        records = {record['mac']:record for record in records}
-        if mac in records:
-            return records['mac']['user']
-        return ''
-
     def check_mac_account(self, mac):
         '''
             # only ruijie ac go to this branch
@@ -869,11 +883,12 @@ class PortalHandler(BaseHandler):
             not found : 
                 reate bd_account by mac
         '''
-        user = self.get_user_by_mac(mac)
+        mac = mac.replace(':', '')
+        user = store.get_bd_user(mac)
         if not user:
-            # uuid = utility.md5(mac).hexdigest()
-            # create user
-            user = store.add_user_by_mac(mac.replace(':', ''), utility.generate_password())
+            user = store.add_user_by_mac(mac, utility.generate_password())
+        else:
+            user = user['user']
         return user
 
     def create_account_by_mac(self, mac):

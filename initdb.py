@@ -70,6 +70,7 @@ class Account(DeclarativeBase):
             2^1   group account, holder's code
             2^2   personal account
             2^3   holder account
+            2^4   南沙无线城市账号
 
             2^5   account from weixin
             2^6   account from app

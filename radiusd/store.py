@@ -343,7 +343,7 @@ class Store():
             now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             sql = ''
             if isupdate:
-                sql = '''update mac_history set mac = "{}", tlogin = "{}", agent = "{}" 
+                sql = '''update mac_history set mac = "{}", tlogin = "{}", platform = "{}" 
                 where user = "{}" and mac = "{}" '''.format(new_mac, now, agent, user, old_mac)
             else:
                 sql = '''insert into mac_history (user, mac, tlogin, platform) 

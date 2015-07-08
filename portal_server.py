@@ -143,7 +143,7 @@ class BaseHandler(tornado.web.RequestHandler):
             pass request handler environment to template engine
         '''
         try:
-            if not self.is_mobile():
+            if not self.is_mobile:
                 template = self.LOOK_UP.get_template(filename)
             else:
                 template = self.LOOK_UP_MOBILE.get_template(filename)
@@ -173,8 +173,12 @@ class BaseHandler(tornado.web.RequestHandler):
         '''
             Render the template with the given arguments
         '''
-        # if not os.path.exists(os.path.join(TEMPLATE_PATH, filename)):
-        #     raise HTTPError(404, 'File Not Found')
+        directory = TEMPLATE_PATH
+        if self.is_mobile:
+            directory = PAGE_PATH
+
+        if not os.path.exists(os.path.join(directory, filename)):
+            raise HTTPError(404, 'File Not Found')
 
         self.finish(self.render_string(filename, **kwargs))
 
@@ -224,14 +228,16 @@ class BaseHandler(tornado.web.RequestHandler):
             self.set_header('Content-Type', 'application/json')
             self.finish(json_encoder(kwargs))
 
-    def is_mobile(self):
+    def prepare(self):
+        # check client paltform
         agent_str = self.request.headers.get('User-Agent', '')
-        if not agent_str:
-            return False
-        self.agent_str = agent_str
-        agent = user_agents.parse(agent_str)
-        
-        return agent.is_mobile
+        self.agent_str = ''
+        self.agent = None
+        self.is_mobile = False
+        if agent_str:
+            self.agent_str = agent_str
+            agent = user_agents.parse(agent_str)
+            self.is_mobile = agent.is_mobile
 
 def _parse_body(method):
     '''
@@ -321,9 +327,6 @@ class PageHandler(BaseHandler):
         # print(_WX_IP)
         break
 
-    AC = 'AC'
-    AP = 'AP'
-
     def redirect_to_bidong(self):
         '''
         '''
@@ -349,30 +352,31 @@ class PageHandler(BaseHandler):
         if page.startswith('login'):
             kwargs['ac_ip'] = self.get_argument('wlanacip', '') or self.get_argument('nasip', '')
             if not kwargs['ac_ip']:
-                # doesn't contain parameter, return redirect response
+                # doesn't contain ac_ip parameter, return redirect response
                 # if user hasn't auth, ac will redirect the next request
                 # with necessary parameters
                 # return self.redirect('http://10.10.1.175:8080/index.html')
                 return self.redirect_to_bidong()
                 # return self.redirect('http://58.241.41.148/index.html')
             self.parse_ac_parameters(kwargs)
+            url = kwargs['firsturl']
             
-            # check mac address
+            # check mac address, login by mac address
+            # if login successfully, return true, else return false
             if self.login_auto_by_mac(**kwargs):
-                return
+                # auto login successfully
+                # redirect to previous url 
+                if url:
+                    # self.set_header('Access-Control-Allow-Origin', '*')
+                    if kwargs['urlparam']:
+                        url = ''.join([url, '?', kwargs['urlparam']])
+                    return self.redirect(url)
+                return 
 
-            # get cookie setting and auto login
-            # p_user = self.get_secure_cookie('p_user')
-            # p_expire = self.get_secure_cookie('p_expire')
-            # if p_user and p_expire:
-            #     if self.login_auto_by_cookie(p_user, p_expire, **kwargs):
-            #         # if return True, return
-            #         return
-            url = self.get_argument('wlanuserfirsturl', '') or self.get_argument('url', '')
+            # url = self.get_argument('wlanuserfirsturl', '') or self.get_argument('url', '')
             if url.find('m_web/onetonet') != -1:
                 # user from weixin, parse code & and get openid
-                urlparam = self.get_argument('urlparam')
-                urlparam = parse_qs('urlparam='+urlparam)
+                urlparam = parse_qs('urlparam='+kwargs['urlparam'])
                 params = parse_qs(urlparam['urlparam'][0])
                 
                 openid = self.get_openid(params['code'][0])
@@ -388,28 +392,9 @@ class PageHandler(BaseHandler):
                 except:
                     return self.render_exception(HTTPError(400, 'Unknown error'))
                     
-                    
-            kwargs['firsturl'] = url
-            kwargs['urlparam'] = self.get_argument('urlparam', '')
-            # check mac address has been login?
-
-        # if self.is_mobile() and page == 'login.html':
-        #     return self.render('login.html', openid='', **kwargs)
-        # else:
         if kwargs['ac_ip'] in RJ_AC:
-            logger.info('{}'.format(kwargs))
             return self.render('nansha_login.html', openid='', user=kwargs['user_mac'], password='', **kwargs)
         return self.render(page, openid='', **kwargs)
-
-    # def get_user_by_mac(self, mac):
-    #     records = store.get_user_records_by_mac(mac)
-    #     if records:
-    #         return records[-1]['user']
-    #     return ''
-    #     records = {record['mac']:record for record in records}
-    #     if mac in records:
-    #         return records['mac']['user']
-    #     return ''
 
     def get_user_by_mac(self, mac, ac):
         if ac in RJ_AC:
@@ -442,6 +427,8 @@ class PageHandler(BaseHandler):
             kwargs['user_mac'] = ':'.join([mac[:2],mac[2:4],mac[5:7],mac[7:9],mac[10:12],mac[12:14]])
         else:
             raise HTTPError(400, reason='Unknown AC: {}'.format(kwargs['ac_ip']))
+        kwargs['firsturl'] = self.get_argument('wlanuserfirsturl', '') or self.get_argument('url', '')
+        kwargs['urlparam'] = self.get_argument('urlparam', '')
     
     def login_auto_by_mac(self, **kwargs):
         user = self.get_user_by_mac(kwargs['user_mac'], kwargs['ac_ip'])
@@ -470,34 +457,6 @@ class PageHandler(BaseHandler):
             return False
 
         return True
-
-    def login_auto_by_cookie(self, p_user, p_expire, **kwargs):
-        now = utility.now('%Y-%m-%d')
-        if now >= p_expire:
-            # cookie expired
-            return False
-        _user = store.get_bd_user(p_user)
-        if not _user:
-            return False
-        # check billing
-        self.expired, self.rejected = utility.check_account_balance(_user)
-        if self.rejected:
-            # raise HTTPError(403, reason='Account has no left time')
-            return False
-        onlines = store.count_online(_user['user'])
-        if onlines >= _user['ends']:
-            # allow user logout ends 
-            return False
-            # raise HTTPError(403, reason='Over the limit ends')
-        try:
-            logger.info('Progress {} auto login'.format(p_user))
-            self.login(_user, kwargs['ac_ip'], socket.inet_aton(kwargs['user_ip']), kwargs['user_mac'])
-        except:
-            logger.warning('auto login error', exc_info=True)
-            return False
-
-        return True
-
 
     def login(self, _user, ac_ip, user_ip, user_mac):
         '''
@@ -577,9 +536,6 @@ class PageHandler(BaseHandler):
 
         time.sleep(1.5)
 
-        token = utility.token(user)
-        # self.render_json_response(User=user, Token=token, Code=200, Msg='OK')
-        self.redirect('http://www.bidongwifi.com/account/{}?token={}'.format(user, token))
         logger.info('%s login successfully, wlan: %s', user, self.request.remote_ip)
 
 
@@ -636,6 +592,12 @@ class PageHandler(BaseHandler):
             raise HTTPError(403, reason='Over the limit ends')
 
         self.login(_user, kwargs['ac_ip'], socket.inet_aton(kwargs['user_ip']), kwargs['user_mac'])
+
+        # login successfully
+        # redirect to account page
+        token = utility.token(_user['user'])
+        # self.render_json_response(User=user, Token=token, Code=200, Msg='OK')
+        self.redirect('http://www.bidongwifi.com/account/{}?token={}'.format(user, token))
 
     def timeout(self, sock, ac_ip, header, user_mac):
         '''
@@ -757,7 +719,10 @@ class PortalHandler(BaseHandler):
             # no-meaning value
             self.login(ac_ip, user_ip, user_mac)
             # update mac address
-            if ac_ip  in HM_AC:
+            if ac_ip in RJ_AC:
+                # Record nansha city user's platform
+                self.update_mac_record(self.user, user_mac.replace(':', '-'))
+            else:
                 self.update_mac_record(self.user, user_mac)
         else:
             self.logout(ac_ip, user_ip, user_mac)
@@ -903,17 +868,16 @@ class PortalHandler(BaseHandler):
         return store.get_holder_by_mac(ap_mac)
 
     def update_mac_record(self, user, mac):
-        agent_str = self.request.headers.get('User-Agent', '')
+        # agent_str = self.request.headers.get('User-Agent', '')
         records = store.get_mac_records(user['user'])
         m_records = {record['mac']:record for record in records}
-        logger.info(records, m_records, mac)
         if mac not in m_records:
             # update mac record 
             if (not records) or len(records) < user['ends']:
-                store.update_mac_record(user['user'], mac, '', agent_str, False)
+                store.update_mac_record(user['user'], mac, '', self.agent_str, False)
             else:
                 # records = sorted(records.values(), key=lambda item: item['datetime'])
-                store.update_mac_record(user['user'], mac, records[0]['mac'], agent_str, True)
+                store.update_mac_record(user['user'], mac, records[0]['mac'], self.agent_str, True)
 
     def set_login_cookie(self, user, days=7):
         '''
@@ -1162,13 +1126,14 @@ def ac_data_handler(sock, data, addr):
         if True:
             attrs = Attributes.unpack(header.num, data[16:])
             if not attrs.mac:
-                logger.info('Mac address abnormal from {}'.format(addr))
+                logger.info('User quit, ip: {}'.format(socket.inet_ntoa(header.ip)))
                 return
             #
             mac = []
             for b in attrs.mac:
                 mac.append('{:X}'.format(ord(b)))
             print(':'.join(mac))
+            logger.info('User quit, mac: {}'.format(':'.join(mac)))
 
 def init_log(log_folder, log_config):
     global logger

@@ -138,6 +138,7 @@ class BDAccount(DeclarativeBase):
             2^1   group account, holder's code
             2^2   personal account
             2^3   holder account
+            2^4   南沙无线城市 账号
 
             2^5   account from weixin
             2^6   account from app
@@ -177,7 +178,8 @@ class MacHistory(DeclarativesBase):
 
     user = Column('user', VARCHAR(length=32), primary_key=True, nullable=False, doc='bd_account\'s user')
     mac = Column('mac', VARCHAR(length=17), primary_key=True, nullable=False, doc='mac addr')
-    datetime = Column('datetime', DATETIME(), doc='the datetime client login')
+    tlogin = Column('datetime', DATETIME(), doc='the datetime client login')
+    platform = Column('platform', VARCHAR(128), doc='http User-Agent')
 
 class Online(DeclarativeBase):
     '''

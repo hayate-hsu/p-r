@@ -230,14 +230,12 @@ class BaseHandler(tornado.web.RequestHandler):
 
     def prepare(self):
         # check client paltform
-        agent_str = self.request.headers.get('User-Agent', '')
-        self.agent_str = ''
+        self.agent_str = self.request.headers.get('User-Agent', '')
         self.agent = None
         self.is_mobile = False
-        if agent_str:
-            self.agent_str = agent_str
-            agent = user_agents.parse(agent_str)
-            self.is_mobile = agent.is_mobile
+        if self.agent_str:
+            self.agent = user_agents.parse(self.agent_str)
+            self.is_mobile = self.agent.is_mobile
 
 def _parse_body(method):
     '''
@@ -562,9 +560,10 @@ class PageHandler(BaseHandler):
             if not _user:
                 raise HTTPError(400, reason='Should subscribe first')
         # user unsubscribe, the account will be forbid
+        logger.info('weixin account {}'.format(_user))
         if _user['mask']>>31 & 1:
             raise HTTPError(401, reason='Account has been frozen')
-        _user = store.get_bd_user(_user['id'])
+        _user = store.get_bd_user(str(_user['id']))
         user = _user['user']
         password = _user['password']
             
@@ -721,9 +720,9 @@ class PortalHandler(BaseHandler):
             # update mac address
             if ac_ip in RJ_AC:
                 # Record nansha city user's platform
-                self.update_mac_record(self.user, user_mac.replace(':', '-'))
-            else:
-                self.update_mac_record(self.user, user_mac)
+                # distinguish nansha_city accoutn & bidong account
+                user_mac = user_mac.replace(':', '-')
+            self.update_mac_record(self.user, user_mac)
         else:
             self.logout(ac_ip, user_ip, user_mac)
 

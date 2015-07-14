@@ -84,6 +84,8 @@ STATIC_PATH = os.path.join('/home/niot/wifi', 'webpro/bidong_v2')
 TEMPLATE_PATH = os.path.join('/home/niot/wifi', 'webpro/bidong_v2/portal')
 PAGE_PATH = os.path.join(TEMPLATE_PATH, 'm')
 
+ONLINES = {}
+
 class Application(tornado.web.Application):
     '''
         Web application class.
@@ -442,6 +444,11 @@ class PageHandler(BaseHandler):
             if self.rejected:
                 # raise HTTPError(403, reason='Account has no left time')
                 return False
+        else:
+            # nansha city  account
+            if self.check_mac_online_recently(kwargs['user_mac'], 1):
+                # user has been online, auto login
+                return True
         onlines = store.count_online(_user['user'])
         if onlines >= _user['ends']:
             # allow user logout ends 
@@ -606,6 +613,20 @@ class PageHandler(BaseHandler):
         header.err = 0x01
         packet = Packet(header, Attributes(mac=user_mac))
         sock.sendto(packet.pack(), (ac_ip, BAS_PORT))
+
+    def check_mac_online_recently(self, mac, flag):
+        '''
+            check ruijie client's online
+            if last_start is '': use hasn't been online
+            else : check last_start & now timedelta
+        '''
+        last_start = store.get_online_by_mac(mac, flag)
+        if last_start:
+            seconds = utility.cala_delta(last_start)
+            if seconds < 60:
+                # check user online(if user login in 1 minutes, assume use has been login)
+                return True
+        return False
 
 class SerialNo:
     def __init__(self):

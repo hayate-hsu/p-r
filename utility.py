@@ -43,6 +43,13 @@ def now(fmt=DATE_FORMAT, days=0):
         _now = _now + datetime.timedelta(days=days)
     return _now.strftime(fmt)
 
+def cala_delta(start):
+    '''
+    '''
+    _now = datetime.datetime.now()
+    start = datetime.strptime(start, '%Y-%m-%d %H:%M:%S')
+    return (_now - start).seconds
+
 @check_codes
 def md5(*args):
     '''

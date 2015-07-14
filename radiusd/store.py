@@ -369,13 +369,25 @@ class Store():
 
     def is_online(self, nas_addr, acct_session_id):
         '''
-            
         '''
         with Cursor(self.dbpool) as cur:
             sql = 'select count(id) as online from online where \
                     nas_addr = "{}" and acct_session_id = "{}"'.format(nas_addr, acct_session_id)
             cur.execute(sql)
             return cur.fetchone()['online'] > 0
+
+    def get_online_by_mac(self, mac, flag=0):
+        '''
+            flag:   0 
+            1 mac address need deal with(remove ':|', lower)
+        '''
+        with Cursor(self.dbpool) as cur:
+            if flag:
+                mac = mac.replace(':', '').lower()
+            sql = 'select acct_start_time as start from online where mac_addr = "{}"'.format(mac)
+            cur.execute(sql)
+            result = cur.fetchone()
+            return result['start'] if result else ''
 
     def count_online(self, account):
         '''

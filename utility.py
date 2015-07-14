@@ -47,7 +47,7 @@ def cala_delta(start):
     '''
     '''
     _now = datetime.datetime.now()
-    start = datetime.strptime(start, '%Y-%m-%d %H:%M:%S')
+    start = datetime.datetime.strptime(start, '%Y-%m-%d %H:%M:%S')
     return (_now - start).seconds
 
 @check_codes

@@ -351,6 +351,18 @@ class Store():
             cur.execute(sql)
             conn.commit()
 
+    def query_ap_policy(self, ap_mac):
+        '''
+            query who own the ap and its' policy
+        '''
+        with Connect(self.dbpool) as conn:
+            cur = conn.cursor()
+            sql = '''select account.portal, account.policy from account, holder_ap 
+            where holder_ap.mac = "{}" and holder_ap.holder = account.id'''.format(ap_mac)
+            cur.execute(sql)
+            result = cur.fetchone()
+            return result if result else {}
+
     def get_user_records_by_mac(self, mac):
         with Cursor(self.dbpool) as cur:
             sql = 'select user, mac, tlogin from mac_history where mac = "{}" order by tlogin'.format(mac)
@@ -417,18 +429,23 @@ class Store():
 
     def add_online(self, online):
         with Connect(self.dbpool) as conn:
-            cur = conn.cursor()
+            cur = conn.cursor(MySQLdb.cursors.DictCursor)
+            # temporary scheme
+            nas_addr = online['nas_addr']
+            if nas_addr in ['10.10.0.60', ]:
+                mac_addr = online['mac_addr']
+                mac_addr = mac_addr.upper()
+                online['mac_addr'] = ':'.join([mac_addr[:2], mac_addr[2:4], mac_addr[4:6], 
+                                               mac_addr[6:8], mac_addr[8:10], mac_addr[10:12]])
+                ap_mac = online['ap_mac']
+                online['ap_mac'] = ':'.join([ap_mac[:2], ap_mac[2:4], ap_mac[4:6], ap_mac[6:8], ap_mac[8:10], ap_mac[10:12]])
+
+            sql = 'delete from online where mac_addr = "{}"'.format(online['mac_addr'])
+            cur.execute(sql)
+
             keys = ','.join(online.keys())
             vals = ','.join(['"%s"'%c for c in online.values()])
             sql = 'insert into online ({}) values({})'.format(keys, vals)
-            # sql = '''update online set user="{}", nas_addr="{}", 
-            # acct_session_id="{}", acct_start_time="{}", framed_ipaddr="{}", 
-            # mac_addr="{}", start_source="{}" 
-            # where user="{}" and mac_addr="{}"
-            # '''.format(online['user'], online['nas_addr'], online['acct_session_id'], 
-            #            online['acct_start_time'], online['framed_ipaddr'], 
-            #            online['mac_addr'], online['start_source'], 
-            #            online['user'], online['mac_addr'])
             cur.execute(sql)
             conn.commit()
 
@@ -524,7 +541,7 @@ class Store():
         def _unlock_one():
             ticket = None
             with Connect(self.dbpool) as conn:
-                cur = conn.cursor(cursors.DictCursor)
+                cur = conn.cursor(MySQLdb.cursors.DictCursor)
                 sql = 'select * from online where nas_addr = "{}" and \
                         acct_session_id = "{}"'.format(nas_addr, acct_session_id)
                 cur.execute(sql)
@@ -540,7 +557,7 @@ class Store():
         def _unlock_many():
             tickets = None
             with Connect(self.dbpool) as conn:
-                cur = conn.cursor(cursors.DictCursor)
+                cur = conn.cursor(MySQLdb.cursors.DictCursor)
                 sql = 'select * from online where nas_addr = "{}" and \
                         acct_session_id = "{}"'.format(nas_addr, acct_session_id)
                 cur.execute(sql)

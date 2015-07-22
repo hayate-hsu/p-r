@@ -397,19 +397,20 @@ class PageHandler(BaseHandler):
 
         # get policy
         # return self.render(self.policy['portal'], openid='', user=)
+        kwargs['user'] = kwargs['user_mac']
                     
         if kwargs['ac_ip'] in RJ_AC:
             return self.render('nansha_login.html', openid='', user=kwargs['user_mac'], password='', **kwargs)
         return self.render(page, openid='', **kwargs)
 
     def get_user_by_mac(self, mac, ac):
-        if ac in RJ_AC:
-            return mac.replace(':', '')
-        else:
-            records = store.get_user_records_by_mac(mac)
-            if records:
-                return records[-1]['user']
-            return ''
+        # if ac in RJ_AC:
+        #     return mac.replace(':', '')
+        # else:
+        records = store.get_user_records_by_mac(mac)
+        if records:
+            return records[-1]['user']
+        return ''
 
     def get_current_billing_policy(self, **kwargs):
         '''
@@ -650,6 +651,18 @@ class PageHandler(BaseHandler):
                 return True
         return False
 
+    def update_mac_record(self, user, mac):
+        # agent_str = self.request.headers.get('User-Agent', '')
+        records = store.get_mac_records(user['user'])
+        m_records = {record['mac']:record for record in records}
+        if mac not in m_records:
+            # update mac record 
+            if (not records) or len(records) < user['ends']:
+                store.update_mac_record(user['user'], mac, '', self.agent_str, False)
+            else:
+                # records = sorted(records.values(), key=lambda item: item['datetime'])
+                store.update_mac_record(user['user'], mac, records[0]['mac'], self.agent_str, True)
+
 class SerialNo:
     def __init__(self):
         self.cur = 1
@@ -763,10 +776,10 @@ class PortalHandler(BaseHandler):
             # no-meaning value
             self.login(ac_ip, user_ip, user_mac)
             # update mac address
-            if ac_ip in RJ_AC:
-                # Record nansha city user's platform
-                # distinguish nansha_city accoutn & bidong account
-                user_mac = user_mac.replace(':', '-')
+            # if ac_ip in RJ_AC:
+            #     # Record nansha city user's platform
+            #     # distinguish nansha_city accoutn & bidong account
+            #     user_mac = user_mac.replace(':', '-')
             self.update_mac_record(self.user, user_mac)
         else:
             self.logout(ac_ip, user_ip, user_mac)

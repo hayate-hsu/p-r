@@ -628,6 +628,9 @@ class PageHandler(BaseHandler):
         # self.render_json_response(User=user, Token=token, Code=200, Msg='OK')
         self.redirect('http://www.bidongwifi.com/account/{}?token={}'.format(user, token))
 
+        self.update_mac_record(user, kwargs['user_mac'])
+
+
     def timeout(self, sock, ac_ip, header, user_mac):
         '''
         '''

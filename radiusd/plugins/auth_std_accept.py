@@ -22,7 +22,10 @@ def process(req=None, resp=None, user=None, **kwargs):
     '''
     session_timeout = CONFIG['SESSION_TIMEOUT']
 
-    if not (user['mask'] & 1<<4):
+    policy = user['policy']
+    # policy: 
+    if policy == 0:
+        # normal billing pocily
         # user is not nansha wireless city account
         if user['expire_date']:
             _expire_datetime = datetime.datetime.strptime(user['expire_date']+' 00:00:00',"%Y-%m-%d %H:%M:%S")

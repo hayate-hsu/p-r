@@ -54,12 +54,3 @@ CONFIG = {
     'SESSION_TIMEOUT':86400,        # session max timeout 
 }
 
-
-
-
-
-
-
-
-
-

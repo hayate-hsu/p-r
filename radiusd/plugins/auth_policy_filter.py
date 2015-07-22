@@ -10,6 +10,9 @@ def process(req=None,resp=None,user=None,**kwargs):
     """执行计费策略校验，用户到期检测，用户余额，时长检测"""
 
     #
+    if user['policy']:
+        return resp
+
     expired, rejected = _check_account(user)
     if rejected:
         resp['Framed-Pool'] = 'expire'

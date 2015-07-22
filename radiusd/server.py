@@ -32,6 +32,12 @@ import json
 import six
 import os
 
+EXPIRE = 7200
+BILLING_FROFILE = {}
+RJ_AC = set()
+HM_AC = set()
+
+
 __verson__ = '0.7'
 
 def _check_expire_date(_user): 
@@ -58,6 +64,32 @@ def check_account_balance(_user):
     if expired:
         rejected = _check_left_time(_user)
     return expired, rejected
+
+def get_billing_policy(req):
+    '''
+        add expired mechanism
+    '''
+    ac_ip = reg.get_nas_addr()
+    ap_mac = ''
+    called_stationid = reg.get_called_stationid()
+    if called_stationid:
+        ap_mac = called_stationid.split(':')[0]
+
+    if ac_ip in RJ_AC:
+        ap_mac = ':'.join([ap_mac[:2], ap_mac[2:4], ap_mac[4:6], ap_mac[6:8], ap_mac[8:10], ap_mac[10:12]]) 
+        ap_mac = ap_mac.upper()
+
+    if ap_mac in BILLING_PROFILE:
+        # check expired times
+        if int(time.time()) < BILLING_PROFILE[ap_mac]['expire']:
+            return BILLING_PROFILE[ap_mac]
+
+    # query who own the ap and her's billing policy
+    policy = store.query_ap_policy(ap_mac)
+    policy = policy.get('policy', 0) if policy else 0
+    expired = int(time.time()) + EXPIRE
+    BILLING_PROFILE[ap_mac] = {'policy':policy, 'expire':expired}
+    return policy
         
 class PacketError(Exception):pass
 
@@ -198,15 +230,25 @@ class RADIUSAccess(RADIUS):
         # user = store.get_bd_user_by_mac(req.get_user_name())
         # print(user, req.get_user_name())
         user = store.get_bd_user(req.get_user_name())
-        if user:
-            expired, rejected = check_account_balance(user)
-            if rejected:
-                # if go to this branch, (req.get_user_name()) is mac address
-                # user has no time left, set user=None
-                # goto portal authenication
-                user = None
+        # if user:
+        #     expired, rejected = check_account_balance(user)
+        #     if rejected:
+        #         # if go to this branch, (req.get_user_name()) is mac address
+        #         # user has no time left, set user=None
+        #         # goto portal authenication
+        #         user = None
         if user:
             self.user_trace.push(user['user'],req)
+            # get billing policy
+            user['policy'] = get_billing_policy(req)
+            if not user['policy']:
+                expired, rejected = check_account_balance(user)
+                if rejected:
+                    # if go to this branch, (req.get_user_name()) is mac address
+                    # user has no time left, set user=None
+                    # goto portal authenication
+                    user = None
+
         # middleware execute
         for plugin in auth_plugins:
             self.midware.process(plugin,req=req,resp=reply,user=user)
@@ -253,7 +295,10 @@ class RADIUSAccounting(RADIUS):
                  
         # user = store.get_bd_user_by_mac(req.get_user_name())
         user = store.get_bd_user(req.get_user_name())
-        if user:self.user_trace.push(user['user'],req)        
+        if user:
+            self.user_trace.push(user['user'],req)        
+            # get billing policy
+            user['policy'] = get_billing_policy(req)
           
         reply = req.CreateReply()
         reply.source = req.source
@@ -307,6 +352,9 @@ def run(config):
     authport = config['authport']
     acctport = config['acctport']
     adminport = config['adminport']
+    global HM_AC, RJ_AC
+    HM_AC = config['HM_AC']
+    RJ_AC = config['RJ_AC']
     
     #parse dictfile
     dictfile = config.get('dictfile', None)

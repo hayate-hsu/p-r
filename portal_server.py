@@ -65,12 +65,13 @@ RUN_PATH = '/var/run'
 # 
 _REQUESTES_ = {}
 
-BAS_IP = ['10.10.0.50', '10.10.0.60']
-
 # hanming ac 
-HM_AC = ['10.10.0.50',]
+HM_AC = config['HM_AC']
 # Ruijie ac
-RJ_AC = ['10.10.0.60',]
+RJ_AC = config['RJ_AC']
+
+BAS_IP = HM_AC | RJ_AC
+
 BAS_PORT = 2000
 _BUFSIZE=1024
 
@@ -84,7 +85,8 @@ STATIC_PATH = os.path.join('/home/niot/wifi', 'webpro/bidong_v2')
 TEMPLATE_PATH = os.path.join('/home/niot/wifi', 'webpro/bidong_v2/portal')
 PAGE_PATH = os.path.join(TEMPLATE_PATH, 'm')
 
-ONLINES = {}
+# ap_mac_addr:{portal:'', billing:''}
+BILLING_PROFILE = {}
 
 class Application(tornado.web.Application):
     '''
@@ -361,6 +363,7 @@ class PageHandler(BaseHandler):
             self.parse_ac_parameters(kwargs)
             url = kwargs['firsturl']
             
+            self.get_current_billing_policy(**kwargs)
             # check mac address, login by mac address
             # if login successfully, return true, else return false
             if self.login_auto_by_mac(**kwargs):
@@ -391,6 +394,9 @@ class PageHandler(BaseHandler):
                     return self.render_exception(ex)
                 except:
                     return self.render_exception(HTTPError(400, 'Unknown error'))
+
+        # get policy
+        # return self.render(self.policy['portal'], openid='', user=)
                     
         if kwargs['ac_ip'] in RJ_AC:
             return self.render('nansha_login.html', openid='', user=kwargs['user_mac'], password='', **kwargs)
@@ -404,6 +410,12 @@ class PageHandler(BaseHandler):
             if records:
                 return records[-1]['user']
             return ''
+
+    def get_current_billing_policy(self, **kwargs):
+        '''
+            user's billing policy based on the connected ap 
+        '''
+        self.profile = get_billing_policy(kwargs['ac_ip'], kwargs['ap_mac'])
 
 
     def parse_ac_parameters(self, kwargs):
@@ -421,7 +433,8 @@ class PageHandler(BaseHandler):
             kwargs['ssid'] = self.get_argument('ssid')
 
             kwargs['user_ip'] = self.get_argument('wlanuserip')
-            kwargs['ap_mac'] = self.get_argument('wlanapmac', '')
+            ap_mac = self.get_argument('wlanapmac').upper()
+            kwargs['ap_mac'] = ':'.join([ap_mac[:2],ap_mac[2:4],ap_mac[5:7],ap_mac[7:9],ap_mac[10:12],ap_mac[12:14]])
             mac = self.get_argument('mac').upper()
             # kwargs['user_mac'] = ':'.join([mac[:2],mac[2:4],mac[4:6],mac[6:8],mac[8:10],mac[10:12]])
             kwargs['user_mac'] = ':'.join([mac[:2],mac[2:4],mac[5:7],mac[7:9],mac[10:12],mac[12:14]])
@@ -438,19 +451,23 @@ class PageHandler(BaseHandler):
         _user = store.get_bd_user(user)
         if not _user:
             return False
-        if kwargs['ac_ip'] in HM_AC:
-            # check billing
-            self.expired, self.rejected = utility.check_account_balance(_user)
-            if self.rejected:
-                # raise HTTPError(403, reason='Account has no left time')
-                return False
-        else:
+        # fix rj client user re-login error 
+        # report challenge error if user has been login
+        if kwargs['ac_ip'] in RJ_AC:
             # nansha city  account
             if self.check_mac_online_recently(kwargs['user_mac'], 1):
                 # user has been online, auto login
                 return True
-        onlines = store.count_online(_user['user'])
-        if onlines >= _user['ends']:
+
+        if not self.profile['policy']:
+            # ipolicy =0, check billing
+            self.expired, self.rejected = utility.check_account_balance(_user)
+            if self.rejected:
+                # raise HTTPError(403, reason='Account has no left time')
+                return False
+        
+        onlines = store.get_onlines(_user['user'])
+        if kwargs['user_mac'] not in onlines and len(onlines) >= _user['ends']:
             # allow user logout ends 
             return False
             # raise HTTPError(403, reason='Over the limit ends')
@@ -587,15 +604,20 @@ class PageHandler(BaseHandler):
         if password != _user['password']:
             raise HTTPError(401, reason='Password error')
 
-        # check billing
-        self.expired, self.rejected = utility.check_account_balance(_user)
-        if self.rejected:
-            raise HTTPError(403, reason='Account has no left time')
+        if not self.profile['policy']:
+            # ipolicy =0, check billing
+            self.expired, self.rejected = utility.check_account_balance(_user)
+            if self.rejected:
+                raise HTTPError(403, reason='Account has no left time')
 
-        onlines = store.count_online(_user['user'])
-        if onlines >= _user['ends']:
+        onlines = store.get_onlines(_user['user'])
+        if kwargs['user_mac'] not in onlines and len(onlines) >= _user['ends']:
             # allow user logout ends 
-            raise HTTPError(403, reason='Over the limit ends')
+            return False
+        # onlines = store.count_online(_user['user'])
+        # if onlines >= _user['ends']:
+        #     # allow user logout ends 
+        #     raise HTTPError(403, reason='Over the limit ends')
 
         self.login(_user, kwargs['ac_ip'], socket.inet_aton(kwargs['user_ip']), kwargs['user_mac'])
 
@@ -708,27 +730,29 @@ class PortalHandler(BaseHandler):
         if _user['mask']>>30 & 1:
             # raise HTTPError(403, reason='Account has been frozened')
             raise HTTPError(403, reason=bd_errs[434])
-        onlines = store.count_online(_user['user'])
-        if onlines >= _user['ends']:
-            # allow user logout ends 
-            # raise HTTPError(403, reason='Over the limit ends')
-            raise HTTPError(403, reason=bd_errs[451])
 
         self.user = _user
-
-        # check billing
-        # nanshan account user network freedom (check by ac_ip)
-        if ac_ip in HM_AC:
-            self.expired, self.rejected = utility.check_account_balance(self.user)
-            if self.rejected:
-                # raise HTTPError(403, reason='Account has no left time')
-                raise HTTPError(403, reason=bd_errs[450])
 
         ap_mac = self.get_argument('ap_mac')
         user_mac = self.get_argument('user_mac')
         user_ip = self.get_argument('user_ip')
         # vlanId = self.get_argument('vlan')
         # ssid = self.get_argument('ssid')
+
+        onlines = store.get_onlines(self.user['user'])
+        if user_mac not in onlines and len(onlines) >= self.user['ends']:
+            # allow user logout ends 
+            return False
+
+        # check billing
+        # nanshan account user network freedom (check by ac_ip)
+        profile = get_billing_policy(ac_ip, ap_mac)
+        # if ac_ip in HM_AC:
+        if not profile['policy']:
+            self.expired, self.rejected = utility.check_account_balance(self.user)
+            if self.rejected:
+                # raise HTTPError(403, reason='Account has no left time')
+                raise HTTPError(403, reason=bd_errs[450])
 
         user_ip = socket.inet_aton(user_ip)
         # send challenge to ac
@@ -1053,6 +1077,30 @@ class Header():
         if len(data) < 16:
             raise ValueError('Read Data length abnormal')
         return cls(*struct.unpack(cls._FMT, data[:16]))
+
+# ap billing profile should refress each 7200 seconds
+# _DEFAULT_PROFILE = {'portal':'login.html', 'policy':0}
+EXPIRE = 7200
+def get_billing_policy(nas_addr, ap_mac):
+    '''
+        nas_addr : ipv4
+        ap_mac : ':' separated
+        return value: {'portal':'', 'policy':0}
+    '''
+    if ap_mac in BILLING_PROFILE:
+        if int(time.time()) < BILLING_PROFILE[ap_mac]['expire']:
+            return BILLING_PROFILE[ap_mac]
+
+    policy = store.query_ap_policy(ap_mac)
+    if policy:
+        policy['expire'] = int(time.time()) + EXPIRE
+        BILLING_PROFILE[ap_mac] = policy
+    else:
+        profile = {'portal':'login.html', 'policy':0, 'expire':int(time.time()+EXPIRE)}
+        BILLING_PROFILE[ap_mac] = profile
+        
+    return BILLING_PROFILE[ap_mac];
+        
 
 _DEFAULT_BACKLOG = 128
 # These errnos indicate that a non-blocking operation must be retried

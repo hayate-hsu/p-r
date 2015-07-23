@@ -76,6 +76,9 @@ class Account(DeclarativeBase):
             2^6   account from app
 
             2^28  frozen
+
+            policy: 0 normal billing(expire & coin)
+                    1 free
     '''
     __tablename__ = 'account'
     __table_args__ = {}
@@ -94,6 +97,8 @@ class Account(DeclarativeBase):
     # age = Column('age', INTEGER(), nullable=True, doc='user age')
     create_time = Column('create_time', VARCHAR(length=19), nullable=False, doc='create time')
     expire_date = Column('expire_date', VARCHAR(length=10), nullable=True, doc='group accout expired date')
+    portal = Column('portal', VARCHAR(length=64), nullable=False, default='login.html', doc='账号对应的portal认证页面')
+    policy = Column('policy', INTEGER(), nullable=False, default=0, doc='账号的计费策略')
 
 class RenterAP(DeclarativeBase):
     '''
@@ -104,6 +109,7 @@ class RenterAP(DeclarativeBase):
     
     holder = Column('holder', INTEGER(), nullable=False, doc='equal account\'s id')
     mac = Column('mac', CHAR(length=17), nullable=False, primary_key=True, doc='ap\'s mac address')
+
 
 class AP(DeclarativeBase):
     '''
@@ -120,14 +126,6 @@ class AP(DeclarativeBase):
     position = Column('position', POINT(), doc='ap 部署位置')
     fm = Column('fm', VARCHAR(length=32), doc='固件版本')
 
-class RenterRoom(DeclarativeBase):
-    '''
-    '''
-    __tablename__ = 'holder_room'
-    __table_args__ = {}
-    
-    holder = Column('holder', INTEGER(), primary_key=True, nullable=False, doc='equal account\'s id')
-    room = Column('room', CHAR(4), primary_key=True, nullable=False, doc='room number')
 
 class BDAccount(DeclarativeBase):
     '''

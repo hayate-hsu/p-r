@@ -286,11 +286,17 @@ class AuthPacket2(AuthPacket):
     def set_session_timeout(self,timeout):
         if timeout:self.AddAttribute(27,tools.EncodeInteger(timeout))
    
-         
-
     def get_nas_addr(self):
         try:return tools.DecodeAddress(self.get(4)[0])
         except:return None
+
+    def get_calling_stationid(self):
+        try:return tools.DecodeString(self.get(31)[0])
+        except:return None   
+
+    def get_called_stationid(self):
+        try:return tools.DecodeString(self.get(30)[0])
+        except:return 0
         
     def get_mac_addr(self):
         if self.client_macaddr:return self.client_macaddr
@@ -431,6 +437,10 @@ class AcctPacket2(AcctPacket):
     def get_calling_stationid(self):
         try:return tools.DecodeString(self.get(31)[0])
         except:return None   
+
+    def get_called_stationid(self):
+        try:return tools.DecodeString(self.get(30)[0])
+        except:return 0
 
     def get_acct_status_type(self):
         try:return tools.DecodeInteger(self.get(40)[0])

@@ -355,8 +355,8 @@ class Store():
         '''
             query who own the ap and its' policy
         '''
-        with Connect(self.dbpool) as conn:
-            cur = conn.cursor()
+        with Cursor(self.dbpool) as cur:
+            # cur = conn.cursor()
             sql = '''select account.portal, account.policy from account, holder_ap 
             where holder_ap.mac = "{}" and holder_ap.holder = account.id'''.format(ap_mac)
             cur.execute(sql)

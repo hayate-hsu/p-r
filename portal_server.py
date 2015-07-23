@@ -396,12 +396,14 @@ class PageHandler(BaseHandler):
                     return self.render_exception(HTTPError(400, 'Unknown error'))
 
         # get policy
-        # return self.render(self.policy['portal'], openid='', user=)
         kwargs['user'] = kwargs['user_mac']
+        kwargs['password'] = ''
+        logger.info('profile: {}'.format(self.profile))
                     
-        if kwargs['ac_ip'] in RJ_AC:
-            return self.render('nansha_login.html', openid='', user=kwargs['user_mac'], password='', **kwargs)
-        return self.render(page, openid='', **kwargs)
+        return self.render(self.profile['portal'], openid='', **kwargs)
+        # if kwargs['ac_ip'] in RJ_AC:
+        #     return self.render('nansha_login.html', openid='', user=kwargs['user_mac'], password='', **kwargs)
+        # return self.render(page, openid='', **kwargs)
 
     def get_user_by_mac(self, mac, ac):
         # if ac in RJ_AC:
@@ -628,7 +630,7 @@ class PageHandler(BaseHandler):
         # self.render_json_response(User=user, Token=token, Code=200, Msg='OK')
         self.redirect('http://www.bidongwifi.com/account/{}?token={}'.format(user, token))
 
-        self.update_mac_record(user, kwargs['user_mac'])
+        self.update_mac_record(_user, kwargs['user_mac'])
 
 
     def timeout(self, sock, ac_ip, header, user_mac):
@@ -757,8 +759,9 @@ class PortalHandler(BaseHandler):
 
         onlines = store.get_onlines(self.user['user'])
         if user_mac not in onlines and len(onlines) >= self.user['ends']:
-            # allow user logout ends 
-            return False
+            # allow user login ends 
+            raise HTTPError(403, reason=bd_errs[451])
+            # return False
 
         # check billing
         # nanshan account user network freedom (check by ac_ip)

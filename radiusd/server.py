@@ -33,7 +33,7 @@ import six
 import os
 
 EXPIRE = 7200
-BILLING_FROFILE = {}
+BILLING_PROFILE = {}
 RJ_AC = set()
 HM_AC = set()
 
@@ -69,9 +69,9 @@ def get_billing_policy(req):
     '''
         add expired mechanism
     '''
-    ac_ip = reg.get_nas_addr()
+    ac_ip = req.get_nas_addr()
     ap_mac = ''
-    called_stationid = reg.get_called_stationid()
+    called_stationid = req.get_called_stationid()
     if called_stationid:
         ap_mac = called_stationid.split(':')[0]
 

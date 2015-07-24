@@ -445,6 +445,8 @@ class PageHandler(BaseHandler):
             raise HTTPError(400, reason='Unknown AC: {}'.format(kwargs['ac_ip']))
         kwargs['firsturl'] = self.get_argument('wlanuserfirsturl', '') or self.get_argument('url', '')
         kwargs['urlparam'] = self.get_argument('urlparam', '')
+        if kwargs['ac_ip'] == '10.10.0.71':
+            logger.info('w3c: {}'.format(self.request))
     
     def login_auto_by_mac(self, **kwargs):
         user = self.get_user_by_mac(kwargs['user_mac'], kwargs['ac_ip'])

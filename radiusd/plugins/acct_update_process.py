@@ -22,7 +22,7 @@ def process(req=None,user=None,runstat=None,**kwargs):
         ap_mac = ''
         called_stationid = req.get_called_stationid()
         if called_stationid:
-            ap_mac = called_stationed.split(':')[0]
+            ap_mac = called_stationid.split(':')[0]
             ap_mac = ap_mac.upper()
         sessiontime = req.get_acct_sessiontime()
         updatetime = datetime.datetime.now()

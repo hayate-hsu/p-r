@@ -21,6 +21,8 @@ def send_dm(coa_clients,online):
             'NAS-IP-Address' : online['nas_addr'],
             'Framed-IP-Address' : online['framed_ipaddr']
         }
+        if 'None' == attrs['Framed-IP-Address'] or not attrs['Framed-IP-Address']:
+            attrs['Framed-IP-Address'] = '0.0.0.0'
         dmeq = coa_client.createDisconnectPacket(**attrs)
         coa_client.sendCoA(dmeq)
     except:

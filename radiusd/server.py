@@ -36,6 +36,7 @@ EXPIRE = 7200
 BILLING_PROFILE = {}
 RJ_AC = set()
 HM_AC = set()
+H3C_AC = set()
 
 
 __verson__ = '0.7'
@@ -70,6 +71,8 @@ def get_billing_policy(req):
         add expired mechanism
     '''
     ac_ip = req.get_nas_addr()
+    if ac_ip in H3C_AC:
+        return {'policy':0, 'expire':int(time.time())+EXPIRE}
     ap_mac = ''
     called_stationid = req.get_called_stationid()
     if called_stationid:
@@ -352,9 +355,10 @@ def run(config):
     authport = config['authport']
     acctport = config['acctport']
     adminport = config['adminport']
-    global HM_AC, RJ_AC
+    global HM_AC, RJ_AC, H3C_AC
     HM_AC = config['HM_AC']
     RJ_AC = config['RJ_AC']
+    H3C_AC = config['H3C_AC']
     
     #parse dictfile
     dictfile = config.get('dictfile', None)

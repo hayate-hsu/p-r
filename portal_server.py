@@ -70,7 +70,12 @@ HM_AC = config['HM_AC']
 # Ruijie ac
 RJ_AC = config['RJ_AC']
 
-BAS_IP = HM_AC | RJ_AC
+H3C_AC = config['H3C_AC']
+
+BAS_IP = HM_AC | RJ_AC | H3C_AC
+
+# nansha ac
+NS_AC = RJ_AC | H3C_AC
 
 BAS_PORT = 2000
 _BUFSIZE=1024
@@ -332,6 +337,7 @@ class PageHandler(BaseHandler):
     def redirect_to_bidong(self):
         '''
         '''
+        logger.info('redirect : {}'.format(self.request.arguments))
         self.redirect('http://www.bidongwifi.com/')
 
     @_trace_wrapper
@@ -441,12 +447,20 @@ class PageHandler(BaseHandler):
             mac = self.get_argument('mac').upper()
             # kwargs['user_mac'] = ':'.join([mac[:2],mac[2:4],mac[4:6],mac[6:8],mac[8:10],mac[10:12]])
             kwargs['user_mac'] = ':'.join([mac[:2],mac[2:4],mac[5:7],mac[7:9],mac[10:12],mac[12:14]])
+        elif kwargs['ac_ip'] in H3C_AC:
+            kwargs['vlan'] = self.get_argument('vlan', '1')
+            kwargs['ssid'] = self.get_argument('ssid')
+            kwargs['user_ip'] = self.get_argument('wlanuserip')
+            mac = self.get_argument('mac').upper()
+            kwargs['user_mac'] = mac.replace('-', ':')
+
+            #
+            kwargs['ap_mac'] = '00:00:00:00:00:00'
+            logger.info('argument: {}'.format(self.request.arguments))
         else:
             raise HTTPError(400, reason='Unknown AC: {}'.format(kwargs['ac_ip']))
         kwargs['firsturl'] = self.get_argument('wlanuserfirsturl', '') or self.get_argument('url', '')
         kwargs['urlparam'] = self.get_argument('urlparam', '')
-        if kwargs['ac_ip'] == '10.10.0.71':
-            logger.info('w3c: {}'.format(self.request))
     
     def login_auto_by_mac(self, **kwargs):
         user = self.get_user_by_mac(kwargs['user_mac'], kwargs['ac_ip'])
@@ -1100,7 +1114,7 @@ class Header():
         return cls(*struct.unpack(cls._FMT, data[:16]))
 
 # ap billing profile should refress each 7200 seconds
-# _DEFAULT_PROFILE = {'portal':'login.html', 'policy':0}
+_DEFAULT_PROFILE = {'portal':'login.html', 'policy':0}
 EXPIRE = 7200
 def get_billing_policy(nas_addr, ap_mac):
     '''
@@ -1108,6 +1122,9 @@ def get_billing_policy(nas_addr, ap_mac):
         ap_mac : ':' separated
         return value: {'portal':'', 'policy':0}
     '''
+    if nas_addr in H3C_AC:
+        return _DEFAULT_PROFILE
+
     if ap_mac in BILLING_PROFILE:
         if int(time.time()) < BILLING_PROFILE[ap_mac]['expire']:
             return BILLING_PROFILE[ap_mac]

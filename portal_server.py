@@ -510,7 +510,10 @@ class PageHandler(BaseHandler):
         _mac = user_mac.split(':')
         # mac_addr = user_mac.replace('.', ':').upper()
         user_mac = ''.join([chr(int(item, base=16)) for item in _mac])
-        header = Header(0x01, 0x01, 0x00, 0x00, PortalHandler._SERIAL_NO_.pop(), 
+        ver = 0x01
+        if ac_ip in H3C_AC:
+            ver = 0x02
+        header = Header(ver, 0x01, 0x00, 0x00, PortalHandler._SERIAL_NO_.pop(), 
                         0, user_ip, 0 , 0x00, 0x00)
         packet = Packet(header, Attributes(mac=user_mac))
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -816,7 +819,10 @@ class PortalHandler(BaseHandler):
         _mac = user_mac.split(':')
         # mac_addr = user_mac.replace('.', ':').upper()
         user_mac = ''.join([chr(int(item, base=16)) for item in _mac])
-        header = Header(0x01, 0x01, 0x00, 0x00, PortalHandler._SERIAL_NO_.pop(), 
+        ver = 0x01
+        if ac_ip in H3C_AC:
+            ver = 0x02
+        header = Header(ver, 0x01, 0x00, 0x00, PortalHandler._SERIAL_NO_.pop(), 
                         0, user_ip, 0 , 0x00, 0x00)
         packet = Packet(header, Attributes(mac=user_mac))
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -901,7 +907,10 @@ class PortalHandler(BaseHandler):
         '''
         user = self.user['user']
         logger.info('progress %s logout, ip: %s', user, self.request.remote_ip)
-        header = Header(0x01, 0x05, 0x00, 0x00, PortalHandler._SERIAL_NO_.pop(), 
+        ver = 0x01
+        if ac_ip in H3C_AC:
+            ver = 0x02
+        header = Header(ver, 0x05, 0x00, 0x00, PortalHandler._SERIAL_NO_.pop(), 
                         0, user_ip, 0 , 0x00, 0x00)
         packet = Packet(header, Attributes(mac=user_mac))
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -980,10 +989,20 @@ class Packet():
         if self.attrs:
             num, data = self.attrs.pack()
         self.header.num = num
-        return self.header.pack() + data
+        header = self.header.pack()
+        attrs = data
+        auths = b''
+        if self.header.ver == 0x02:
+            auths = self.md5(header, attrs)
 
-    def md5(self):
-        pass
+        return b''.join([self.header.pack(), auths, data])
+
+    def md5(self, header, attrs):
+        '''
+            calc md5 of (header, attrs)
+        '''
+        data = b''.join([header, b'0'*16, attrs, portal_config['secret']])
+        return utility.md5(data).digest()
 
 class Attributes():
     '''
@@ -1094,10 +1113,11 @@ class Header():
         self.port = port
         self.err = err
         self.num = num
+        self.auth = b'0'*16
 
     def pack(self):
         '''
-            return binary data in big-endiani[>]
+            return binary data in big-endian[>]
         '''
         return struct.pack(self._FMT, 
                            self.ver, self.type, self.auth, self.rsv, 

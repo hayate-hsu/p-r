@@ -511,9 +511,10 @@ class PageHandler(BaseHandler):
         _mac = user_mac.split(':')
         # mac_addr = user_mac.replace('.', ':').upper()
         user_mac = ''.join([chr(int(item, base=16)) for item in _mac])
-        ver = 0x01
+        ver,start = 0x01, 16
         if ac_ip in H3C_AC:
             ver = 0x02
+            start = 16 + 16
         header = Header(ver, 0x01, 0x00, 0x00, PortalHandler._SERIAL_NO_.pop(), 
                         0, user_ip, 0 , 0x00, 0x00)
         packet = Packet(header, Attributes(mac=user_mac))
@@ -536,7 +537,7 @@ class PageHandler(BaseHandler):
             raise HTTPError(400, reason='challenge error')
             # return self.render_json_response(Code=400, Msg='challenge error')
         # parse challenge value
-        attrs = Attributes.unpack(header.num, data[16:])
+        attrs = Attributes.unpack(header.num, data[start:])
         if not attrs.challenge:
             logger.warning('Abnormal challenge value, 0x%x, 0x%x', header.err, header.num)
             sock.close()
@@ -820,9 +821,11 @@ class PortalHandler(BaseHandler):
         _mac = user_mac.split(':')
         # mac_addr = user_mac.replace('.', ':').upper()
         user_mac = ''.join([chr(int(item, base=16)) for item in _mac])
-        ver = 0x01
+        ver,start = 0x01,16
         if ac_ip in H3C_AC:
+            # user portal v2
             ver = 0x02
+            start = 16 + 16
         header = Header(ver, 0x01, 0x00, 0x00, PortalHandler._SERIAL_NO_.pop(), 
                         0, user_ip, 0 , 0x00, 0x00)
         packet = Packet(header, Attributes(mac=user_mac))
@@ -847,7 +850,7 @@ class PortalHandler(BaseHandler):
             raise HTTPError(400, reason=bd_errs[530])
             # return self.render_json_response(Code=400, Msg='challenge error')
         # parse challenge value
-        attrs = Attributes.unpack(header.num, data[16:])
+        attrs = Attributes.unpack(header.num, data[start:])
         if not attrs.challenge:
             logger.warning('Abnormal challenge value, 0x%x, 0x%x', header.err, header.num)
             sock.close()
@@ -882,7 +885,7 @@ class PortalHandler(BaseHandler):
         if header.type != 0x04 or header.err:
             logger.info('0x%x error, errno: 0x%x', header.type, header.err)
             sock.close()
-            attrs = Attributes.unpack(header.num, data[16:])
+            attrs = Attributes.unpack(header.num, data[start:])
             # raise HTTPError(403, reason='auth error')
             raise HTTPError(403, reason=bd_errs[531])
 
@@ -978,9 +981,10 @@ class PortalHandler(BaseHandler):
 class Packet():
     '''
     '''
-    def __init__(self, header, attrs=None):
+    def __init__(self, header, attrs=None, auth=''):
         self.header = header
         self.attrs = attrs
+        self.auth = ''
 
     def pack(self):
         '''
@@ -997,6 +1001,19 @@ class Packet():
             auths = self.md5(header, attrs)
 
         return b''.join([header, auths, data])
+
+    @classmethod
+    def unpack(cls, data):
+        auth = ''
+        header = Header.unpack(data)
+        attrs = None
+        data = data[16:]
+        if header.num and data:
+            if header.ver == 0x02:
+                auth, data = data[:16],data[16:]
+                attrs = Attributes.unpack(header.num, data)
+
+        return cls(header, attrs, auth)
 
     def md5(self, header, attrs):
         '''
@@ -1251,7 +1268,8 @@ def ac_data_handler(sock, data, addr):
         # sock.sendto(data, addr)
 
         if True:
-            attrs = Attributes.unpack(header.num, data[16:])
+            start = 32 if header.ver == 0x02 else 16
+            attrs = Attributes.unpack(header.num, data[start:])
             if not attrs.mac:
                 logger.info('User quit, ip: {}'.format(socket.inet_ntoa(header.ip)))
                 return

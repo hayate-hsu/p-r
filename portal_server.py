@@ -460,7 +460,7 @@ class PageHandler(BaseHandler):
             logger.info('argument: {}'.format(self.request.arguments))
         else:
             raise HTTPError(400, reason='Unknown AC: {}'.format(kwargs['ac_ip']))
-        kwargs['firsturl'] = self.get_argument('wlanuserfirsturl', '') or self.get_argument('url', '')
+        kwargs['firsturl'] = self.get_argument('wlanuserfirsturl', '') or self.get_argument('url', '') or self.get_argument('userurl', '')
         kwargs['urlparam'] = self.get_argument('urlparam', '')
     
     def login_auto_by_mac(self, **kwargs):

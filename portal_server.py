@@ -885,7 +885,7 @@ class PortalHandler(BaseHandler):
         if header.type != 0x04 or header.err:
             logger.info('0x%x error, errno: 0x%x', header.type, header.err)
             sock.close()
-            attrs = Attributes.unpack(header.num, data[start:])
+            # attrs = Attributes.unpack(header.num, data[start:])
             # raise HTTPError(403, reason='auth error')
             raise HTTPError(403, reason=bd_errs[531])
 

@@ -448,9 +448,10 @@ class PageHandler(BaseHandler):
             # kwargs['user_mac'] = ':'.join([mac[:2],mac[2:4],mac[4:6],mac[6:8],mac[8:10],mac[10:12]])
             kwargs['user_mac'] = ':'.join([mac[:2],mac[2:4],mac[5:7],mac[7:9],mac[10:12],mac[12:14]])
         elif kwargs['ac_ip'] in H3C_AC:
+            logger.info('info: {}'.format(self.request.arguments))
             kwargs['vlan'] = self.get_argument('vlan', '1')
-            kwargs['ssid'] = self.get_argument('ssid')
-            kwargs['user_ip'] = self.get_argument('wlanuserip')
+            kwargs['ssid'] = self.get_argument('ssid', 'bidong-h3c')
+            kwargs['user_ip'] = self.get_argument('userip', '') or self.get_argument('wlanuserip', '') 
             mac = self.get_argument('mac').upper()
             kwargs['user_mac'] = mac.replace('-', ':')
 
@@ -995,7 +996,7 @@ class Packet():
         if self.header.ver == 0x02:
             auths = self.md5(header, attrs)
 
-        return b''.join([self.header.pack(), auths, data])
+        return b''.join([header, auths, data])
 
     def md5(self, header, attrs):
         '''
@@ -1113,7 +1114,7 @@ class Header():
         self.port = port
         self.err = err
         self.num = num
-        self.auth = b'0'*16
+        # self.auth = b'0'*16
 
     def pack(self):
         '''

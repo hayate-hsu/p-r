@@ -480,6 +480,10 @@ class PageHandler(BaseHandler):
                 return True
 
         if not self.profile['policy']:
+            if _user['mask']>>30 & 1:
+                # raise HTTPError(403, reason='Account has been frozened')
+                return False
+                # raise HTTPError(403, reason=bd_errs[434])
             # ipolicy =0, check billing
             self.expired, self.rejected = utility.check_account_balance(_user)
             if self.rejected:

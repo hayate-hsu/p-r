@@ -113,7 +113,7 @@ def _check_expire_date(_user):
     if not _user['expire_date']:
         return True
     now = datetime.datetime.now()
-    _expire_datetime = datetime.datetime.strptime(_user['expire_date'], '%Y-%m-%d')
+    _expire_datetime = datetime.datetime.strptime(_user['expire_date'] + ' 23:59:59', '%Y-%m-%d %H:%M:%S')
     if now > _expire_datetime:
         return True
     return False

@@ -47,7 +47,7 @@ def _check_expire_date(_user):
     if not _user['expire_date']:
         return True
     now = datetime.datetime.now()
-    _expire_datetime = datetime.datetime.strptime(_user['expire_date'], '%Y-%m-%d')
+    _expire_datetime = datetime.datetime.strptime(_user['expire_date']+' 23:59:59', '%Y-%m-%d %H:%M:%S')
     if now > _expire_datetime:
         return True
     return False
@@ -230,27 +230,22 @@ class RADIUSAccess(RADIUS):
         
         reply = req.CreateReply()
         reply.source = req.source
-        # user = store.get_bd_user_by_mac(req.get_user_name())
-        # print(user, req.get_user_name())
         user = store.get_bd_user(req.get_user_name())
-        # if user:
-        #     expired, rejected = check_account_balance(user)
-        #     if rejected:
-        #         # if go to this branch, (req.get_user_name()) is mac address
-        #         # user has no time left, set user=None
-        #         # goto portal authenication
-        #         user = None
         if user:
-            self.user_trace.push(user['user'],req)
             # get billing policy
             user['policy'] = get_billing_policy(req)
             if not user['policy']:
-                expired, rejected = check_account_balance(user)
-                if rejected:
-                    # if go to this branch, (req.get_user_name()) is mac address
-                    # user has no time left, set user=None
-                    # goto portal authenication
+                if user['mask']>>30 & 1:
                     user = None
+                if user:
+                    expired, rejected = check_account_balance(user)
+                    if rejected:
+                        # if go to this branch, (req.get_user_name()) is mac address
+                        # user has no time left, set user=None
+                        # goto portal authenication
+                        user = None
+        if user:
+            self.user_trace.push(user['user'],req)
 
         # middleware execute
         for plugin in auth_plugins:

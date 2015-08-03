@@ -36,6 +36,8 @@ def process(req=None, user=None, runstat=None, coa_clients=None, **kwargs):
         return   
 
     online = store.get_online(req.get_nas_addr(),req.get_acct_sessionid())  
+    if not online:
+        return
 
     log.msg('{} > Prepaid long time billing '.format(req.get_user_name()),level=logging.INFO)
     if (not user) or user['policy']:

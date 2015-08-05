@@ -516,9 +516,9 @@ class PageHandler(BaseHandler):
         # mac_addr = user_mac.replace('.', ':').upper()
         user_mac = ''.join([chr(int(item, base=16)) for item in _mac])
         ver,start = 0x01, 16
-        if ac_ip in H3C_AC:
-            ver = 0x02
-            start = 16 + 16
+        # if ac_ip in H3C_AC:
+        #     ver = 0x02
+        #     start = 16 + 16
         header = Header(ver, 0x01, 0x00, 0x00, PortalHandler._SERIAL_NO_.pop(), 
                         0, user_ip, 0 , 0x00, 0x00)
         packet = Packet(header, Attributes(mac=user_mac))
@@ -826,10 +826,10 @@ class PortalHandler(BaseHandler):
         # mac_addr = user_mac.replace('.', ':').upper()
         user_mac = ''.join([chr(int(item, base=16)) for item in _mac])
         ver,start = 0x01,16
-        if ac_ip in H3C_AC:
-            # user portal v2
-            ver = 0x02
-            start = 16 + 16
+        # if ac_ip in H3C_AC:
+        #     # user portal v2
+        #     ver = 0x02
+        #     start = 16 + 16
         header = Header(ver, 0x01, 0x00, 0x00, PortalHandler._SERIAL_NO_.pop(), 
                         0, user_ip, 0 , 0x00, 0x00)
         packet = Packet(header, Attributes(mac=user_mac))
@@ -916,8 +916,8 @@ class PortalHandler(BaseHandler):
         user = self.user['user']
         logger.info('progress %s logout, ip: %s', user, self.request.remote_ip)
         ver = 0x01
-        if ac_ip in H3C_AC:
-            ver = 0x02
+        # if ac_ip in H3C_AC:
+        #     ver = 0x02
         header = Header(ver, 0x05, 0x00, 0x00, PortalHandler._SERIAL_NO_.pop(), 
                         0, user_ip, 0 , 0x00, 0x00)
         packet = Packet(header, Attributes(mac=user_mac))
@@ -1088,7 +1088,7 @@ class Attributes():
             parse data
         '''
         user, password, challenge, chap_password, mac, textinfo = '', '', '', '', '', ''
-        while num:
+        while num and data:
             # check length
             # length contain type&length bytes.
             # 0xff0x08 6bytes mac address
@@ -1106,6 +1106,9 @@ class Attributes():
                 textinfo,data = data[2:length],data[length:]
             elif type == 0xff:
                 mac, data = data[2:length],data[length:]
+            else:
+                # unknown attributes
+                data = data[length:]
             num = num - 1
         return cls(user=user, password=password, challenge=challenge, 
                    mac=mac, textinfo=textinfo)

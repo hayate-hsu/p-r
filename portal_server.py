@@ -390,6 +390,7 @@ class PageHandler(BaseHandler):
                     # self.set_header('Access-Control-Allow-Origin', '*')
                     if kwargs['urlparam']:
                         url = ''.join([url, '?', kwargs['urlparam']])
+                    self.set_header('User-Mac', kwargs['user_mac'])
                     return self.redirect(url)
                 return 
 

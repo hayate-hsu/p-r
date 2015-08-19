@@ -964,7 +964,7 @@ class PortalHandler(BaseHandler):
                     1<<7 : ios
         '''
         value,mask = '', self.get_argument('mask',0)
-        if mask & ((1<<6) + (1<<7)):
+        if mask & (1<<6|1<<7):
             value = self.get_argument('uuid')
         else:
             return None 

@@ -10,12 +10,6 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relation
 from sqlalchemy.orm import scoped_session, sessionmaker
 from hashlib import md5
-from sqlalchemy.dialects.mysql import \
-        BIGINT, BINARY, BIT, BLOB, BOOLEAN, CHAR, DATE, \
-        DATETIME, DECIMAL, DECIMAL, DOUBLE, ENUM, FLOAT, INTEGER, \
-        LONGBLOB, LONGTEXT, MEDIUMBLOB, MEDIUMINT, MEDIUMTEXT, NCHAR, \
-        NUMERIC, NVARCHAR, REAL, SET, SMALLINT, TEXT, TIME, TIMESTAMP, \
-        TINYBLOB, TINYINT, TINYTEXT, VARBINARY, VARCHAR, YEAR
 
 import functools
 
@@ -257,38 +251,6 @@ class Ticket(DeclarativeBase):
     start_source = Column('start_source', INTEGER(), nullable=False, doc='')
     stop_source = Column('stop_source', INTEGER(), nullable=False, doc='')
 
-class NSEmployee(DeclarativeBase):
-    '''
-        NAN SHA employee 
-    '''
-    __tablename__ = 'ns_employee'
-    __table_args__ = {}
-
-    id = Column('id', INTEGER(), primary_key=True, nullable=False, doc='id')
-    name = Column('name', VARCHAR(length=32), nullable=False, doc='name')
-    gender = Column('gender', TINYINT(), nullable, default=0, doc='gender' )
-    mobile = Column('mobile', VARCHAR(length=17), nullable=False, doc='mobile, unique index')
-    position = Column('position', VARCHAR(length=64), doc='')
-    department = Column('department', VARCHAR(length=64), doc='')
-    ctime = Column('ctime', DATETIME(), default=CURRENT_TIMESTAMP, doc='record created datetime')
-    mtime = Column('mtime', DATETIME(), default=CURRENT_TIMESTAMP, doc='modify datetime')
-    
-class NSNotice(DeclarativeBase):
-    '''
-        mask : notice type
-            0 : default news
-            1 : notice, server will send details immediately
-        id: notice's id, if notice type is 0(news), the generated html paged
-        will be store at ns_news/id.html
-    '''
-    __tablename__ = 'ns_notice'
-    __table_args__ = {}
-
-    id = Column('id', INTEGER(), primary_key=True, nullable=False, doc='id')
-    caption = Column('caption', VARCHAR(length=128), nullable=False, doc='caption')
-    summary = Column('summary', VARCHAR(length=256), nullable=False, doc='caption')
-    mask = Column('mask', TINYINT(), nullable=False, doc='notice type')
-    ctime = Column('ctime', DATETIME(), default=CURRENT_TIMESTAMP, doc='notice created time')
 
 def build_db(config=None, password=None):
     '''

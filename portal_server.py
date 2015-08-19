@@ -357,6 +357,7 @@ class PageHandler(BaseHandler):
             # return self.redirect('http://58.241.41.148/index.html')
 
         kwargs = {}
+        accept = self.request.headers.get('Accept', 'text/html')
         if page.startswith('login'):
             kwargs['ac_ip'] = self.get_argument('wlanacip', '') or self.get_argument('nasip', '')
             if not kwargs['ac_ip']:
@@ -371,10 +372,20 @@ class PageHandler(BaseHandler):
             
             self.get_current_billing_policy(**kwargs)
             # check mac address, login by mac address
-            # if login successfully, return true, else return false
-            if self.login_auto_by_mac(**kwargs):
+            # if login successfully, return _user, else return None
+            _user = self.login_auto_by_mac(**kwargs)
+            if _user:
                 # auto login successfully
                 # redirect to previous url 
+                if accept.startswith('application/json'):
+                    # request from app (android & ios)
+                    # if mask & 1<<4 ,indicate account is nansha city account
+                    # app need create app account & merge account
+                    token = utility.token(_user['user'])
+                    self.render_json_response(User=_user['user'], Token=token, Mask=_user['mask'], 
+                                              Code=200, Msg='OK')
+                    return
+
                 if url:
                     # self.set_header('Access-Control-Allow-Origin', '*')
                     if kwargs['urlparam']:
@@ -405,11 +416,10 @@ class PageHandler(BaseHandler):
         kwargs['user'] = kwargs['user_mac']
         kwargs['password'] = ''
         logger.info('profile: {}'.format(self.profile))
+        if accept.startswith('application/json'):
+            return self.render_json_response(Code=200, Msg='OK', openid='', **kwargs)
                     
         return self.render(self.profile['portal'], openid='', **kwargs)
-        # if kwargs['ac_ip'] in RJ_AC:
-        #     return self.render('nansha_login.html', openid='', user=kwargs['user_mac'], password='', **kwargs)
-        # return self.render(page, openid='', **kwargs)
 
     def get_user_by_mac(self, mac, ac):
         # if ac in RJ_AC:
@@ -464,45 +474,49 @@ class PageHandler(BaseHandler):
         kwargs['urlparam'] = self.get_argument('urlparam', '')
     
     def login_auto_by_mac(self, **kwargs):
+        '''
+            if found bd_account by mac, and check successfully return user account 
+            otherwise return None
+        '''
         user = self.get_user_by_mac(kwargs['user_mac'], kwargs['ac_ip'])
         if not user:
-            return False
+            return None
 
         _user = store.get_bd_user(user)
         if not _user:
-            return False
+            return None
         # fix rj client user re-login error 
         # report challenge error if user has been login
-        if kwargs['ac_ip'] in RJ_AC:
-            # nansha city  account
-            if self.check_mac_online_recently(kwargs['user_mac'], 1):
-                # user has been online, auto login
-                return True
+        # if kwargs['ac_ip'] in RJ_AC:
+        #     # nansha city  account
+        #     if self.check_mac_online_recently(kwargs['user_mac'], 1):
+        #         # user has been online, auto login
+        #         return True
 
         if not self.profile['policy']:
             if _user['mask']>>30 & 1:
                 # raise HTTPError(403, reason='Account has been frozened')
-                return False
+                return None
                 # raise HTTPError(403, reason=bd_errs[434])
             # ipolicy =0, check billing
             self.expired, self.rejected = utility.check_account_balance(_user)
             if self.rejected:
                 # raise HTTPError(403, reason='Account has no left time')
-                return False
+                return None
         
         onlines = store.get_onlines(_user['user'])
         if kwargs['user_mac'] not in onlines and len(onlines) >= _user['ends']:
             # allow user logout ends 
-            return False
+            return None
             # raise HTTPError(403, reason='Over the limit ends')
         try:
             logger.info('Progress {} (mac: {}) auto login'.format(user, kwargs['user_mac']))
             self.login(_user, kwargs['ac_ip'], socket.inet_aton(kwargs['user_ip']), kwargs['user_mac'])
         except:
             logger.warning('auto login error', exc_info=True)
-            return False
+            return None
 
-        return True
+        return _user
 
     def login(self, _user, ac_ip, user_ip, user_mac):
         '''
@@ -751,12 +765,24 @@ class PortalHandler(BaseHandler):
         if ac_ip not in BAS_IP:
             logger.error('not avaiable ac & ap')
             raise HTTPError(403, reason='AC ip error')
-        
-        if ac_ip in RJ_AC:
-            user = self.check_mac_account(self.get_argument('user_mac'))
-        elif not password:
-            logger.error('Password can\'t null')
-            raise HTTPError(403, 'Password can\'t null')
+
+        ap_mac = self.get_argument('ap_mac')
+        user_mac = self.get_argument('user_mac')
+        user_ip = self.get_argument('user_ip')
+        # vlanId = self.get_argument('vlan')
+        # ssid = self.get_argument('ssid')
+
+        mask = self.get_argument('mask', 0)
+        if mask:
+            _user = self.check_app_account(user_mac)
+            user = _user['user']
+            password = _user['password']
+        else:
+            if ac_ip in RJ_AC:
+                user = self.check_mac_account(user_mac)
+            elif not password:
+                logger.error('Password can\'t null')
+                raise HTTPError(403, 'Password can\'t null')
 
         if len(user) == 4:
             # room number
@@ -775,12 +801,6 @@ class PortalHandler(BaseHandler):
             raise HTTPError(403, reason=bd_errs[434])
 
         self.user = _user
-
-        ap_mac = self.get_argument('ap_mac')
-        user_mac = self.get_argument('user_mac')
-        user_ip = self.get_argument('user_ip')
-        # vlanId = self.get_argument('vlan')
-        # ssid = self.get_argument('ssid')
 
         onlines = store.get_onlines(self.user['user'])
         if user_mac not in onlines and len(onlines) >= self.user['ends']:
@@ -936,6 +956,30 @@ class PortalHandler(BaseHandler):
         packet = Packet(header, Attributes(mac=user_mac))
         sock.sendto(packet.pack(), (ac_ip, BAS_PORT))
         # ignore response
+
+    def check_app_account(self, user_mac):
+        '''
+            mask:
+                    1<<6 : android 
+                    1<<7 : ios
+        '''
+        value,mask = '', self.get_argument('mask',0)
+        if mask & ((1<<6) + (1<<7)):
+            value = self.get_argument('uuid')
+        else:
+            return None 
+
+        if mask:
+            user = store.get_user(value, mask)
+            _id = user['id']
+            if not user:
+                _id = store.add_user(value, utility.generate_password(), mask)
+                # check account by mac
+                store.merge_app_account(_id, user_mac)
+            _user = store.get_bd_user(_id)
+            return _user
+
+        return None
 
     def check_mac_account(self, mac):
         '''
@@ -1184,7 +1228,6 @@ def get_billing_policy(nas_addr, ap_mac):
         
     return BILLING_PROFILE[ap_mac];
         
-
 _DEFAULT_BACKLOG = 128
 # These errnos indicate that a non-blocking operation must be retried
 # at a later time. On most paltforms they're the same value, but on 

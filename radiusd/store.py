@@ -197,14 +197,15 @@ class Store():
             results = cur.fetchall()
             return results
 
-    def add_user(self, user, password, ends=2**8):
+    def add_user(self, user, password, ends=0):
         '''
             user : uuid or weixin openid
             password : user encrypted password
             ends : special the end type         data
                 0 : unknown                     
                 2^5 : weixin                      opendid
-                2^6 : app                         opendid or other unique id 
+                2^6 : app(android)                opendid or other unique id 
+                2^7 : app(ios)
                 2**9: user pay by time
 
                 2**28 : acount forzened
@@ -216,10 +217,15 @@ class Store():
             column = 'weixin'
             weixin, uuid = user, ''
             mask = 0 + 2**2 + 2**5
-            if ends>>9 & 0x01:
+            if ends>>6 & 1:
                 weixin, uuid = '', user
                 column = 'uuid'
                 mask = 0 + 2**2 + 2**6
+            elif ends>>7 & 1:
+                weixin, uuid = '', user
+                column = 'uuid'
+                mask = 0 + 2**2 + 2**7
+
             sql = '''insert into account 
             (mobile, weixin, uuid, email, mask, address, realname, create_time) 
             values("", "{}", "{}", "", {}, "", "", "{}")
@@ -235,7 +241,7 @@ class Store():
 
             sql = '''insert into bd_account (user, password, mask, 
             time_length, flow_length, expire_date, coin, 
-            mac, ip, holder, ends) values("{}", "{}", {}, 0, 0, "", {}, "", "", 0, 2)
+            mac, ip, holder, ends) values("{}", "{}", {}, 0, 0, "", {}, "", "", 0, 5)
             '''.format(str(user['id']), password, mask, coin)
             cur.execute(sql)
             conn.commit()
@@ -273,14 +279,17 @@ class Store():
             conn.commit()
             return mac
 
-    def get_user(self, user, ends=2**8):
+    def get_user(self, user, ends=0):
         '''
             arguments as add_user
+            ends:
+                    6&7 : app
+                    0 : weixin
         '''
         with Cursor(self.dbpool) as cur:
             # default from weixin
             column = 'weixin'
-            if ends>>9 & 0x01:
+            if ends:
                 # from app
                 column = 'uuid'
             cur.execute('select * from account where {} = "{}"'.format(column, user))
@@ -336,6 +345,42 @@ class Store():
             mac : mac address
         '''
         pass
+
+    def merge_app_account(self, _id, user_mac):
+        '''
+            merge mac account to app account
+        '''
+        with Connect(self.dbpool) as conn:
+            cur = conn.cursor(MySQLdb.cursors.DictCursor)
+            mac = user_mac.replace(':', '')
+            sql = 'select * from bd_account where user = "{}"'.format(mac)
+            cur.execute(sql)
+            user = cur.fetchone()
+            if user:
+                # delete mac_history record
+                sql = 'delete from mac_history where user = "{}"'.format(mac)
+                cur.execute(sql)
+                # delete mac account
+                sql = 'delete from bd_account where user = "{}"'.format(mac)
+                cur.execute(sql)
+
+                # update _id recordds
+                sql = '''update bd_account set 
+                expire_date="{}" and coin={} where user="{}"
+                '''.format(user['expire_date'], user['coin'], _id)
+                cur.execute(sql)
+
+                # update bind account
+                sql = 'update bind set weixin="{}" where weixin="{}"'.format(_id, mac)
+                cur.execute(sql)
+
+                # update nansha bind account
+                if user['mask'] & 1<<16:
+                    sql = 'update bind set renter="{}" where renter="{}"'.format(_id, mac)
+                    cur.execute(sql)
+
+                conn.commit()
+
 
     def update_mac_record(self, user, new_mac, old_mac, agent, isupdate=True):
         with Connect(self.dbpool) as conn:
@@ -582,5 +627,6 @@ class Store():
             _unlock_one()
         else:
             _unlock_many()
+
 
 store = Store()

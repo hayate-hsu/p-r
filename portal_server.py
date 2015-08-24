@@ -772,7 +772,7 @@ class PortalHandler(BaseHandler):
         # vlanId = self.get_argument('vlan')
         # ssid = self.get_argument('ssid')
 
-        mask = self.get_argument('mask', 0)
+        mask = int(self.get_argument('mask', 0))
         if mask:
             _user = self.check_app_account(user_mac)
             user = _user['user']
@@ -963,7 +963,7 @@ class PortalHandler(BaseHandler):
                     1<<6 : android 
                     1<<7 : ios
         '''
-        value,mask = '', self.get_argument('mask',0)
+        value,mask = '', int(self.get_argument('mask',0))
         if mask & (1<<6|1<<7):
             value = self.get_argument('uuid')
         else:
@@ -971,12 +971,15 @@ class PortalHandler(BaseHandler):
 
         if mask:
             user = store.get_user(value, mask)
-            _id = user['id']
+            _id = ''
             if not user:
                 _id = store.add_user(value, utility.generate_password(), mask)
                 # check account by mac
                 store.merge_app_account(_id, user_mac)
-            _user = store.get_bd_user(_id)
+            else:
+                _id = user['id']
+
+            _user = store.get_bd_user(str(_id))
             return _user
 
         return None

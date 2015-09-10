@@ -470,8 +470,12 @@ class PageHandler(BaseHandler):
             logger.info('argument: {}'.format(self.request.arguments))
         else:
             raise HTTPError(400, reason='Unknown AC: {}'.format(kwargs['ac_ip']))
-        kwargs['firsturl'] = self.get_argument('wlanuserfirsturl', '') or self.get_argument('url', '') or self.get_argument('userurl', '')
-        kwargs['urlparam'] = self.get_argument('urlparam', '')
+        try:
+            kwargs['firsturl'] = self.get_argument('wlanuserfirsturl', '') or self.get_argument('url', '') or self.get_argument('userurl', '')
+            kwargs['urlparam'] = self.get_argument('urlparam', '')
+        except:
+            kwargs['firsturl'] = 'http://wwww.bidongwifi.com/'
+            kwargs['urlparam'] = ''
     
     def login_auto_by_mac(self, **kwargs):
         '''
@@ -1207,6 +1211,7 @@ class Header():
 
 # ap billing profile should refress each 7200 seconds
 _DEFAULT_PROFILE = {'portal':'login.html', 'policy':0}
+_NANSHA_PROFILE = {'portal':'nansha_login.html', 'policy':0}
 EXPIRE = 7200
 def get_billing_policy(nas_addr, ap_mac):
     '''
@@ -1215,7 +1220,7 @@ def get_billing_policy(nas_addr, ap_mac):
         return value: {'portal':'', 'policy':0}
     '''
     if nas_addr in H3C_AC:
-        return _DEFAULT_PROFILE
+        return _NANSHA_PROFILE
 
     if ap_mac in BILLING_PROFILE:
         if int(time.time()) < BILLING_PROFILE[ap_mac]['expire']:
@@ -1246,7 +1251,7 @@ def bind_udp_socket(port, address=None, family=socket.AF_UNSPEC, backlog=_DEFAUL
     if address == '':
         address = None
     if not socket.has_ipv6 and family == socket.AF_UNSPEC:
-        family = socket.AFINET
+        family = socket.AF_INET
     if flags is None:
         flags = socket.AI_PASSIVE
     bound_port = None

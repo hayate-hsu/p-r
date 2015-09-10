@@ -291,6 +291,19 @@ class NSNotice(DeclarativeBase):
     mask = Column('mask', TINYINT(), nullable=False, doc='notice type')
     ctime = Column('ctime', DATETIME(), default=CURRENT_TIMESTAMP, doc='notice created time')
 
+class Version(DeclarativeBase):
+    '''
+         
+    '''
+    __tablename__ = 'app_ver'
+    __table_args__ = {}
+
+    platform = Column('pt', VARCHAR(length=24), nullable=False, doc='IOS/Andriod')
+    # mask = Column('mask', INTEGER(), nullable=False, doc='mask')
+    newest = Column('newest', VARCHAR(length=12), nullable=False, doc='newest')
+    least = Column('least', VARCHAR(length=12), nullable=False, doc='least')
+
+
 def build_db(config=None, password=None):
     '''
         config : database value

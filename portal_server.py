@@ -782,7 +782,7 @@ class PortalHandler(BaseHandler):
             user = _user['user']
             password = _user['password']
         else:
-            if ac_ip in RJ_AC:
+            if ac_ip in NS_AC:
                 user = self.check_mac_account(user_mac)
             elif not password:
                 logger.error('Password can\'t null')
@@ -1211,7 +1211,7 @@ class Header():
 
 # ap billing profile should refress each 7200 seconds
 _DEFAULT_PROFILE = {'portal':'login.html', 'policy':0}
-_NANSHA_PROFILE = {'portal':'nansha_login.html', 'policy':0}
+_NANSHA_PROFILE = {'portal':'nansha_login.html', 'policy':1}
 EXPIRE = 7200
 def get_billing_policy(nas_addr, ap_mac):
     '''
@@ -1219,7 +1219,8 @@ def get_billing_policy(nas_addr, ap_mac):
         ap_mac : ':' separated
         return value: {'portal':'', 'policy':0}
     '''
-    if nas_addr in H3C_AC:
+    # NANSHA aps use _NANSHA_PROFILE profile 
+    if nas_addr in NS_AC:
         return _NANSHA_PROFILE
 
     if ap_mac in BILLING_PROFILE:

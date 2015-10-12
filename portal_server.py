@@ -554,6 +554,15 @@ class PageHandler(BaseHandler):
 
         header = Header.unpack(data)
         if header.type != 0x02 or header.err:
+            if header.err == 0x02:
+                # linked has been established, has been authed 
+                logger.info('user: {} has been authed, mac:{}'.format(user, ':'.join(_mac)))
+                return
+            elif header.err == 0x03:
+                # user's previous link has been verifring 
+                logger.info('user: {}\'s previous has been progressing, mac:{}'.format(user, ':'.join(_mac)))
+                return
+
             logger.info('0x%x error, errno: 0x%x', header.type, header.err)
             sock.close()
             raise HTTPError(400, reason='challenge error')
@@ -872,6 +881,14 @@ class PortalHandler(BaseHandler):
 
         header = Header.unpack(data)
         if header.type != 0x02 or header.err:
+            if header.err == 0x02:
+                # linked has been established, has been authed 
+                logger.info('user: {} has been authed, mac:{}'.format(user, ':'.join(_mac)))
+                raise HTTPError(435, reason=bd_errs[435])
+            elif header.err == 0x03:
+                # user's previous link has been verifring 
+                logger.info('user: {}\'s previous has been progressing, mac:{}'.format(user, ':'.join(_mac)))
+                raise HTTPError(436, reason=bd_errs[436])
             logger.info('0x%x error, errno: 0x%x', header.type, header.err)
             sock.close()
             # raise HTTPError(400, reason='challenge timeout, retry')

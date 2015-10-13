@@ -86,8 +86,10 @@ LOGIN = 0
 LOGOUT = 1
 
 CURRENT_PATH = os.path.abspath(os.path.dirname(__file__))
-STATIC_PATH = os.path.join('/home/niot/wifi', 'webpro/bidong_v2')
-TEMPLATE_PATH = os.path.join('/home/niot/wifi', 'webpro/bidong_v2/portal')
+# STATIC_PATH = os.path.join('/home/niot/wifi', 'webpro/bidong_v2')
+# TEMPLATE_PATH = os.path.join('/home/niot/wifi', 'webpro/bidong_v2/portal')
+STATIC_PATH = '/web/bidong'
+TEMPLATE_PATH = '/web/portal'
 PAGE_PATH = os.path.join(TEMPLATE_PATH, 'm')
 
 # ap_mac_addr:{portal:'', billing:''}

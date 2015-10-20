@@ -545,7 +545,7 @@ class PageHandler(BaseHandler):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.sendto(packet.pack(), (ac_ip, BAS_PORT))
         try:
-            sock.settimeout(portal_config['nas_timeout'])
+            sock.settimeout(5)
             data, address = sock.recvfrom(_BUFSIZE)
         except socket.timeout:
             logger.warning('Challenge timeout')
@@ -588,7 +588,7 @@ class PageHandler(BaseHandler):
 
         # wait auth response
         try:
-            sock.settimeout(portal_config['nas_timeout'])
+            sock.settimeout(5)
             data, address = sock.recvfrom(_BUFSIZE)
         except socket.timeout:
             logger.warning('auth timeout')
@@ -612,11 +612,9 @@ class PageHandler(BaseHandler):
         sock.settimeout(None)
         sock.sendto(packet.pack(), (ac_ip, BAS_PORT))
         sock.close()
-
-        time.sleep(1.5)
-
         logger.info('%s login successfully, wlan: %s', user, self.request.remote_ip)
 
+        time.sleep(1.5)
 
     def get_openid(self, code):
         URL = 'https://{}/sns/oauth2/access_token?appid={}&secret={}&code={}&grant_type=authorization_code'

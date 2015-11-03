@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 #coding=utf-8
-from DBUtils.PooledDB import PooledDB
+# from DBUtils.PooledDB import PooledDB
+from DBUtils.PersistentDB import PersistentDB
 # from beaker.cache import CacheManager
 # import functools
 # import settings
@@ -48,7 +49,7 @@ class Cursor:
 
 class MySQLPool():
     def __init__(self, config):
-        self.dbpool = PooledDB(
+        self.dbpool = PersistentDB(
             creator=MySQLdb,
             db=config['db'],
             host=config['host'],

@@ -167,6 +167,7 @@ class BaseHandler(tornado.web.RequestHandler):
                 static_url = self.static_url,
                 xsrf_form_html = self.xsrf_form_html,
                 reverse_url = self.application.reverse_url,
+                agent = self.agent,
             )
             env_kwargs.update(kwargs)
             return template.render(**env_kwargs)
@@ -784,6 +785,7 @@ class PortalHandler(BaseHandler):
         user_ip = self.get_argument('user_ip')
         # vlanId = self.get_argument('vlan')
         # ssid = self.get_argument('ssid')
+        profile = get_billing_policy(ac_ip, ap_mac)
 
         mask = int(self.get_argument('mask', 0))
         if mask:
@@ -791,7 +793,8 @@ class PortalHandler(BaseHandler):
             user = _user['user']
             password = _user['password']
         else:
-            if ac_ip in NS_AC:
+            if ac_ip in NS_AC or (':' in user and profile.get('policy', 0)):
+                # nansha ac or user is mac account and profile in free module
                 user = self.check_mac_account(user_mac)
             elif not password:
                 logger.error('Password can\'t null')
@@ -823,7 +826,6 @@ class PortalHandler(BaseHandler):
 
         # check billing
         # nanshan account user network freedom (check by ac_ip)
-        profile = get_billing_policy(ac_ip, ap_mac)
         # if ac_ip in HM_AC:
         if not profile['policy']:
             self.expired, self.rejected = utility.check_account_balance(self.user)

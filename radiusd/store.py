@@ -115,14 +115,12 @@ class Store():
             cur.execute(sql)
             user = cur.fetchone()
 
-            time_length = 1800
             mask = mask + 2**8
 
             sql = '''insert into bd_account (user, password, mask, 
-            time_length, flow_length, expire_date, coin, 
-            mac, ip, holder) values("{}", "{}", {}, 
-            {}, 0, "{}", 0, "", "", {})
-            '''.format(str(user['id']), password, mask, time_length, expire_date, user['id'])
+            expire_date, coin, holder) values("{}", "{}", {}, 
+            "{}", 0, {})
+            '''.format(str(user['id']), password, mask, expire_date, user['id'])
             cur.execute(sql)
             conn.commit()
             return user['id']
@@ -170,10 +168,8 @@ class Store():
                 sql = 'insert into holder_room (holder, room) values({}, "{}")'.format(holder, room)
                 cur.execute(sql)
                 # insert holder's account
-                sql = '''insert into bd_account (user, password, mask, 
-                time_length, flow_length, expire_date, coin, 
-                mac, ip, holder) values("{}", "{}", {}, 
-                0, 0, "{}", 0, "", "", {})
+                sql = '''insert into bd_account (user, password, mask, expire_date, coin, holder) 
+                values("{}", "{}", {}, "{}", 0, {})
                 '''.format(str(holder)+str(room), password, mask, expire_date, holder)
                 cur.execute(sql)
             conn.commit()
@@ -239,13 +235,12 @@ class Store():
             mask = mask + 2**9
             coin = 60
 
-            sql = '''insert into bd_account (user, password, mask, 
-            time_length, flow_length, expire_date, coin, 
-            mac, ip, holder, ends) values("{}", "{}", {}, 0, 0, "", {}, "", "", 0, 5)
+            sql = '''insert into bd_account (user, password, mask, coin, holder, ends) 
+            values("{}", "{}", {}, {}, 0, 5)
             '''.format(str(user['id']), password, mask, coin)
             cur.execute(sql)
             conn.commit()
-            return user['id']# , password, mask, time_length
+            return user['id']
 
     def add_user_by_mac(self, mac, password):
         '''
@@ -272,8 +267,7 @@ class Store():
 
             coin = 60
             sql = '''insert into bd_account (user, password, mask, 
-            time_length, flow_length, expire_date, coin, 
-            mac, ip, holder, ends) values("{}", "{}", {}, 0, 0, "", {}, "", "", {}, 2)
+            coin, holder, ends) values("{}", "{}", {}, {}, {}, 2)
             '''.format(mac, password, mask, coin, holder)
             cur.execute(sql)
             conn.commit()
@@ -302,9 +296,7 @@ class Store():
         with Connect(self.dbpool) as conn:
             cur = conn.cursor()
             # password = random.sample(__PASSWORD__, 8)
-            sql = '''insert into bd_account (user, password, mask, 
-            time_length, flow_length, coin)
-            values(%s, %s, 3, 3600, 0, 0)'''
+            sql = '''insert into bd_account (user, password, mask, coin) values(%s, %s, 3, 60)'''
             cur.execute(sql, user, password)
             conn.commit()
 

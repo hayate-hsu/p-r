@@ -373,6 +373,7 @@ class PageHandler(BaseHandler):
             self.parse_ac_parameters(kwargs)
             url = kwargs['firsturl']
             
+            logger.info('begin get billing policy')
             self.get_current_billing_policy(**kwargs)
             # check mac address, login by mac address
             # if login successfully, return _user, else return None
@@ -1246,7 +1247,9 @@ def get_billing_policy(nas_addr, ap_mac):
         if int(time.time()) < BILLING_PROFILE[ap_mac]['expire']:
             return BILLING_PROFILE[ap_mac]
 
+    logger.info('query ap ({}) policy'.format(ap_mac))
     policy = store.query_ap_policy(ap_mac)
+    logger.info('policyi: {}'.format(policy))
     if policy:
         policy['expire'] = int(time.time()) + EXPIRE
         BILLING_PROFILE[ap_mac] = policy

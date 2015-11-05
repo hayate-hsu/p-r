@@ -1361,12 +1361,12 @@ def ac_data_handler(sock, data, addr):
             print(':'.join(mac))
             logger.info('User quit, mac: {}'.format(':'.join(mac)))
 
-def init_log(log_folder, log_config):
+def init_log(log_folder, log_config, port):
     global logger
     import logging
     import logging.config
     log_config['handlers']['file']['filename'] = os.path.join(log_folder, 
-                                                              log_config['handlers']['file']['filename'])
+                                                              '{}_{}.log'.format(log_config['handlers']['file']['filename'], port))
     logging.config.dictConfig(log_config)
     logger = logging.getLogger()
     logger.propagate = False
@@ -1374,9 +1374,9 @@ def init_log(log_folder, log_config):
 def main():
     tornado.options.parse_command_line()
 
-    init_log(config['log_folder'], config['logging_config'])
+    init_log(config['log_folder'], config['logging_config'], options.port)
 
-    portal_pid = portal_config['portal_pid']
+    portal_pid = os.path.join(config['RUN_PATH'], 'portal/p_{}.pid'.format(options.port))
     with open(portal_pid, 'w') as f:
         f.write('{}'.format(os.getpid()))
 

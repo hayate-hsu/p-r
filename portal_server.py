@@ -332,10 +332,10 @@ class PageHandler(BaseHandler):
     '''
     '''
     _WX_IP = 'api.weixin.qq.com'
-    for family,type,proto,canonname,sockaddr in socket.getaddrinfo('api.weixin.qq.com', None, socket.AF_INET, 0, socket.SOL_TCP):
-        _WX_IP = sockaddr[0]
-        # print(_WX_IP)
-        break
+    # for family,type,proto,canonname,sockaddr in socket.getaddrinfo('api.weixin.qq.com', None, socket.AF_INET, 0, socket.SOL_TCP):
+    #     _WX_IP = sockaddr[0]
+    #     # print(_WX_IP)
+    #     break
 
     def redirect_to_bidong(self):
         '''

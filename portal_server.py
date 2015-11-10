@@ -241,13 +241,30 @@ class BaseHandler(tornado.web.RequestHandler):
             self.finish(json_encoder(kwargs))
 
     def prepare(self):
-        # check client paltform
+        '''
+            check client paltform
+        '''
         self.agent_str = self.request.headers.get('User-Agent', '')
         self.agent = None
         self.is_mobile = False
+        
+        # check app & os info 
+        self.check_app()
+        
         if self.agent_str:
             self.agent = user_agents.parse(self.agent_str)
             self.is_mobile = self.agent.is_mobile
+
+    def check_app(self):
+        '''
+        '''
+        name = '\xe8\x87\xaa\xe8\xb4\xb8\xe9\x80\x9a'
+        if name in self.agent_str:
+            self.is_mobile = True
+            # if self.agent_str.find('Android'):
+            #     self.agent['os'] = {'family':'Android'}
+            # else:
+            #     self.agent['os'] = {'family':'IOS'}
 
 def _parse_body(method):
     '''

@@ -57,7 +57,9 @@ class MySQLPool():
             user=config['user'],
             passwd=config['passwd'],
             charset=config['charset'],
-            maxusage=config['maxusage']
+            maxusage=config['maxusage'],
+            # MySQLdb support, version > 1.2.5, mysql > 5.1.12
+            read_timeout=config['read_timeout'],
         )
 
     def cursor(self, conn):

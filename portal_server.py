@@ -33,6 +33,8 @@ import socket
 import collections
 import functools
 
+import re
+
 from urlparse import parse_qs
 
 import xml.etree.ElementTree as ET
@@ -92,8 +94,10 @@ STATIC_PATH = '/web/bidong'
 TEMPLATE_PATH = '/web/portal'
 PAGE_PATH = os.path.join(TEMPLATE_PATH, 'm')
 
-# ap_mac_addr:{portal:'', billing:''}
-BILLING_PROFILE = {}
+# PN_PROFILE {pn:{ssid1:policy, ssid2:policy}, }
+PN_PROFILE = collections.defaultdict(dict)
+# {ap_mac:pn}  : ap_mac(11:22:33:44:55:66)
+AP_MAPS = {}
 
 class Application(tornado.web.Application):
     '''
@@ -345,6 +349,26 @@ def _trace_wrapper(method):
             logger.info('<-- Out %s: <%s> -->\n\n', self.__class__.__name__, self.request.method)
     return wrapper
 
+def _check_token(method):
+    '''
+        check user & token
+    '''
+    @functools.wraps(method)
+    def wrapper(self, *args, **kwargs):
+        user = self.get_argument('user') 
+        if not user:
+            raise HTTPError(400, reason='account can\'t be null')
+        token = self.get_argument('token')
+
+        token, expired = token.split('|')
+        token2 = utility.token2(user, expired)
+        if token != token2:
+            raise HTTPError(400, reason='Abnormal token')
+        # check expired?
+
+        return method(self, *args, **kwargs)
+    return wrapper
+
 class PageHandler(BaseHandler):
     '''
     '''
@@ -436,11 +460,30 @@ class PageHandler(BaseHandler):
         # get policy
         kwargs['user'] = kwargs['user_mac']
         kwargs['password'] = ''
+
         logger.info('profile: {}'.format(self.profile))
+        
+        pn_ssid, pn_note, pn_logo = '', '', ''
+
         if accept.startswith('application/json'):
-            return self.render_json_response(Code=200, Msg='OK', openid='', **kwargs)
+            # ssid key:value in kwargs
+            if not self.profile['ispri']:
+                profile = store.get_pn(self.profile['pn'])
+                if profile:
+                    pn_ssid = profile['ssid']
+                    pn_note = profile['note']
+                    pn_logo = profile['logo']
+                
+
+            return self.render_json_response(Code=200, Msg='OK', openid='', pn_ssid=pn_ssid, 
+                                             pn_note=pn_note, pn_logo=pn_logo,  
+                                             ispri=self.profile['ispri'], pn=self.profile['pn'], 
+                                             note=self.profile['note'], image=self.profile['logo'], 
+                                             **kwargs)
                     
-        return self.render(self.profile['portal'], openid='', **kwargs)
+        return self.render(self.profile['portal'], openid='', ispri=self.profile['ispri'], 
+                           pn=self.profile['pn'], note=self.profile['note'], image=self.profile['logo'], 
+                           **kwargs)
 
     def get_user_by_mac(self, mac, ac):
         # if ac in RJ_AC:
@@ -455,7 +498,10 @@ class PageHandler(BaseHandler):
         '''
             user's billing policy based on the connected ap 
         '''
-        self.profile = get_billing_policy(kwargs['ac_ip'], kwargs['ap_mac'])
+        profile = get_billing_policy(kwargs['ac_ip'], kwargs['ap_mac'], kwargs['ssid'])
+        self.profile = profile
+        # self.profile = {'logo':profile[0], 'pn':profile[1], 'note':profile[2], 
+        #                 'policy':profile[3], 'ispri':profile[4], 'portal':profile[5]}
 
 
     def parse_ac_parameters(self, kwargs):
@@ -488,9 +534,9 @@ class PageHandler(BaseHandler):
 
             #
             kwargs['ap_mac'] = '00:00:00:00:00:00'
-            logger.info('argument: {}'.format(self.request.arguments))
         else:
             raise HTTPError(400, reason='Unknown AC: {}'.format(kwargs['ac_ip']))
+        logger.info('argument: {}'.format(self.request.arguments))
         try:
             kwargs['firsturl'] = self.get_argument('wlanuserfirsturl', '') or self.get_argument('url', '') or self.get_argument('userurl', '')
             kwargs['urlparam'] = self.get_argument('urlparam', '')
@@ -510,13 +556,15 @@ class PageHandler(BaseHandler):
         _user = store.get_bd_user(user)
         if not _user:
             return None
-        # fix rj client user re-login error 
-        # report challenge error if user has been login
-        # if kwargs['ac_ip'] in RJ_AC:
-        #     # nansha city  account
-        #     if self.check_mac_online_recently(kwargs['user_mac'], 1):
-        #         # user has been online, auto login
-        #         return True
+
+        # check private network
+        logger.info('>>profile : {}'.format(self.profile))
+        if self.profile['ispri']:
+            # current network is private, check user privilege
+            logger.info('pn:{}, user:{}'.format(self.profile['pn'], _user['user']))
+            if not store.check_pn_privilege(self.profile['pn'], _user['user']):
+                return None
+                # raise HTTPError(427, reason='Can\'t access private network : {}'.format(self.profile['pn']))
 
         if not self.profile['policy']:
             if _user['mask']>>30 & 1:
@@ -575,6 +623,8 @@ class PageHandler(BaseHandler):
 
         header = Header.unpack(data)
         if header.type != 0x02 or header.err:
+            logger.info('0x%x error, errno: 0x%x', header.type, header.err)
+            sock.close()
             if header.err == 0x02:
                 # linked has been established, has been authed 
                 logger.info('user: {} has been authed, mac:{}'.format(user, ':'.join(_mac)))
@@ -582,10 +632,10 @@ class PageHandler(BaseHandler):
             elif header.err == 0x03:
                 # user's previous link has been verifring 
                 logger.info('user: {}\'s previous has been progressing, mac:{}'.format(user, ':'.join(_mac)))
+                raise HTTPError(436, reason=bd_errs[436])
+                # raise HTTPError(449, reason='in progressing, wait')
                 return
 
-            logger.info('0x%x error, errno: 0x%x', header.type, header.err)
-            sock.close()
             raise HTTPError(400, reason='challenge error')
             # return self.render_json_response(Code=400, Msg='challenge error')
         # parse challenge value
@@ -684,10 +734,10 @@ class PageHandler(BaseHandler):
             if self.rejected:
                 raise HTTPError(403, reason='Account has no left time')
 
-        onlines = store.get_onlines(_user['user'])
-        if kwargs['user_mac'] not in onlines and len(onlines) >= _user['ends']:
-            # allow user logout ends 
-            return False
+        # onlines = store.get_onlines(_user['user'])
+        # if kwargs['user_mac'] not in onlines and len(onlines) >= _user['ends']:
+        #     # allow user logout ends 
+        #     return False
         # onlines = store.count_online(_user['user'])
         # if onlines >= _user['ends']:
         #     # allow user logout ends 
@@ -754,19 +804,15 @@ class PortalHandler(BaseHandler):
         Handler portal auth request
     '''
     _SERIAL_NO_ = SerialNo()
-    def get(self):
-        '''
-        '''  
-        pass
 
-    @_trace_wrapper
-    @_parse_body
-    def put(self):
-        openid = self.get_argument('openid', None)
-        user = self.get_argument('user', '')
-        password = self.get_argument('password', '')
-        _user = None
-        pass
+    # @_trace_wrapper
+    # @_parse_body
+    # def put(self):
+    #     openid = self.get_argument('openid', None)
+    #     user = self.get_argument('user', '')
+    #     password = self.get_argument('password', '')
+    #     _user = None
+    #     pass
 
     @_trace_wrapper
     @_parse_body
@@ -801,9 +847,13 @@ class PortalHandler(BaseHandler):
         ap_mac = self.get_argument('ap_mac')
         user_mac = self.get_argument('user_mac')
         user_ip = self.get_argument('user_ip')
+
         # vlanId = self.get_argument('vlan')
-        # ssid = self.get_argument('ssid')
-        profile = get_billing_policy(ac_ip, ap_mac)
+        ssid = self.get_argument('ssid')
+        profile = get_billing_policy(ac_ip, ap_mac, ssid)
+        # profile = get_billing_policy(kwargs['ac_ip'], kwargs['ap_mac'], kwargs['ssid'])
+        # self.profile = {'logo':profile[0], 'pn':profile[1], 'note':profile[2], 
+        #                 'policy':profile[3], 'ispri':profile[4], 'portal':profile[5]}
 
         mask = int(self.get_argument('mask', 0))
         if mask:
@@ -842,9 +892,16 @@ class PortalHandler(BaseHandler):
             raise HTTPError(403, reason=bd_errs[451])
             # return False
 
+        # check private network
+        if profile['ispri']:
+            # current network is private, check user privilege
+            if not store.check_pn_privilege(profile['pn'], self.user['user']):
+                raise HTTPError(427, reason='{} Can\'t access private network : {}'.format(self.user['user'], profile['pn']))
+        
         # check billing
         # nanshan account user network freedom (check by ac_ip)
         # if ac_ip in HM_AC:
+        # if not profile['policy']:
         if not profile['policy']:
             self.expired, self.rejected = utility.check_account_balance(self.user)
             if self.rejected:
@@ -901,6 +958,8 @@ class PortalHandler(BaseHandler):
 
         header = Header.unpack(data)
         if header.type != 0x02 or header.err:
+            logger.info('0x%x error, errno: 0x%x', header.type, header.err)
+            sock.close()
             if header.err == 0x02:
                 # linked has been established, has been authed 
                 logger.info('user: {} has been authed, mac:{}'.format(user, ':'.join(_mac)))
@@ -909,8 +968,6 @@ class PortalHandler(BaseHandler):
                 # user's previous link has been verifring 
                 logger.info('user: {}\'s previous has been progressing, mac:{}'.format(user, ':'.join(_mac)))
                 raise HTTPError(436, reason=bd_errs[436])
-            logger.info('0x%x error, errno: 0x%x', header.type, header.err)
-            sock.close()
             # raise HTTPError(400, reason='challenge timeout, retry')
             raise HTTPError(400, reason=bd_errs[530])
             # return self.render_json_response(Code=400, Msg='challenge error')
@@ -1247,10 +1304,20 @@ class Header():
         return cls(*struct.unpack(cls._FMT, data[:16]))
 
 # ap billing profile should refress each 7200 seconds
-_DEFAULT_PROFILE = {'portal':'login.html', 'policy':0}
-_NANSHA_PROFILE = {'portal':'nansha_login.html', 'policy':1}
+
+# holder: 10001  bidong project's ap  
+# _DEFAULT_PROFILE = {'pn':10001, 'portal':'login.html', 'policy':0, 
+#                     'ispri':0, 'note':'', 'ssid':''}
+#                  logo,  pn,    note, policy, ispri, portal
+_DEFAULT_PROFILE = ('',  10001,  '',     0,     0,     'login.html')
+
+# holder: 10002 nansha_city's ap
+# _NANSHA_PROFILE = {'pn':10002, 'portal':'nansha_login.html', 'policy':1, 
+#                    'ispri':0, 'note':'', 'ssid':''}
+_NANSHA_PROFILE =  ('',  10002,  '',     1,     0,     'nansha_login.html')
+_NANSHA_PN_PROFILE =  ('',  10003,  '',     1,     1,     'nansha_login.html')
 EXPIRE = 7200
-def get_billing_policy(nas_addr, ap_mac):
+def get_billing_policy(nas_addr, ap_mac, ssid):
     '''
         nas_addr : ipv4
         ap_mac : ':' separated
@@ -1258,23 +1325,36 @@ def get_billing_policy(nas_addr, ap_mac):
     '''
     # NANSHA aps use _NANSHA_PROFILE profile 
     if nas_addr in NS_AC:
-        return _NANSHA_PROFILE
+        if ssid == 'NanSha_City':
+            return _NANSHA_PROFILE
+        else:
+            return _NANSHA_PN_PROFILE 
 
-    if ap_mac in BILLING_PROFILE:
-        if int(time.time()) < BILLING_PROFILE[ap_mac]['expire']:
-            return BILLING_PROFILE[ap_mac]
+    if ap_mac in AP_MAPS:
+        profile = PN_PROFILE[AP_MAPS[ap_mac]].get(ssid, None)
+        if profile and int(time.time()) < profile['expired']:
+            return profile
 
-    logger.info('query ap ({}) policy'.format(ap_mac))
-    policy = store.query_ap_policy(ap_mac)
-    logger.info('policyi: {}'.format(policy))
-    if policy:
-        policy['expire'] = int(time.time()) + EXPIRE
-        BILLING_PROFILE[ap_mac] = policy
+    profile = store.query_ap_policy(ap_mac, ssid)
+    logger.info('mac:{} ssid:{} ---- {}'.format(ap_mac, ssid, profile))
+    
+    if profile:
+        profile['expired'] = int(time.time()) + EXPIRE
+        AP_MAPS[ap_mac] = profile['pn']
+        PN_PROFILE[profile['pn']][profile['ssid']] = profile
     else:
-        profile = {'portal':'login.html', 'policy':0, 'expire':int(time.time()+EXPIRE)}
-        BILLING_PROFILE[ap_mac] = profile
+        pn = store.query_ap_holder(ap_mac)
+        pn = pn['holder'] if pn else 10001
+        profile = {'pn':pn, 'ssid':ssid, 'policy':1, 'note':'', 
+                   'logo':'', 'ispri':0, 'portal':'login.html', 
+                   'expired':int(time.time())+EXPIRE}
+
+        AP_MAPS[ap_mac] = pn
+        PN_PROFILE[profile['pn']][profile['ssid']] = profile
+
         
-    return BILLING_PROFILE[ap_mac];
+    return PN_PROFILE[AP_MAPS[ap_mac]][ssid];
+
         
 _DEFAULT_BACKLOG = 128
 # These errnos indicate that a non-blocking operation must be retried

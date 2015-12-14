@@ -77,6 +77,19 @@ class Store():
         # global __cache_timeout__
         # __cache_timeout__ = config['cache_timeout']
 
+    def _combine_query_kwargs(self, **kwargs):
+        '''
+            convert query kwargs to str
+        '''
+        query_list = []
+        for key, value in kwargs.iteritems():
+            if isinstance(value, int):
+                query_list.append('{}={}'.format(key, value))
+            else:
+                query_list.append('{}="{}"'.format(key, value))
+
+        return 'and '.join(query_list) 
+
 
     def list_bas(self):
         '''
@@ -94,6 +107,17 @@ class Store():
             cur.execute('select * from bas where ip = "{}"'.format(ip))
             bas = cur.fetchone()
             return bas
+
+    def get_account(self, **kwargs):
+        '''
+            get account's info
+        '''
+        with Cursor(self.dbpool) as cur:
+            query_str = self._combine_query_kwargs(**kwargs)
+            sql = 'select * from account where {}'.format(query_str)
+
+            cur.execute(sql)
+            return cur.fetchone()
 
     def add_holder(self, weixin, password, mobile, expire_date,
                       email='', address='', realname=''):
@@ -158,52 +182,51 @@ class Store():
             holder = cur.fetchone()
             return holder['holder'] if holder else ''
 
-
-    def add_holder_rooms(self, holder, expire_date, rooms):
+    def create_app_account(self, uuid, password, ends=2**5):
         '''
-            holder: int
-            rooms: ((room, password), )
+            parameters : as add_user
         '''
         with Connect(self.dbpool) as conn:
-            cur = conn.cursor()
-            mask = 2**1 + 2**8
-            for room,password in rooms:
-                # insert room to holder_room
-                sql = 'insert into holder_room (holder, room) values({}, "{}")'.format(holder, room)
-                cur.execute(sql)
-                # insert holder's account
-                sql = '''insert into bd_account (user, password, mask, expire_date, coin, holder) 
-                values("{}", "{}", {}, "{}", 0, {})
-                '''.format(str(holder)+str(room), password, mask, expire_date, holder)
-                cur.execute(sql)
+            cur = conn.cursor(MySQLdb.cursors.DictCursor)
+            now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            uuid = uuid
+            mask = 0 + 2**2
+            if ends>>6 & 1:
+                mask = mask + 2**6
+            elif ends>>7 & 1:
+                mask = mask + 2**7
+            else:
+                raise KeyError('abnormal mask : {}'.format(mask))
+
+            sql = '''insert into account 
+            (mobile, weixin, uuid, email, mask, address, realname, create_time) 
+            values("", "", "{}", "", {}, "", "", "{}")
+            '''.format(uuid, mask, now)
+            cur.execute(sql)
+
+            sql = 'select id from account where uuid = "{}"'.format(uuid)
+            cur.execute(sql)
+            user = cur.fetchone()
+
+            coin = 60
+            sql = '''insert into bd_account 
+            (user, password, mask, coin, holder, ends) 
+            values("{}", "{}", {}, {}, 0, 5)
+            '''.format(str(user['id']), password, mask, coin)
+            cur.execute(sql)
             conn.commit()
+            return user['id']
 
-    def get_holder_rooms(self, holder):
-        '''
-        '''
-        with Cursor(self.dbpool) as cur:
-            sql = 'select room from holder_room where holder = "{}"'.format(holder)
-            cur.execute(sql)
-            results = cur.fetchall()
 
-            return results if results else ()
 
-    def get_holder_renters(self, holder):
-        '''
-        '''
-        with Cursor(self.dbpool) as cur:
-            sql = 'select * from bd_account where holder = "{}"'.format(holder)
-            cur.execute(sql)
-            results = cur.fetchall()
-            return results
-
-    def add_user(self, user, password, ends=0):
+    def add_user(self, user, password, ends=2**5):
         '''
             user : uuid or weixin openid
             password : user encrypted password
             ends : special the end type         data
                 0 : unknown                     
                 2^5 : weixin                      opendid
+
                 2^6 : app(android)                opendid or other unique id 
                 2^7 : app(ios)
                 2**9: user pay by time
@@ -236,7 +259,7 @@ class Store():
             cur.execute(sql)
             user = cur.fetchone()
             #
-            mask = mask + 2**9
+            # mask = mask + 2**9
             coin = 60
 
             sql = '''insert into bd_account (user, password, mask, coin, holder, ends) 
@@ -304,7 +327,6 @@ class Store():
             cur.execute(sql, user, password)
             conn.commit()
 
-
     def get_bd_user(self, user, password=None):
         '''
             support auto login, user may be mac address or user account
@@ -312,7 +334,10 @@ class Store():
                 account
                 mac : [##:##:##:##:##:##]
         '''
-        with Cursor(self.dbpool) as cur:
+        # with Cursor(self.dbpool) as cur:
+        with Connect(self.dbpool) as conn:
+            conn.commit()
+            cur = conn.cursor(MySQLdb.cursors.DictCursor)
             sql = ''
             if user.count(':') == 5:
                 sql = '''select bd_account.* from mac_history, bd_account 
@@ -336,11 +361,37 @@ class Store():
                         user['expire_date'] = ret['expire_date']
             return user
 
-    def get_block_user(self, mac):
+    def get_pn(self, pn, ispri=1):
         '''
-            mac : mac address
         '''
-        pass
+        # with Cursor(self.dbpool) as cur:
+        with Connect(self.dbpool) as conn:
+            conn.commit()
+            cur = conn.cursor(MySQLdb.cursors.DictCursor)
+            sql = 'select * from pn_policy where pn={} and ispri={}'.format(pn, ispri)
+            cur.execute(sql)
+            return cur.fetchone()
+
+    def check_pn_privilege(self, pn, user):
+        '''
+        '''
+        # with Cursor(self.dbpool) as cur:
+        with Connect(self.dbpool) as conn:
+            conn.commit()
+            cur = conn.cursor(MySQLdb.cursors.DictCursor)
+            sql = 'select * from pn_bind where user="{}" and holder={}'.format(user, pn)
+            cur.execute(sql)
+            return cur.fetchone()
+
+    def get_bd_user2(self, user):
+        '''
+        '''
+        with Connect(self.dbpool) as conn:
+            conn.commit()
+            cur = conn.cursor(MySQLdb.cursors.DictCursor)
+            cur.execute('select * from bd_account where user = "{}"'.format(user))
+            user = cur.fetchone()
+            return user
 
     def merge_app_account(self, _id, user_mac):
         '''
@@ -392,17 +443,24 @@ class Store():
             cur.execute(sql)
             conn.commit()
 
-    def query_ap_policy(self, ap_mac):
+    def query_ap_policy(self, ap_mac, ssid):
         '''
             query who own the ap and its' policy
         '''
         with Cursor(self.dbpool) as cur:
-            # cur = conn.cursor()
-            sql = '''select account.portal, account.policy from account, holder_ap 
-            where holder_ap.mac = "{}" and holder_ap.holder = account.id'''.format(ap_mac)
+            sql = '''select pn_policy.* from pn_policy, holder_ap 
+            where holder_ap.mac="{}" and holder_ap.holder=pn_policy.pn and 
+            pn_policy.ssid="{}"'''.format(ap_mac, ssid)
             cur.execute(sql)
             result = cur.fetchone()
             return result if result else {}
+
+    def query_ap_holder(self, ap_mac):
+        with Cursor(self.dbpool) as cur:
+            sql = 'select * from holder_ap where mac = "{}"'.format(ap_mac)
+            cur.execute(sql)
+            return cur.fetchone()
+
 
     def get_user_records_by_mac(self, mac):
         with Cursor(self.dbpool) as cur:

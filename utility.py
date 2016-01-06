@@ -20,6 +20,9 @@ DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
 
 KEY = base64.b64encode(uuid.uuid5(uuid.NAMESPACE_X500, 'bidong wifi').hex)
 
+b64encode = base64.b64encode
+b64decode = base64.b64decode
+
 class My_JSONEncoder(json.JSONEncoder):
     '''
         serial datetime date

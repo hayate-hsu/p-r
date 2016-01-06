@@ -24,8 +24,8 @@ import middleware
 # import settings
 import datetime
 import logging
-import pprint
-import socket
+# import pprint
+# import socket
 import utils
 import time
 import json
@@ -266,6 +266,8 @@ class RADIUSAccess(RADIUS):
         reply = req.CreateReply()
         reply.source = req.source
         user = store.get_bd_user(req.get_user_name())
+        if not user:
+            user = store.get_bd_user2(req.get_user_name())
         if user:
             # get billing policy
 
@@ -333,6 +335,8 @@ class RADIUSAccounting(RADIUS):
                  
         # user = store.get_bd_user_by_mac(req.get_user_name())
         user = store.get_bd_user(req.get_user_name())
+        if not user:
+            user = store.get_bd_user2(req.get_user_name())
         if user:
             self.user_trace.push(user['user'],req)        
             # get billing policy

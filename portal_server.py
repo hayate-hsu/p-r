@@ -32,6 +32,7 @@ import struct
 import socket
 import collections
 import functools
+import copy
 
 import re
 
@@ -42,6 +43,8 @@ import xml.etree.ElementTree as ET
 # Mako template
 import mako.lookup
 import mako.template
+
+from MySQLdb import (IntegrityError)
 
 logger = None
 
@@ -56,6 +59,8 @@ portal_config = config['portal_config']
 
 json_encoder = utility.json_encoder
 json_decoder = utility.json_decoder
+# b64encode = utility.b64encode
+# b64decode = utility.b64decode
 
 # from radiusd.store import store
 
@@ -90,8 +95,8 @@ LOGOUT = 1
 CURRENT_PATH = os.path.abspath(os.path.dirname(__file__))
 # STATIC_PATH = os.path.join('/home/niot/wifi', 'webpro/bidong_v2')
 # TEMPLATE_PATH = os.path.join('/home/niot/wifi', 'webpro/bidong_v2/portal')
-STATIC_PATH = '/web/bidong'
-TEMPLATE_PATH = '/web/portal'
+STATIC_PATH = '/www/bidong'
+TEMPLATE_PATH = '/www/portal'
 PAGE_PATH = os.path.join(TEMPLATE_PATH, 'm')
 
 # PN_PROFILE {pn:{ssid1:policy, ssid2:policy}, }
@@ -107,6 +112,7 @@ class Application(tornado.web.Application):
     def __init__(self):
         handlers = [
             (r'/account', PortalHandler),
+            (r'/wx_auth', PortalHandler),
             (r'/(.*?\.html)$', PageHandler),
             # in product environment, use nginx to support static resources
             (r'/(.*\.(?:css|jpg|js|png))$', tornado.web.StaticFileHandler, 
@@ -270,6 +276,36 @@ class BaseHandler(tornado.web.RequestHandler):
             # else:
             #     self.agent['os'] = {'family':'IOS'}
 
+    def b64encode(self, **kwargs):
+        '''
+            use base64 to encode kwargs
+            the end of b64 : '' | '=' | '==' 
+        '''
+        arguments = copy.copy(kwargs)
+        arguments.pop('firsturl', '')
+        arguments.pop('urlparam', '')
+        data = utility.b64encode(json_encoder(arguments))
+        if data[-2] == '=':
+            data = data[:-2] + '2'
+        elif data[-1] == '=':
+            data = data[:-1] + '1'
+        else:
+            data = data + '0'
+        return data
+
+    def b64decode(self, data):
+        '''
+            decode data to dict
+        '''
+        bdata, nums = data[:-1], data[-1]
+        nums = int(nums, 10)
+        if nums == 2:
+            bdata = bdata + '=='
+        elif nums == 1:
+            bdata = bdata + '='
+
+        return json_decoder(utility.b64decode(bdata))
+
 def _parse_body(method):
     '''
         Framework only parse body content as arguments 
@@ -377,6 +413,9 @@ class PageHandler(BaseHandler):
     #     _WX_IP = sockaddr[0]
     #     # print(_WX_IP)
     #     break
+    _APP_ID = 'wxa7c14e6853105a84'
+    _SHOP_ID = '4873033'
+    _SECRET_KEY = '9db64a9e2ef817abd463e06bb50ec4e2'
 
     def redirect_to_bidong(self):
         '''
@@ -384,13 +423,33 @@ class PageHandler(BaseHandler):
         logger.info('redirect : {}'.format(self.request.arguments))
         self.redirect('http://www.bidongwifi.com/')
 
+    def prepare_wx_wifi(self, **kwargs):
+        wx_wifi = {}
+        wx_wifi['extend'] = self.b64encode(**kwargs)
+        wx_wifi['timestamp'] = str(int(time.time()*1000))
+        portal_server = '{}://{}:{}/wx_auth'.format(self.request.protocol, 
+                                                    self.request.headers.get('Host'), 
+                                                    self.request.headers.get('Port'))
+        
+        wx_wifi['auth_url'] = tornado.escape.url_escape(portal_server)
+        wx_wifi['auth_url'] = portal_server
+        wx_wifi['sign'] = self.calc_sign(self._APP_ID, wx_wifi['extend'], wx_wifi['timestamp'], 
+                                         self._SHOP_ID, wx_wifi['auth_url'], 
+                                         kwargs['user_mac'], 'BD_ZF', kwargs['ap_mac'], 
+                                         self._SECRET_KEY)
+
+        logger.info('wifi_wx: {}'.format(wx_wifi))
+
+        self.wx_wifi = wx_wifi
+
+
     @_trace_wrapper
     @_parse_body
     def get(self, page):
         '''
             Render html page
         '''
-        print(self.request)
+        logger.info(self.request)
         page = page.lower()
 
         if page == 'nansha.html':
@@ -405,6 +464,7 @@ class PageHandler(BaseHandler):
         if page.startswith('login'):
             kwargs['ac_ip'] = self.get_argument('wlanacip', '') or self.get_argument('nasip', '')
             if not kwargs['ac_ip']:
+                logger.error('can\'t found ac parameter, please check ac url configuration')
                 # doesn't contain ac_ip parameter, return redirect response
                 # if user hasn't auth, ac will redirect the next request
                 # with necessary parameters
@@ -412,6 +472,14 @@ class PageHandler(BaseHandler):
                 return self.redirect_to_bidong()
                 # return self.redirect('http://58.241.41.148/index.html')
             self.parse_ac_parameters(kwargs)
+
+            logger.info('Parsed arguments: {}'.format(kwargs))
+
+
+            # process weixin argument
+            self.prepare_wx_wifi(**kwargs)
+
+
             url = kwargs['firsturl']
             
             logger.info('begin get billing policy')
@@ -458,7 +526,7 @@ class PageHandler(BaseHandler):
                     return self.render_exception(HTTPError(400, 'Unknown error'))
 
         # get policy
-        kwargs['user'] = kwargs['user_mac']
+        kwargs['user'] = ''
         kwargs['password'] = ''
 
         logger.info('profile: {}'.format(self.profile))
@@ -481,9 +549,18 @@ class PageHandler(BaseHandler):
                                              note=self.profile['note'], image=self.profile['logo'], 
                                              **kwargs)
                     
-        return self.render(self.profile['portal'], openid='', ispri=self.profile['ispri'], 
+        # return self.render(self.profile['portal'], openid='', ispri=self.profile['ispri'], 
+        #                    pn=self.profile['pn'], note=self.profile['note'], image=self.profile['logo'], 
+        #                    **kwargs)
+
+        # now all page user login, later after update back to use self.profile['portal']  
+        return self.render('login.html', openid='', ispri=self.profile['ispri'], 
                            pn=self.profile['pn'], note=self.profile['note'], image=self.profile['logo'], 
+                           appid=self._APP_ID, shopid=self._SHOP_ID, secret=self._SECRET_KEY, 
+                           extend=self.wx_wifi['extend'], timestamp=self.wx_wifi['timestamp'], 
+                           sign=self.wx_wifi['sign'], authUrl=self.wx_wifi['auth_url'], 
                            **kwargs)
+
 
     def get_user_by_mac(self, mac, ac):
         # if ac in RJ_AC:
@@ -543,6 +620,7 @@ class PageHandler(BaseHandler):
         except:
             kwargs['firsturl'] = 'http://wwww.bidongwifi.com/'
             kwargs['urlparam'] = ''
+
     
     def login_auto_by_mac(self, **kwargs):
         '''
@@ -702,18 +780,16 @@ class PageHandler(BaseHandler):
         user, password = '', ''
         _user = store.get_user(openid)
         if not _user:
-            # create new account
-            store.add_user(openid, utility.generate_password())
-            _user = store.get_user(openid)
+            _user = store.get_user2(openid)
+            if not _user:
+                # create new account
+                _user = store.add_user(openid, utility.generate_password())
             if not _user:
                 raise HTTPError(400, reason='Should subscribe first')
         # user unsubscribe, the account will be forbid
         logger.info('weixin account {}'.format(_user))
         if _user['mask']>>31 & 1:
             raise HTTPError(401, reason='Account has been frozen')
-        _user = store.get_bd_user(str(_user['id']))
-        user = _user['user']
-        password = _user['password']
             
         # check ac ip
         if kwargs['ac_ip'] not in BAS_IP:
@@ -721,18 +797,25 @@ class PageHandler(BaseHandler):
             raise HTTPError(403, reason='AC ip error')
 
         # check account & password
-        if not _user:
-            _user = store.get_bd_user(user)
-        if not _user:
-            raise HTTPError(404, reason='Account not existed')
-        if password != _user['password']:
-            raise HTTPError(401, reason='Password error')
+        # if not _user:
+        #     _user = store.get_bd_user(user)
+        # if not _user:
+        #     raise HTTPError(404, reason='Account not existed')
+        # if password != _user['password']:
+        #     raise HTTPError(401, reason='Password error')
+        if self.profile['ispri']:
+            # current network is private, check user privilege
+            logger.info('pn:{}, user:{}'.format(self.profile['pn'], _user['user']))
+            if not store.check_pn_privilege(self.profile['pn'], _user['user']):
+                raise HTTPError(427, reason='Can\'t access private network : {}'.format(self.profile['pn']))
 
         if not self.profile['policy']:
             # ipolicy =0, check billing
             self.expired, self.rejected = utility.check_account_balance(_user)
             if self.rejected:
                 raise HTTPError(403, reason='Account has no left time')
+
+        # allow weixin ends uses, ingore ends limit
 
         # onlines = store.get_onlines(_user['user'])
         # if kwargs['user_mac'] not in onlines and len(onlines) >= _user['ends']:
@@ -748,8 +831,7 @@ class PageHandler(BaseHandler):
         # login successfully
         # redirect to account page
         token = utility.token(_user['user'])
-        # self.render_json_response(User=user, Token=token, Code=200, Msg='OK')
-        self.redirect('http://www.bidongwifi.com/account/{}?token={}'.format(user, token))
+        self.redirect('http://www.bidongwifi.com/account/{}?token={}'.format(_user['user'], token))
 
         self.update_mac_record(_user, kwargs['user_mac'])
 
@@ -789,6 +871,15 @@ class PageHandler(BaseHandler):
                 # records = sorted(records.values(), key=lambda item: item['datetime'])
                 store.update_mac_record(user['user'], mac, records[0]['mac'], self.agent_str, True)
 
+    def calc_sign(self, *args):
+        '''
+            sign = md5(appid, extend,timestamp, shop_id, authUrl, 
+                       mac, ssid, bssid, secretkey) 
+        '''
+        data = ''.join(args)
+        logger.info('calc md5: {}'.format(data))
+        return utility.md5(data).hexdigest()
+
 class SerialNo:
     def __init__(self):
         self.cur = 1
@@ -805,14 +896,71 @@ class PortalHandler(BaseHandler):
     '''
     _SERIAL_NO_ = SerialNo()
 
-    # @_trace_wrapper
-    # @_parse_body
-    # def put(self):
-    #     openid = self.get_argument('openid', None)
-    #     user = self.get_argument('user', '')
-    #     password = self.get_argument('password', '')
-    #     _user = None
-    #     pass
+    def prepare(self):
+        self.is_weixin = False
+
+    @_trace_wrapper
+    @_parse_body
+    def get(self):
+        # tid = self.get_argument('tid')
+        # timestamp = self.get_argument('timestamp')
+        # sign = self.get_argument('sign')
+        openid = self.get_argument('openId')
+        extend = self.get_argument('extend')
+
+        kwargs = self.b64decode(extend)
+        user, password = '',''
+        _user = store.get_user(openid)
+        
+        if not _user:
+            _user = store.get_user2(openid)
+            if not _user:
+                # create new account
+                _user = store.add_user(openid, utility.generate_password())
+            if not _user:
+                raise HTTPError(400, reason='Should subscribe first')
+        
+        self.user = _user
+
+        # check account left, forbin un-meaning request to ac
+        ac_ip = kwargs['ac_ip']
+        # check ac ip
+        if ac_ip not in BAS_IP:
+            logger.error('not avaiable ac & ap')
+            raise HTTPError(403, reason='AC ip error')
+
+        ap_mac = kwargs['ap_mac']
+        user_mac = kwargs['user_mac']
+        user_ip = kwargs['user_ip']
+
+        # vlanId = self.get_argument('vlan')
+        ssid = kwargs['ssid']
+        profile = get_billing_policy(ac_ip, ap_mac, ssid)
+
+        # check private network
+        if profile['ispri']:
+            # current network is private, check user privilege
+            if not store.check_pn_privilege(profile['pn'], self.user['user']):
+                raise HTTPError(427, reason='{} Can\'t access private network : {}'.format(self.user['user'], profile['pn']))
+        
+        # check billing
+        # nanshan account user network freedom (check by ac_ip)
+        # if ac_ip in HM_AC:
+        # if not profile['policy']:
+        if not profile['policy']:
+            self.expired, self.rejected = utility.check_account_balance(self.user)
+            if self.rejected:
+                # raise HTTPError(403, reason='Account has no left time')
+                raise HTTPError(403, reason=bd_errs[450])
+
+        user_ip = socket.inet_aton(user_ip)
+
+        self.is_weixin = True
+
+        self.login(ac_ip, user_ip, user_mac)
+        self.update_mac_record(self.user, user_mac)
+
+        # self.render_json_response(Code=200, Msg='OK')
 
     @_trace_wrapper
     @_parse_body
@@ -827,16 +975,16 @@ class PortalHandler(BaseHandler):
             # weixin client
             _user = store.get_user(openid)
             if not _user:
-                # create new account
-                # raise HTTPError(404, reason='Can\'t found account')
+                _user = store.get_user2(openid)
+            
+            if not _user:
                 raise HTTPError(404, reason=bd_errs[430])
-            else:
                 # user unsubscribe, the account will be forbid
-                if _user['mask']>>31 & 1:
-                    raise HTTPError(403, reason='No privilege')
-                _user = store.get_bd_user(_user['id'])
-                user = _user['user']
-                password = _user['password']
+                # if _user['mask']>>31 & 1:
+                #     raise HTTPError(403, reason='No privilege')
+                # _user = store.get_bd_user(_user['id'])
+            user = _user['user']
+            password = _user['password']
         # check account left, forbin un-meaning request to ac
         ac_ip = self.get_argument('ac_ip')
         # check ac ip
@@ -860,13 +1008,13 @@ class PortalHandler(BaseHandler):
             _user = self.check_app_account(user_mac)
             user = _user['user']
             password = _user['password']
-        else:
-            if ac_ip in NS_AC or (':' in user and profile.get('policy', 0)):
-                # nansha ac or user is mac account and profile in free module
-                user = self.check_mac_account(user_mac)
-            elif not password:
-                logger.error('Password can\'t null')
-                raise HTTPError(403, 'Password can\'t null')
+        # else:
+        #     if ac_ip in NS_AC or (':' in user and profile.get('policy', 0)):
+        #         # nansha ac or user is mac account and profile in free module
+        #         user = self.check_mac_account(user_mac)
+        #     elif not password:
+        #         logger.error('Password can\'t null')
+        #         raise HTTPError(403, 'Password can\'t null')
 
         if len(user) == 4:
             # room number
@@ -886,11 +1034,11 @@ class PortalHandler(BaseHandler):
 
         self.user = _user
 
-        onlines = store.get_onlines(self.user['user'])
-        if user_mac not in onlines and len(onlines) >= self.user['ends']:
-            # allow user login ends 
-            raise HTTPError(403, reason=bd_errs[451])
-            # return False
+        # onlines = store.get_onlines(self.user['user'])
+        # if user_mac not in onlines and len(onlines) >= self.user['ends']:
+        #     # allow user login ends 
+        #     raise HTTPError(403, reason=bd_errs[451])
+        #     # return False
 
         # check private network
         if profile['ispri']:
@@ -1024,8 +1172,10 @@ class PortalHandler(BaseHandler):
 
         # self.set_login_cookie(user)
         token = utility.token(user)
-        self.render_json_response(User=user, Token=token, Code=200, Msg='OK')
-        # self.redirect('http://www.bidongwifi.com/account/{}?token={}'.format(user, token))
+        if self.is_weixin:
+            self.redirect('http://www.bidongwifi.com/account/{}?token={}'.format(user, token))
+        else:
+            self.render_json_response(User=user, Token=token, Code=200, Msg='OK')
         logger.info('%s login successfully, ip: %s', user, self.request.remote_ip)
 
     def logout(self, ac_ip, user_ip, user_mac):
@@ -1068,39 +1218,15 @@ class PortalHandler(BaseHandler):
             return None 
 
         if mask:
-            user = store.get_user(value, mask)
-            _id = ''
-            if not user:
-                _id = store.add_user(value, utility.generate_password(), mask)
-                # check account by mac
-                store.merge_app_account(_id, user_mac)
-            else:
-                _id = user['id']
+            _user = store.get_user(value, mask)
+            if not _user:
+                _user = store.get_user2(value, mask)
+                # _id = store.add_user(value, utility.generate_password(), mask)
 
-            _user = store.get_bd_user(str(_id))
-            return _user
+            if _user:
+                return _user
 
         return None
-
-    def check_mac_account(self, mac):
-        '''
-            # only ruijie ac go to this branch
-            check mac address binded acocunt
-            not found : 
-                reate bd_account by mac
-        '''
-        mac = mac.replace(':', '')
-        user = store.get_bd_user(mac)
-        if not user:
-            user = store.add_user_by_mac(mac, utility.generate_password())
-        else:
-            user = user['user']
-        return user
-
-    def create_account_by_mac(self, mac):
-        '''
-        '''
-        pass
 
     def get_holder(self, ap_mac):
         '''

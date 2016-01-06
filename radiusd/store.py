@@ -261,44 +261,19 @@ class Store():
             #
             # mask = mask + 2**9
             coin = 60
+            user = str(user['id'])
 
             sql = '''insert into bd_account (user, password, mask, coin, holder, ends) 
             values("{}", "{}", {}, {}, 0, 5)
-            '''.format(str(user['id']), password, mask, coin)
+            '''.format(user, password, mask, coin)
             cur.execute(sql)
-            conn.commit()
-            return user['id']
 
-    def add_user_by_mac(self, mac, password):
-        '''
-            create user account by mac (remove ':') 
-        '''
-        with Connect(self.dbpool) as conn:
-            cur = conn.cursor(MySQLdb.cursors.DictCursor)
-            # now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            # mask = 0 + 2**4
-            # sql = '''insert into account 
-            # (mobile, weixin, uuid, email, mask, address, realname, create_time) 
-            # values("", "", "{}", "", {}, "", "", "{}")
-            # '''.format(uuid, mask, now)
-            # cur.execute(sql)
-
-            # sql = 'select id from account where uuid = "{}"'.format(uuid)
-            # cur.execute(sql)
-            # user = cur.fetchone()
-    
-            # nansha holder is 10002
-            holder = 10002
-
-            mask = 1<<4
-
-            coin = 60
-            sql = '''insert into bd_account (user, password, mask, 
-            coin, holder, ends) values("{}", "{}", {}, {}, {}, 2)
-            '''.format(mac, password, mask, coin, holder)
+            sql = 'select * from bd_account where user = "{}"'.format(user)
             cur.execute(sql)
+            user = cur.fetchone()
             conn.commit()
-            return mac
+            return user
+
 
     def get_user(self, user, ends=0):
         '''
@@ -308,14 +283,28 @@ class Store():
                     0 : weixin
         '''
         with Cursor(self.dbpool) as cur:
-            # default from weixin
             column = 'weixin'
             if ends:
-                # from app
                 column = 'uuid'
-            cur.execute('select * from account where {} = "{}"'.format(column, user))
-            user = cur.fetchone()
-            return user
+            sql = '''select bd_account.* from bd_account, account where 
+            account.{} = "{}" and cast(account.id as char) = bd_account.user'''.format(column, user)
+            cur.execute(sql)
+            return cur.fetchone()
+
+    def get_user2(self, user, ends=0):
+        '''
+        '''
+        with Connect(self.dbpool) as conn:
+            conn.commit()
+            cur = conn.cursor(MySQLdb.cursors.DictCursor)
+            column = 'weixin'
+            if ends:
+                column = 'uuid'
+            sql = '''select bd_account.* from bd_account, account where 
+            account.{} = "{}" and cast(account.id as char) = bd_account.user'''.format(column, user)
+            cur.execute(sql)
+            return cur.fetchone()
+
 
     def add_bd_user(self, user, password):
         '''
@@ -334,10 +323,7 @@ class Store():
                 account
                 mac : [##:##:##:##:##:##]
         '''
-        # with Cursor(self.dbpool) as cur:
-        with Connect(self.dbpool) as conn:
-            conn.commit()
-            cur = conn.cursor(MySQLdb.cursors.DictCursor)
+        with Cursor(self.dbpool) as cur:
             sql = ''
             if user.count(':') == 5:
                 sql = '''select bd_account.* from mac_history, bd_account 
@@ -361,13 +347,34 @@ class Store():
                         user['expire_date'] = ret['expire_date']
             return user
 
-    def get_pn(self, pn, ispri=1):
+    def get_bd_user2(self, user, password=None):
         '''
+            support auto login, user may be mac address or user account
+            user:
+                account
+                mac : [##:##:##:##:##:##]
         '''
         # with Cursor(self.dbpool) as cur:
         with Connect(self.dbpool) as conn:
             conn.commit()
             cur = conn.cursor(MySQLdb.cursors.DictCursor)
+            sql = ''
+            if user.count(':') == 5:
+                sql = '''select bd_account.* from mac_history, bd_account 
+                where mac_history.mac = "{}" and mac_history.user = bd_account.user'''.format(user)
+            else:
+                sql = 'select * from bd_account where user = "{}"'.format(user)
+            cur.execute(sql)
+            user = cur.fetchone()
+            return user
+
+    def get_pn(self, pn, ispri=1):
+        '''
+        '''
+        with Cursor(self.dbpool) as cur:
+        # with Connect(self.dbpool) as conn:
+        #     conn.commit()
+        #     cur = conn.cursor(MySQLdb.cursors.DictCursor)
             sql = 'select * from pn_policy where pn={} and ispri={}'.format(pn, ispri)
             cur.execute(sql)
             return cur.fetchone()
@@ -375,23 +382,23 @@ class Store():
     def check_pn_privilege(self, pn, user):
         '''
         '''
-        # with Cursor(self.dbpool) as cur:
-        with Connect(self.dbpool) as conn:
-            conn.commit()
-            cur = conn.cursor(MySQLdb.cursors.DictCursor)
+        with Cursor(self.dbpool) as cur:
+        # with Connect(self.dbpool) as conn:
+        #     conn.commit()
+        #     cur = conn.cursor(MySQLdb.cursors.DictCursor)
             sql = 'select * from pn_bind where user="{}" and holder={}'.format(user, pn)
             cur.execute(sql)
             return cur.fetchone()
 
-    def get_bd_user2(self, user):
-        '''
-        '''
-        with Connect(self.dbpool) as conn:
-            conn.commit()
-            cur = conn.cursor(MySQLdb.cursors.DictCursor)
-            cur.execute('select * from bd_account where user = "{}"'.format(user))
-            user = cur.fetchone()
-            return user
+    # def get_bd_user2(self, user):
+    #     '''
+    #     '''
+    #     with Connect(self.dbpool) as conn:
+    #         conn.commit()
+    #         cur = conn.cursor(MySQLdb.cursors.DictCursor)
+    #         cur.execute('select * from bd_account where user = "{}"'.format(user))
+    #         user = cur.fetchone()
+    #         return user
 
     def merge_app_account(self, _id, user_mac):
         '''

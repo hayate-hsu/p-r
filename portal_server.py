@@ -421,7 +421,7 @@ class PageHandler(BaseHandler):
         '''
         '''
         logger.info('redirect : {}'.format(self.request.arguments))
-        self.redirect('http://www.bidongwifi.com/')
+        self.redirect(config['bidong'])
 
     def prepare_wx_wifi(self, **kwargs):
         wx_wifi = {}
@@ -437,8 +437,6 @@ class PageHandler(BaseHandler):
                                          self._SHOP_ID, wx_wifi['auth_url'], 
                                          kwargs['user_mac'], 'BD_ZF', kwargs['ap_mac'], 
                                          self._SECRET_KEY)
-
-        logger.info('wifi_wx: {}'.format(wx_wifi))
 
         self.wx_wifi = wx_wifi
 
@@ -618,7 +616,8 @@ class PageHandler(BaseHandler):
             kwargs['firsturl'] = self.get_argument('wlanuserfirsturl', '') or self.get_argument('url', '') or self.get_argument('userurl', '')
             kwargs['urlparam'] = self.get_argument('urlparam', '')
         except:
-            kwargs['firsturl'] = 'http://wwww.bidongwifi.com/'
+            kwargs['firsturl'] = config['bidong']
+            # kwargs['firsturl'] = 'http://wwww.bidongwifi.com/'
             kwargs['urlparam'] = ''
 
     
@@ -831,7 +830,8 @@ class PageHandler(BaseHandler):
         # login successfully
         # redirect to account page
         token = utility.token(_user['user'])
-        self.redirect('http://www.bidongwifi.com/account/{}?token={}'.format(_user['user'], token))
+        self.redirect(config['bidong'] + 'account/{}?token={}'.format(_user['user'], token))
+        # self.redirect('http://www.bidongwifi.com/account/{}?token={}'.format(_user['user'], token))
 
         self.update_mac_record(_user, kwargs['user_mac'])
 
@@ -897,6 +897,7 @@ class PortalHandler(BaseHandler):
     _SERIAL_NO_ = SerialNo()
 
     def prepare(self):
+        super(PortalHandler, self).prepare()
         self.is_weixin = False
 
     @_trace_wrapper
@@ -966,7 +967,6 @@ class PortalHandler(BaseHandler):
     @_parse_body
     def post(self):
         # parse request data
-        logger.info('{}'.format(self.request.arguments))
         openid = self.get_argument('openid', None)
         user = self.get_argument('user', '')
         password = self.get_argument('password', '')
@@ -1173,7 +1173,8 @@ class PortalHandler(BaseHandler):
         # self.set_login_cookie(user)
         token = utility.token(user)
         if self.is_weixin:
-            self.redirect('http://www.bidongwifi.com/account/{}?token={}'.format(user, token))
+            self.redirect(config['bidong'] + 'account/{}?token={}'.format(user, token))
+            # self.redirect('http://www.bidongwifi.com/account/{}?token={}'.format(user, token))
         else:
             self.render_json_response(User=user, Token=token, Code=200, Msg='OK')
         logger.info('%s login successfully, ip: %s', user, self.request.remote_ip)

@@ -79,7 +79,9 @@ RJ_AC = config['RJ_AC']
 
 H3C_AC = config['H3C_AC']
 
-BAS_IP = HM_AC | RJ_AC | H3C_AC
+XR_AC = config['XR_AC']
+
+BAS_IP = HM_AC | RJ_AC | H3C_AC | XR_AC
 
 # nansha ac
 NS_AC = RJ_AC | H3C_AC
@@ -111,12 +113,13 @@ class Application(tornado.web.Application):
     '''
     def __init__(self):
         handlers = [
-            (r'/account', PortalHandler),
-            (r'/wx_auth', PortalHandler),
+            (r'/account$', PortalHandler),
+            (r'/wx_auth$', PortalHandler),
             (r'/(.*?\.html)$', PageHandler),
             # in product environment, use nginx to support static resources
             (r'/(.*\.(?:css|jpg|js|png))$', tornado.web.StaticFileHandler, 
              {'path':STATIC_PATH}),
+            (r'/test1$', TestHandler),
             # (r'/weixin', WeiXinHandler),
         ]
         settings = {
@@ -262,6 +265,7 @@ class BaseHandler(tornado.web.RequestHandler):
         self.check_app()
         
         if self.agent_str:
+            logger.info('parse agent str')
             self.agent = user_agents.parse(self.agent_str)
             self.is_mobile = self.agent.is_mobile
 
@@ -404,6 +408,10 @@ def _check_token(method):
 
         return method(self, *args, **kwargs)
     return wrapper
+
+def TestHandler(BaseHandler):
+    def get(self):
+        self.redirect('/nagivation.html')
 
 class PageHandler(BaseHandler):
     '''
@@ -600,15 +608,20 @@ class PageHandler(BaseHandler):
             # kwargs['user_mac'] = ':'.join([mac[:2],mac[2:4],mac[4:6],mac[6:8],mac[8:10],mac[10:12]])
             kwargs['user_mac'] = ':'.join([mac[:2],mac[2:4],mac[5:7],mac[7:9],mac[10:12],mac[12:14]])
         elif kwargs['ac_ip'] in H3C_AC:
-            logger.info('info: {}'.format(self.request.arguments))
             kwargs['vlan'] = self.get_argument('vlan', '1')
             kwargs['ssid'] = self.get_argument('ssid', 'bidong-h3c')
             kwargs['user_ip'] = self.get_argument('userip', '') or self.get_argument('wlanuserip', '') 
-            mac = self.get_argument('mac').upper()
+            mac = self.get_argument('mac').upper() 
             kwargs['user_mac'] = mac.replace('-', ':')
 
             #
             kwargs['ap_mac'] = '00:00:00:00:00:00'
+        elif kwargs['ac_ip'] in XR_AC:
+            kwargs['vlan'] = self.get_argument('vlan', '0')
+            kwargs['ssid'] = self.get_argument('ssid')
+            # 
+            kwargs['user_ip'] = self.get_argument('wlanuserip')
+            kwargs['user_mac'] = self.get_argument('usermac').replace('-', ':').upper()
         else:
             raise HTTPError(400, reason='Unknown AC: {}'.format(kwargs['ac_ip']))
         logger.info('argument: {}'.format(self.request.arguments))
@@ -1237,6 +1250,8 @@ class PortalHandler(BaseHandler):
 
     def update_mac_record(self, user, mac):
         # agent_str = self.request.headers.get('User-Agent', '')
+        if user['user'] == '10001':
+            return
         records = store.get_mac_records(user['user'])
         m_records = {record['mac']:record for record in records}
         if mac not in m_records:

@@ -237,22 +237,41 @@ class Store():
         with Connect(self.dbpool) as conn:
             cur = conn.cursor(MySQLdb.cursors.DictCursor)
             now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            column = 'weixin'
-            weixin, uuid = user, ''
+            sql = ''
+            column = 'uuid'
             mask = 0 + 2**2 + 2**5
             if ends>>6 & 1:
                 weixin, uuid = '', user
                 column = 'uuid'
                 mask = 0 + 2**2 + 2**6
+                sql = '''insert into account (uuid, mask, create_time) 
+                values ("{}", {}, "{}")'''.format(user, mask, now)
             elif ends>>7 & 1:
-                weixin, uuid = '', user
-                column = 'uuid'
                 mask = 0 + 2**2 + 2**7
+                sql = '''insert into account (uuid, mask, create_time) 
+                values ("{}", {}, "{}")'''.format(user, mask, now)
+            else:
+                # from weixin
+                column = 'weixin'
+                sql = '''insert into account (weixin, mask, create_time) 
+            # cur = conn.cursor(MySQLdb.cursors.DictCursor)
+            # now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            # column = 'weixin'
+            # weixin, uuid = user, ''
+            # mask = 0 + 2**2 + 2**5
+            # if ends>>6 & 1:
+            #     weixin, uuid = '', user
+            #     column = 'uuid'
+            #     mask = 0 + 2**2 + 2**6
+            # elif ends>>7 & 1:
+            #     weixin, uuid = '', user
+            #     column = 'uuid'
+            #     mask = 0 + 2**2 + 2**7
 
-            sql = '''insert into account 
-            (mobile, weixin, uuid, email, mask, address, realname, create_time) 
-            values("", "{}", "{}", "", {}, "", "", "{}")
-            '''.format(weixin, uuid, mask, now)
+            # sql = '''insert into account 
+            # (mobile, weixin, uuid, email, mask, address, realname, create_time) 
+            # values("", "{}", "{}", "", {}, "", "", "{}")
+            # '''.format(weixin, uuid, mask, now)
             cur.execute(sql)
 
             sql = 'select id from account where {} = "{}"'.format(column, user)

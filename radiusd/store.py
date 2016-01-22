@@ -182,43 +182,6 @@ class Store():
             holder = cur.fetchone()
             return holder['holder'] if holder else ''
 
-    def create_app_account(self, uuid, password, ends=2**5):
-        '''
-            parameters : as add_user
-        '''
-        with Connect(self.dbpool) as conn:
-            cur = conn.cursor(MySQLdb.cursors.DictCursor)
-            now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            uuid = uuid
-            mask = 0 + 2**2
-            if ends>>6 & 1:
-                mask = mask + 2**6
-            elif ends>>7 & 1:
-                mask = mask + 2**7
-            else:
-                raise KeyError('abnormal mask : {}'.format(mask))
-
-            sql = '''insert into account 
-            (mobile, weixin, uuid, email, mask, address, realname, create_time) 
-            values("", "", "{}", "", {}, "", "", "{}")
-            '''.format(uuid, mask, now)
-            cur.execute(sql)
-
-            sql = 'select id from account where uuid = "{}"'.format(uuid)
-            cur.execute(sql)
-            user = cur.fetchone()
-
-            coin = 60
-            sql = '''insert into bd_account 
-            (user, password, mask, coin, holder, ends) 
-            values("{}", "{}", {}, {}, 0, 5)
-            '''.format(str(user['id']), password, mask, coin)
-            cur.execute(sql)
-            conn.commit()
-            return user['id']
-
-
-
     def add_user(self, user, password, ends=2**5):
         '''
             user : uuid or weixin openid
@@ -239,7 +202,6 @@ class Store():
             now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             sql = ''
             column = 'uuid'
-            mask = 0 + 2**2 + 2**5
             if ends>>6 & 1:
                 weixin, uuid = '', user
                 column = 'uuid'
@@ -253,25 +215,10 @@ class Store():
             else:
                 # from weixin
                 column = 'weixin'
-                sql = '''insert into account (weixin, mask, create_time) 
-            # cur = conn.cursor(MySQLdb.cursors.DictCursor)
-            # now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            # column = 'weixin'
-            # weixin, uuid = user, ''
-            # mask = 0 + 2**2 + 2**5
-            # if ends>>6 & 1:
-            #     weixin, uuid = '', user
-            #     column = 'uuid'
-            #     mask = 0 + 2**2 + 2**6
-            # elif ends>>7 & 1:
-            #     weixin, uuid = '', user
-            #     column = 'uuid'
-            #     mask = 0 + 2**2 + 2**7
+                mask = 0 + 2**2 + 2**5
+                sql = '''insert into account (weixin, mask, create_time)
+                values ("{}", {}, "{}")'''.format(user, mask, now)
 
-            # sql = '''insert into account 
-            # (mobile, weixin, uuid, email, mask, address, realname, create_time) 
-            # values("", "{}", "{}", "", {}, "", "", "{}")
-            # '''.format(weixin, uuid, mask, now)
             cur.execute(sql)
 
             sql = 'select id from account where {} = "{}"'.format(column, user)

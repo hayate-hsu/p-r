@@ -81,7 +81,9 @@ H3C_AC = config['H3C_AC']
 
 XR_AC = config['XR_AC']
 
-BAS_IP = HM_AC | RJ_AC | H3C_AC | XR_AC
+HW_AC = config['HW_AC']
+
+BAS_IP = HM_AC | RJ_AC | H3C_AC | XR_AC | HW_AC
 
 # nansha ac
 NS_AC = RJ_AC | H3C_AC
@@ -622,6 +624,12 @@ class PageHandler(BaseHandler):
             # 
             kwargs['user_ip'] = self.get_argument('wlanuserip')
             kwargs['user_mac'] = self.get_argument('usermac').replace('-', ':').upper()
+        elif kwargs['ac_ip'] in HW_AC:
+            kwargs['vlan'] = self.get_argument('vlan')
+            kwargs['ssid'] = self.get_argument('ssid')
+            kwargs['user_ip'] = self.get_argument('userip')
+            kwargs['user_mac'] = self.get_argument('mac')
+            kwargs['ap_mac'] = self.get_argument('apmac')
         else:
             raise HTTPError(400, reason='Unknown AC: {}'.format(kwargs['ac_ip']))
         logger.info('argument: {}'.format(self.request.arguments))

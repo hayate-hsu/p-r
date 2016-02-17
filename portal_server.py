@@ -423,9 +423,9 @@ class PageHandler(BaseHandler):
     #     _WX_IP = sockaddr[0]
     #     # print(_WX_IP)
     #     break
-    _APP_ID = 'wxa7c14e6853105a84'
-    _SHOP_ID = '4873033'
-    _SECRET_KEY = '9db64a9e2ef817abd463e06bb50ec4e2'
+    # _APP_ID = 'wxa7c14e6853105a84'
+    # _SHOP_ID = '4873033'
+    # _SECRET_KEY = '9db64a9e2ef817abd463e06bb50ec4e2'
 
     def redirect_to_bidong(self):
         '''
@@ -443,10 +443,10 @@ class PageHandler(BaseHandler):
         
         wx_wifi['auth_url'] = tornado.escape.url_escape(portal_server)
         wx_wifi['auth_url'] = portal_server
-        wx_wifi['sign'] = self.calc_sign(self._APP_ID, wx_wifi['extend'], wx_wifi['timestamp'], 
-                                         self._SHOP_ID, wx_wifi['auth_url'], 
-                                         kwargs['user_mac'], 'BD_ZF', kwargs['ap_mac'], 
-                                         self._SECRET_KEY)
+        wx_wifi['sign'] = self.calc_sign(self.profile['appid'], wx_wifi['extend'], wx_wifi['timestamp'], 
+                                         self.profile['shopid'], wx_wifi['auth_url'], 
+                                         kwargs['user_mac'], self.profile['ssid'], kwargs['ap_mac'], 
+                                         self.profile['secret'])
 
         self.wx_wifi = wx_wifi
 
@@ -484,14 +484,15 @@ class PageHandler(BaseHandler):
             logger.info('Parsed arguments: {}'.format(kwargs))
 
 
-            # process weixin argument
-            self.prepare_wx_wifi(**kwargs)
-
-
             url = kwargs['firsturl']
             
             logger.info('begin get billing policy')
             self.get_current_billing_policy(**kwargs)
+
+
+            # process weixin argument
+            self.prepare_wx_wifi(**kwargs)
+
             # check mac address, login by mac address
             # if login successfully, return _user, else return None
             _user = self.login_auto_by_mac(**kwargs)
@@ -557,23 +558,22 @@ class PageHandler(BaseHandler):
                                              note=self.profile['note'], image=self.profile['logo'], 
                                              **kwargs)
                     
-        # return self.render(self.profile['portal'], openid='', ispri=self.profile['ispri'], 
-        #                    pn=self.profile['pn'], note=self.profile['note'], image=self.profile['logo'], 
-        #                    **kwargs)
 
         # now all page user login, later after update back to use self.profile['portal']  
-        return self.render('login.html', openid='', ispri=self.profile['ispri'], 
+        page = 'login.html'
+        if self.profile['portal'] == 'weixin.html':
+            page = 'weixin.html'
+
+        return self.render(page, openid='', ispri=self.profile['ispri'], 
+        # return self.render('login.html', openid='', ispri=self.profile['ispri'], 
                            pn=self.profile['pn'], note=self.profile['note'], image=self.profile['logo'], 
-                           appid=self._APP_ID, shopid=self._SHOP_ID, secret=self._SECRET_KEY, 
+                           appid=self.profile['appid'], shopid=self.profile['shopid'], secret=self.profile['secret'], 
                            extend=self.wx_wifi['extend'], timestamp=self.wx_wifi['timestamp'], 
                            sign=self.wx_wifi['sign'], authUrl=self.wx_wifi['auth_url'], 
                            **kwargs)
 
 
     def get_user_by_mac(self, mac, ac):
-        # if ac in RJ_AC:
-        #     return mac.replace(':', '')
-        # else:
         records = store.get_user_records_by_mac(mac)
         if records:
             return records[-1]['user']
@@ -585,8 +585,6 @@ class PageHandler(BaseHandler):
         '''
         profile = get_billing_policy(kwargs['ac_ip'], kwargs['ap_mac'], kwargs['ssid'])
         self.profile = profile
-        # self.profile = {'logo':profile[0], 'pn':profile[1], 'note':profile[2], 
-        #                 'policy':profile[3], 'ispri':profile[4], 'portal':profile[5]}
 
 
     def parse_ac_parameters(self, kwargs):
@@ -620,16 +618,21 @@ class PageHandler(BaseHandler):
             kwargs['ap_mac'] = '00:00:00:00:00:00'
         elif kwargs['ac_ip'] in XR_AC:
             kwargs['vlan'] = self.get_argument('vlan', '0')
-            kwargs['ssid'] = self.get_argument('ssid')
+            kwargs['ssid'] = self.get_argument('ssid', 'XR-test')
+
             # 
             kwargs['user_ip'] = self.get_argument('wlanuserip')
-            kwargs['user_mac'] = self.get_argument('usermac').replace('-', ':').upper()
+            kwargs['user_mac'] = self.get_argument('wlanusermac').replace('-', ':').upper()
+            kwargs['ap_mac'] = '00:00:00:00:00:00'
+
         elif kwargs['ac_ip'] in HW_AC:
-            kwargs['vlan'] = self.get_argument('vlan')
+            kwargs['vlan'] = self.get_argument('vlan', 0)
             kwargs['ssid'] = self.get_argument('ssid')
             kwargs['user_ip'] = self.get_argument('userip')
-            kwargs['user_mac'] = self.get_argument('mac')
-            kwargs['ap_mac'] = self.get_argument('apmac')
+            ap_mac = self.get_argument('apmac')
+            kwargs['ap_mac'] = ':'.join([ap_mac[:2],ap_mac[2:4],ap_mac[4:6],ap_mac[6:8],ap_mac[8:10],ap_mac[10:12]])
+            mac = self.get_argument('mac').upper()
+            kwargs['user_mac'] = ':'.join([mac[:2],mac[2:4],mac[4:6],mac[6:8],mac[8:10],mac[10:12]])
         else:
             raise HTTPError(400, reason='Unknown AC: {}'.format(kwargs['ac_ip']))
         logger.info('argument: {}'.format(self.request.arguments))
@@ -1155,6 +1158,7 @@ class PortalHandler(BaseHandler):
         # header.serial = PortalHandler._SERIAL_NO_.pop()
         # chap_password = utility.md5(data[8], password, attrs.challenge).digest()
         # attrs = Attributes(user=user, chap_password=chap_password)
+        logger.info('user %s, password %s, challenge:%s', user, password, attrs.challenge)
         attrs = Attributes(user=user, password=password, challenge=attrs.challenge, mac=user_mac, chap_id=data[8])
         packet = Packet(header, attrs)
         sock.settimeout(None)
@@ -1456,16 +1460,21 @@ class Header():
 # ap billing profile should refress each 7200 seconds
 
 # holder: 10001  bidong project's ap  
-# _DEFAULT_PROFILE = {'pn':10001, 'portal':'login.html', 'policy':0, 
-#                     'ispri':0, 'note':'', 'ssid':''}
-#                  logo,  pn,    note, policy, ispri, portal
-_DEFAULT_PROFILE = ('',  10001,  '',     0,     0,     'login.html')
+_DEFAULT_PROFILE = {'pn':10001, 'portal':'login.html', 
+                    'policy':0, 'ispri':0, 
+                    'note':'', 'ssid':'', 'logo':'', 
+                    'appid':'', 'shopid':'', 'secret':''}
 
 # holder: 10002 nansha_city's ap
-# _NANSHA_PROFILE = {'pn':10002, 'portal':'nansha_login.html', 'policy':1, 
-#                    'ispri':0, 'note':'', 'ssid':''}
-_NANSHA_PROFILE =  ('',  10002,  '',     1,     0,     'nansha_login.html')
-_NANSHA_PN_PROFILE =  ('',  10003,  '',     1,     1,     'nansha_login.html')
+_NANSHA_PROFILE = {'pn':10002, 'portal':'nansha_login.html', 
+                   'policy':1, 'ispri':0, 
+                   'note':'', 'ssid':'', 'logo':'', 
+                   'appid':'', 'shopid':'', 'secret':''}
+_NANSHA_PN_PROFILE = {'pn':10003, 'portal':'nansha_login.html', 
+                      'policy':1, 'ispri':1, 
+                      'note':'', 'ssid':'', 'logo':'', 
+                      'appid':'', 'shopid':'', 'secret':''}
+
 EXPIRE = 7200
 def get_billing_policy(nas_addr, ap_mac, ssid):
     '''
@@ -1497,7 +1506,8 @@ def get_billing_policy(nas_addr, ap_mac, ssid):
         pn = pn['holder'] if pn else 10001
         profile = {'pn':pn, 'ssid':ssid, 'policy':1, 'note':'', 
                    'logo':'', 'ispri':0, 'portal':'login.html', 
-                   'expired':int(time.time())+EXPIRE}
+                   'expired':int(time.time())+EXPIRE, 
+                   'appid':'', 'shopid':'', 'secret':''}
 
         AP_MAPS[ap_mac] = pn
         PN_PROFILE[profile['pn']][profile['ssid']] = profile

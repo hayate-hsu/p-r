@@ -45,6 +45,8 @@ H3C_AC = set()
 
 # nansha ac
 NS_AC = set()
+HW_AC = set()
+XR_AC = set()
 
 
 __verson__ = '0.7'
@@ -85,13 +87,18 @@ def get_billing_policy(req):
         add expired mechanism
     '''
     ac_ip = req.get_nas_addr()
-    ap_mac,ssid = req.get_called_stationid().split(':')
+    # ap_mac,ssid = req.get_called_stationid().split(':')
+    data = req.get_called_stationid()
     expired = int(time.time()) + EXPIRE
+    log.msg('called stationid: {}'.format(data))
+    if ac_ip in XR_AC:
+        return {'pn':10002, 'policy':0, 'expire':expired, 'ispri':0}
+    ap_mac,ssid = data.split(':')
     if ac_ip in NS_AC:
         if ssid == 'NanSha_City':
             return {'pn':10002, 'policy':0, 'expire':expired, 'ispri':0}
         else:
-            return {'pn':10003, 'policy':0, 'expire':expired, 'ispri':1}
+            return {'pn':10003, 'policy':0, 'expire':expired, 'ispri':0}
     # ap_mac,ssid = '',''
     # called_stationid = req.get_called_stationid()
     # if called_stationid:
@@ -99,10 +106,13 @@ def get_billing_policy(req):
     # else:
     #     raise KeyError('Abnormal called stationid')
         # return {'policy':0, 'expire':int(time.time())+EXPIRE}
+    if ac_ip in HW_AC:
+        ap_mac = ap_mac.replace('-', ':')
 
     if ac_ip in RJ_AC:
         ap_mac = ':'.join([ap_mac[:2], ap_mac[2:4], ap_mac[4:6], ap_mac[6:8], ap_mac[8:10], ap_mac[10:12]]) 
         ap_mac = ap_mac.upper()
+
 
     ap_mac = ap_mac.replace('-', ':').upper()
 
@@ -118,6 +128,9 @@ def get_billing_policy(req):
         profile['expired'] = expired
         AP_MAPS[ap_mac] = profile['pn']
         PN_PROFILE[profile['pn']][profile['ssid']] = profile
+    # else:
+    #     log.msg('Unknonw ssid:{}, ap_mac:{}'.format(ssid, ap_mac))
+    #     raise ValueError('Unknonw ssid:{}, ap_mac:{}'.format(ssid, ap_mac))
     else:
         pn = store.query_ap_holder(ap_mac)
         pn = pn['holder'] if pn else 10001
@@ -394,12 +407,13 @@ def run(config):
     authport = config['authport']
     acctport = config['acctport']
     adminport = config['adminport']
-    global HM_AC, RJ_AC, H3C_AC, NS_AC
+    global HM_AC, RJ_AC, H3C_AC, NS_AC, HW_AC, XR_AC
     HM_AC = config['HM_AC']
     RJ_AC = config['RJ_AC']
     H3C_AC = config['H3C_AC']
-    NS_AC = RJ_AC | H3C_AC
-    
+    HW_AC = config['HW_AC']
+    XR_AC = config['XR_AC'] 
+    NS_AC = RJ_AC | H3C_AC | XR_AC | HW_AC
     #parse dictfile
     dictfile = config.get('dictfile', None)
     if not dictfile or not os.path.exists(dictfile):

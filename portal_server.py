@@ -267,7 +267,6 @@ class BaseHandler(tornado.web.RequestHandler):
         self.check_app()
         
         if self.agent_str:
-            logger.info('parse agent str')
             self.agent = user_agents.parse(self.agent_str)
             self.is_mobile = self.agent.is_mobile
 
@@ -458,7 +457,7 @@ class PageHandler(BaseHandler):
         '''
             Render html page
         '''
-        logger.info(self.request)
+        # logger.info(self.request)
         page = page.lower()
 
         if page == 'nansha.html':
@@ -482,12 +481,11 @@ class PageHandler(BaseHandler):
                 # return self.redirect('http://58.241.41.148/index.html')
             self.parse_ac_parameters(kwargs)
 
-            logger.info('Parsed arguments: {}'.format(kwargs))
-
+            # logger.info('Parsed arguments: {}'.format(kwargs))
 
             url = kwargs['firsturl']
             
-            logger.info('begin get billing policy')
+            # logger.info('begin get billing policy')
             self.get_current_billing_policy(**kwargs)
 
 
@@ -636,7 +634,6 @@ class PageHandler(BaseHandler):
             kwargs['user_mac'] = ':'.join([mac[:2],mac[2:4],mac[4:6],mac[6:8],mac[8:10],mac[10:12]])
         else:
             raise HTTPError(400, reason='Unknown AC: {}'.format(kwargs['ac_ip']))
-        logger.info('argument: {}'.format(self.request.arguments))
         try:
             kwargs['firsturl'] = self.get_argument('wlanuserfirsturl', '') or self.get_argument('url', '') or self.get_argument('userurl', '')
             kwargs['urlparam'] = self.get_argument('urlparam', '')
@@ -660,10 +657,10 @@ class PageHandler(BaseHandler):
             return None
 
         # check private network
-        logger.info('>>profile : {}'.format(self.profile))
+        # logger.info('>>profile : {}'.format(self.profile))
         if self.profile['ispri']:
             # current network is private, check user privilege
-            logger.info('pn:{}, user:{}'.format(self.profile['pn'], _user['user']))
+            # logger.info('pn:{}, user:{}'.format(self.profile['pn'], _user['user']))
             if not store.check_pn_privilege(self.profile['pn'], _user['user']):
                 return None
                 # raise HTTPError(427, reason='Can\'t access private network : {}'.format(self.profile['pn']))
@@ -811,7 +808,7 @@ class PageHandler(BaseHandler):
             if not _user:
                 raise HTTPError(400, reason='Should subscribe first')
         # user unsubscribe, the account will be forbid
-        logger.info('weixin account {}'.format(_user))
+        # logger.info('weixin account {}'.format(_user))
         if _user['mask']>>31 & 1:
             raise HTTPError(401, reason='Account has been frozen')
             
@@ -829,7 +826,7 @@ class PageHandler(BaseHandler):
         #     raise HTTPError(401, reason='Password error')
         if self.profile['ispri']:
             # current network is private, check user privilege
-            logger.info('pn:{}, user:{}'.format(self.profile['pn'], _user['user']))
+            # logger.info('pn:{}, user:{}'.format(self.profile['pn'], _user['user']))
             if not store.check_pn_privilege(self.profile['pn'], _user['user']):
                 raise HTTPError(427, reason='Can\'t access private network : {}'.format(self.profile['pn']))
 

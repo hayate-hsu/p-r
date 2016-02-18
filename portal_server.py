@@ -437,9 +437,10 @@ class PageHandler(BaseHandler):
         wx_wifi = {}
         wx_wifi['extend'] = self.b64encode(**kwargs)
         wx_wifi['timestamp'] = str(int(time.time()*1000))
-        portal_server = '{}://{}:{}/wx_auth'.format(self.request.protocol, 
-                                                    self.request.headers.get('Host'), 
-                                                    self.request.headers.get('Port'))
+        # portal_server = '{}://{}:{}/wx_auth'.format(self.request.protocol, 
+        #                                             self.request.headers.get('Host'), 
+        #                                             self.request.headers.get('Port'))
+        portal_server = 'http://{}:9898/wx_auth'.format(self.request.headers.get('Host'))
         
         wx_wifi['auth_url'] = tornado.escape.url_escape(portal_server)
         wx_wifi['auth_url'] = portal_server

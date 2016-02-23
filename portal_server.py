@@ -899,7 +899,7 @@ class PageHandler(BaseHandler):
                        mac, ssid, bssid, secretkey) 
         '''
         data = ''.join(args)
-        logger.info('calc md5: {}'.format(data))
+        # logger.info('calc md5: {}'.format(data))
         return utility.md5(data).hexdigest()
 
 class SerialNo:

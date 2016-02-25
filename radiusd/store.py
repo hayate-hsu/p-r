@@ -428,6 +428,17 @@ class Store():
             result = cur.fetchone()
             return result if result else {}
 
+    def query_pn_policy(self, **kwargs):
+        '''
+            query network profile
+        '''
+        with Cursor(self.dbpool) as cur:
+            query_str = self._combine_query_kwargs(**kwargs)
+            sql = 'select * from pn_policy where {}'.format(query_str)
+
+            cur.execute(sql)
+            return cur.fetchone()
+
     def query_ap_holder(self, ap_mac):
         with Cursor(self.dbpool) as cur:
             sql = 'select * from holder_ap where mac = "{}"'.format(ap_mac)

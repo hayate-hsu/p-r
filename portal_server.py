@@ -648,6 +648,9 @@ class PageHandler(BaseHandler):
             if found bd_account by mac, and check successfully return user account 
             otherwise return None
         '''
+        if self.profile['pn'] == 10000:
+            # 10000 (test) owner, skip auto login check
+            return None
         user = self.get_user_by_mac(kwargs['user_mac'], kwargs['ac_ip'])
         if not user:
             return None
@@ -1468,10 +1471,12 @@ _NANSHA_PROFILE = {'pn':10002, 'portal':'nansha_login.html',
                    'policy':1, 'ispri':0, 
                    'note':'', 'ssid':'', 'logo':'', 
                    'appid':'', 'shopid':'', 'secret':''}
-_NANSHA_PN_PROFILE = {'pn':10003, 'portal':'nansha_login.html', 
-                      'policy':1, 'ispri':1, 
-                      'note':'', 'ssid':'', 'logo':'', 
-                      'appid':'', 'shopid':'', 'secret':''}
+# _NANSHA_PN_PROFILE = {'pn':10003, 'portal':'login.html', 
+#                       'policy':1, 'ispri':0, 
+#                       'note':'', 'ssid':'NSGOV', 'logo':'', 
+#                       'appid':'wxa7c14e6853105a84', 'shopid':'4312678', 
+#                       'secret':'cefa412068232ef108d1877b7305bd87'}
+_NANSHA_PN_PROFILE = {}
 
 EXPIRE = 7200
 def get_billing_policy(nas_addr, ap_mac, ssid):
@@ -1485,7 +1490,12 @@ def get_billing_policy(nas_addr, ap_mac, ssid):
         if ssid == 'NanSha_City':
             return _NANSHA_PROFILE
         else:
-            return _NANSHA_PN_PROFILE 
+            global _NANSHA_PN_PROFILE
+            if not _NANSHA_PN_PROFILE:
+                return _NANSHA_PN_PROFILE
+            
+            _NANSHA_PN_PROFILE = store.query_pn_policy(pn=10003)
+            return _NANSHA_PN_PROFILE
 
     if ap_mac in AP_MAPS:
         profile = PN_PROFILE[AP_MAPS[ap_mac]].get(ssid, None)
@@ -1646,7 +1656,7 @@ def main():
     udp_sockets = bind_udp_socket(PORTAL_PORT)
     for udp_sock in udp_sockets:
         add_udp_handler(udp_sock, '', io_loop)
-        
+
     logger.info('Portal Server Listening:{} Started'.format(options.port))
     io_loop.start()
 

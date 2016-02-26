@@ -19,7 +19,7 @@ from tornado.platform.auto import set_close_exec
 
 from tornado.options import define, options
 
-define('port', default=9898, help='running on the given port', type=int)
+define('port', default=8880, help='running on the given port', type=int)
 
 import errno
 import os
@@ -1473,7 +1473,7 @@ _NANSHA_PROFILE = {'pn':10002, 'portal':'nansha_login.html',
                    'appid':'', 'shopid':'', 'secret':''}
 # _NANSHA_PN_PROFILE = {'pn':10003, 'portal':'login.html', 
 #                       'policy':1, 'ispri':0, 
-#                       'note':'', 'ssid':'NSGOV', 'logo':'', 
+#                       'note':'', 'ssid':'NS_GOV', 'logo':'', 
 #                       'appid':'wxa7c14e6853105a84', 'shopid':'4312678', 
 #                       'secret':'cefa412068232ef108d1877b7305bd87'}
 _NANSHA_PN_PROFILE = {}
@@ -1487,15 +1487,14 @@ def get_billing_policy(nas_addr, ap_mac, ssid):
     '''
     # NANSHA aps use _NANSHA_PROFILE profile 
     if nas_addr in NS_AC:
-        if ssid == 'NanSha_City':
-            return _NANSHA_PROFILE
-        else:
+        if ssid == 'NS_GOV':
             global _NANSHA_PN_PROFILE
             if not _NANSHA_PN_PROFILE:
+                _NANSHA_PN_PROFILE = store.query_pn_policy(pn=10003, ssid='NS_GOV')
                 return _NANSHA_PN_PROFILE
-            
-            _NANSHA_PN_PROFILE = store.query_pn_policy(pn=10003)
             return _NANSHA_PN_PROFILE
+        else:
+            return _NANSHA_PROFILE
 
     if ap_mac in AP_MAPS:
         profile = PN_PROFILE[AP_MAPS[ap_mac]].get(ssid, None)
@@ -1648,6 +1647,7 @@ def main():
     # # store set
     # import config
     store.setup(config)
+
 
     app = Application()
     app.listen(options.port, xheaders=app.settings.get('xheaders', False))

@@ -88,7 +88,7 @@ class Store():
             else:
                 query_list.append('{}="{}"'.format(key, value))
 
-        return 'and '.join(query_list) 
+        return ' and '.join(query_list) 
 
 
     def list_bas(self):

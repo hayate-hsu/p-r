@@ -83,7 +83,9 @@ XR_AC = config['XR_AC']
 
 HW_AC = config['HW_AC']
 
-BAS_IP = HM_AC | RJ_AC | H3C_AC | XR_AC | HW_AC
+TEST_AC = config['TEST_AC']
+
+BAS_IP = HM_AC | RJ_AC | H3C_AC | XR_AC | HW_AC | TEST_AC
 
 # nansha ac
 NS_AC = RJ_AC | H3C_AC
@@ -1466,6 +1468,11 @@ _DEFAULT_PROFILE = {'pn':10001, 'portal':'login.html',
                     'note':'', 'ssid':'', 'logo':'', 
                     'appid':'', 'shopid':'', 'secret':''}
 
+TEST_PROFILE = {'pn':'15371', 'portal':'login.html', 
+                'policy':0, 'ispri':0, 
+                'note':'', 'ssid':'hmwifi', 'logo':'', 
+                'appid':'', 'shopid':'', 'secret':''}
+
 # holder: 10002 nansha_city's ap
 _NANSHA_PROFILE = {'pn':10002, 'portal':'nansha_login.html', 
                    'policy':1, 'ispri':0, 
@@ -1497,6 +1504,9 @@ def get_billing_policy(nas_addr, ap_mac, ssid):
         else:
             _NANSHA_PROFILE['ssid'] = ssid
             return _NANSHA_PROFILE
+
+    if nas_addr in TEST_AC:
+        return TEST_PROFILE
 
     if ap_mac in AP_MAPS:
         profile = PN_PROFILE[AP_MAPS[ap_mac]].get(ssid, None)

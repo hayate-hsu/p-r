@@ -41,13 +41,14 @@ RJ_AC = set()
 HM_AC = set()
 H3C_AC = set()
 
+TEST_AC = set()
+
 # BAS_IP = HM_AC | RJ_AC | H3C_AC
 
 # nansha ac
 NS_AC = set()
 HW_AC = set()
 XR_AC = set()
-
 
 __verson__ = '0.7'
 
@@ -99,6 +100,9 @@ def get_billing_policy(req):
             return {'pn':10002, 'policy':1, 'expire':expired, 'ispri':0}
         else:
             return {'pn':10003, 'policy':1, 'expire':expired, 'ispri':0}
+
+    if ac_ip in TEST_AC:
+        return {'pn':'15371', 'policy':0, 'expire':expired, 'ispri':0}
 
         # if ssid == 'NanSha_City':
         #     return {'pn':10002, 'policy':0, 'expire':expired, 'ispri':0}
@@ -412,12 +416,13 @@ def run(config):
     authport = config['authport']
     acctport = config['acctport']
     adminport = config['adminport']
-    global HM_AC, RJ_AC, H3C_AC, NS_AC, HW_AC, XR_AC
+    global HM_AC, RJ_AC, H3C_AC, NS_AC, HW_AC, XR_AC, TEST_AC
     HM_AC = config['HM_AC']
     RJ_AC = config['RJ_AC']
     H3C_AC = config['H3C_AC']
     HW_AC = config['HW_AC']
     XR_AC = config['XR_AC'] 
+    TEST_AC = config['TEST_AC']
     NS_AC = RJ_AC | H3C_AC | XR_AC | HW_AC
     #parse dictfile
     dictfile = config.get('dictfile', None)

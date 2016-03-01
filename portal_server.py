@@ -1470,7 +1470,8 @@ _DEFAULT_PROFILE = {'pn':10001, 'portal':'login.html',
 _NANSHA_PROFILE = {'pn':10002, 'portal':'nansha_login.html', 
                    'policy':1, 'ispri':0, 
                    'note':'', 'ssid':'', 'logo':'', 
-                   'appid':'', 'shopid':'', 'secret':''}
+                   'appid':'wxa7c14e6853105a84', 'shopid':'4209818', 
+                   'secret':'406df0f942536d1cd75ec428b5aefc60'}
 # _NANSHA_PN_PROFILE = {'pn':10003, 'portal':'login.html', 
 #                       'policy':1, 'ispri':0, 
 #                       'note':'', 'ssid':'NS_GOV', 'logo':'', 
@@ -1494,6 +1495,7 @@ def get_billing_policy(nas_addr, ap_mac, ssid):
                 return _NANSHA_PN_PROFILE
             return _NANSHA_PN_PROFILE
         else:
+            _NANSHA_PROFILE['ssid'] = ssid
             return _NANSHA_PROFILE
 
     if ap_mac in AP_MAPS:

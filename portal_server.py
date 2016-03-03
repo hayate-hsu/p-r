@@ -589,7 +589,7 @@ class PageHandler(BaseHandler):
 
 
     def parse_ac_parameters(self, kwargs):
-        if kwargs['ac_ip'] in HM_AC:
+        if kwargs['ac_ip'] in HM_AC|TEST_AC:
             kwargs['vlan'] = self.get_argument('vlan')
             kwargs['ssid'] = self.get_argument('ssid')
             # 
@@ -657,7 +657,7 @@ class PageHandler(BaseHandler):
         if not user:
             return None
 
-        _user = store.get_bd_user(user)
+        _user = store.get_bd_user(user) or store.get_bd_user2(user)
         if not _user:
             return None
 

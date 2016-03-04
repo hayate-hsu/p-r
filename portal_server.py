@@ -561,9 +561,7 @@ class PageHandler(BaseHandler):
                     
 
         # now all page user login, later after update back to use self.profile['portal']  
-        page = 'login.html'
-        if self.profile['portal'] == 'weixin.html':
-            page = 'weixin.html'
+        page = self.profile['portal'] or 'login.html'
 
         return self.render(page, openid='', ispri=self.profile['ispri'], 
         # return self.render('login.html', openid='', ispri=self.profile['ispri'], 

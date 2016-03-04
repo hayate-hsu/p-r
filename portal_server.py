@@ -1494,6 +1494,7 @@ _NANSHA_PROFILE = {'pn':10002, 'portal':'nansha_login.html',
 #                       'appid':'wxa7c14e6853105a84', 'shopid':'4312678', 
 #                       'secret':'cefa412068232ef108d1877b7305bd87'}
 _NANSHA_PN_PROFILE = {}
+_XR_PN_PROFILE = {}
 
 EXPIRE = 7200
 def get_billing_policy(nas_addr, ap_mac, ssid):
@@ -1516,6 +1517,14 @@ def get_billing_policy(nas_addr, ap_mac, ssid):
 
     if nas_addr in TEST_AC:
         return TEST_PROFILE
+
+    if nas_addr in XR_AC:
+        global _XR_PN_PROFILE
+        if not _XR_PN_PROFILE:
+            _XR_PN_PROFILE = store.query_pn_policy(pn=15914, ssid='PYNX_FREE')
+            return _XR_PN_PROFILE
+        return _XR_PN_PROFILE
+
 
     if ap_mac in AP_MAPS:
         profile = PN_PROFILE[AP_MAPS[ap_mac]].get(ssid, None)

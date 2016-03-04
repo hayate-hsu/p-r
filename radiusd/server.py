@@ -93,7 +93,7 @@ def get_billing_policy(req):
     expired = int(time.time()) + EXPIRE
     log.msg('called stationid: {}'.format(data))
     if ac_ip in XR_AC:
-        return {'pn':10002, 'policy':1, 'expire':expired, 'ispri':0}
+        return {'pn':15914, 'policy':1, 'expire':expired, 'ispri':0}
     ap_mac,ssid = data.split(':')
     if ac_ip in NS_AC:
         if ssid == 'NanSha_City':

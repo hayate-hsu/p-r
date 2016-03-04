@@ -618,13 +618,14 @@ class PageHandler(BaseHandler):
             #
             kwargs['ap_mac'] = '00:00:00:00:00:00'
         elif kwargs['ac_ip'] in XR_AC:
+            logger.info('xinrui arguments: {}'.format(self.request.arguments))
             kwargs['vlan'] = self.get_argument('vlan', '0')
-            kwargs['ssid'] = self.get_argument('ssid', 'XR-test')
+            kwargs['ssid'] = self.get_argument('ssid')
 
             # 
-            kwargs['user_ip'] = self.get_argument('wlanuserip')
-            kwargs['user_mac'] = self.get_argument('wlanusermac').replace('-', ':').upper()
-            kwargs['ap_mac'] = '00:00:00:00:00:00'
+            kwargs['user_ip'] = self.get_argument('userip')
+            kwargs['user_mac'] = self.get_argument('mac').replace('-',':')
+            kwargs['ap_mac'] = self.get_argument('apmac').replace('_', ':')
 
         elif kwargs['ac_ip'] in HW_AC:
             kwargs['vlan'] = self.get_argument('vlan', 0)
@@ -1183,6 +1184,14 @@ class PortalHandler(BaseHandler):
         if header.type != 0x04 or header.err:
             logger.info('0x%x error, errno: 0x%x', header.type, header.err)
             sock.close()
+            if header.err == 0x02:
+                # linked has been established, has been authed 
+                logger.info('user: {} has been authed, mac:{}'.format(user, ':'.join(_mac)))
+                raise HTTPError(435, reason=bd_errs[435])
+            elif header.err == 0x03:
+                # user's previous link has been verifring 
+                logger.info('user: {}\'s previous has been progressing, mac:{}'.format(user, ':'.join(_mac)))
+                raise HTTPError(436, reason=bd_errs[436])
             # attrs = Attributes.unpack(header.num, data[start:])
             # raise HTTPError(403, reason='auth error')
             raise HTTPError(403, reason=bd_errs[531])

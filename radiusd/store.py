@@ -119,7 +119,7 @@ class Store():
             cur.execute(sql)
             return cur.fetchone()
 
-    def add_holder(self, weixin, password, mobile, expire_date,
+    def add_holder(self, weixin, password, mobile, expired,
                       email='', address='', realname=''):
         '''
             add hold user, user must with tel & address
@@ -134,10 +134,10 @@ class Store():
             # insert holder account
             sql = '''insert into account 
             (mobile, weixin, uuid, email, mask, address, 
-            realname, create_time, expire_date) 
+            realname, ctime, expired) 
             values("{}", "{}", "", "{}", {}, "{}", "{}", "{}", "{}")
             '''.format(mobile, weixin, email, mask, address, 
-                       realname, now, expire_date)
+                       realname, now, expired)
             cur.execute(sql)
             sql = 'select id from account where mobile = "{}" and weixin = "{}"'.format(mobile, weixin)
             cur.execute(sql)
@@ -146,9 +146,9 @@ class Store():
             mask = mask + 2**8
 
             sql = '''insert into bd_account (user, password, mask, 
-            expire_date, coin, holder) values("{}", "{}", {}, 
-            "{}", 0, {})
-            '''.format(str(user['id']), password, mask, expire_date, user['id'])
+            expired, coin, holder, ends) values("{}", "{}", {}, 
+            "{}", 0, {}, 5)
+            '''.format(str(user['id']), password, mask, expired, user['id'])
             cur.execute(sql)
             conn.commit()
             return user['id']
@@ -199,7 +199,10 @@ class Store():
         '''
         with Connect(self.dbpool) as conn:
             cur = conn.cursor(MySQLdb.cursors.DictCursor)
-            now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            now = datetime.datetime.now()
+            expired = now + datetime.timedelta(hours=6)
+            now = now.strftime('%Y-%m-%d %H:%M:%S')
+            expired = expired.strftime('%Y-%m-%d %H:%M:%S')
             sql = ''
             column = 'uuid'
             if ends>>6 & 1:
@@ -229,9 +232,9 @@ class Store():
             coin = 60
             user = str(user['id'])
 
-            sql = '''insert into bd_account (user, password, mask, coin, holder, ends) 
-            values("{}", "{}", {}, {}, 0, 5)
-            '''.format(user, password, mask, coin)
+            sql = '''insert into bd_account (user, password, mask, coin, expired, holder, ends) 
+            values("{}", "{}", {}, {}, "{}", 0, 2)
+            '''.format(user, password, mask, coin, expired)
             cur.execute(sql)
 
             sql = 'select * from bd_account where user = "{}"'.format(user)
@@ -300,17 +303,17 @@ class Store():
                     sql = 'select * from bd_account where user = "{}" and password = "{}"'.format(user, password)
             cur.execute(sql)
             user = cur.fetchone()
-            if user and user['mask'] & 1<<5:
-                # query weixin account binded renter
-                sql = 'select * from bind where weixin = "{}"'.format(user)
-                cur.execute(sql)
-                record = cur.fetchone()
-                if record:
-                    sql = 'select expire_date from bd_account where user = "{}"'.format(record['renter'])
-                    cur.execute(sql)
-                    ret = cur.fetchone()
-                    if ret:
-                        user['expire_date'] = ret['expire_date']
+            # if user and user['mask'] & 1<<5:
+            #     # query weixin account binded renter
+            #     sql = 'select * from bind where weixin = "{}"'.format(user)
+            #     cur.execute(sql)
+            #     record = cur.fetchone()
+            #     if record:
+            #         sql = 'select expired from bd_account where user = "{}"'.format(record['renter'])
+            #         cur.execute(sql)
+            #         ret = cur.fetchone()
+            #         if ret:
+            #             user['expired'] = ret['expired']
             return user
 
     def get_bd_user2(self, user, password=None):
@@ -386,8 +389,8 @@ class Store():
 
                 # update _id recordds
                 sql = '''update bd_account set 
-                expire_date="{}" and coin={} where user="{}"
-                '''.format(user['expire_date'], user['coin'], _id)
+                expired="{}" and coin={} where user="{}"
+                '''.format(user['expired'], user['coin'], _id)
                 cur.execute(sql)
 
                 # update bind account

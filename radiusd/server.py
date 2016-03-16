@@ -55,11 +55,8 @@ __verson__ = '0.7'
 def _check_expire_date(_user): 
     '''
     '''
-    if not _user['expire_date']:
-        return True
     now = datetime.datetime.now()
-    _expire_datetime = datetime.datetime.strptime(_user['expire_date']+' 23:59:59', '%Y-%m-%d %H:%M:%S')
-    if now > _expire_datetime:
+    if now > _user['expired']:
         return True
     return False
 
@@ -71,11 +68,9 @@ def check_account_balance(_user):
         check account expired & left time
     '''
     # if (_user['mask']>>8 & 1):
-    expired, rejected = False, False
-    expired = _check_expire_date(_user)
-    if expired:
-        rejected = _check_left_time(_user)
-    return expired, rejected
+    return _check_expire_date(_user)
+    # if expired:
+    #     rejected = _check_left_time(_user)
 
 def check_pn_privilege(pn, user):
     '''
@@ -302,8 +297,8 @@ class RADIUSAccess(RADIUS):
                 if user['mask']>>30 & 1:
                     user = None
                 if user:
-                    expired, rejected = check_account_balance(user)
-                    if rejected:
+                    expired = check_account_balance(user)
+                    if expired:
                         # if go to this branch, (req.get_user_name()) is mac address
                         # user has no time left, set user=None
                         # goto portal authenication

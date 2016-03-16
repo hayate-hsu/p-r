@@ -13,15 +13,15 @@ def process(req=None,resp=None,user=None,**kwargs):
     if user['policy']:
         return resp
 
-    expired, rejected = _check_account(user)
-    if rejected:
+    expired = _check_account(user)
+    if expired:
         resp['Framed-Pool'] = 'expire'
         return error_auth(resp, 'user time_length poor')
     return resp
 
     acct_policy = user['product_policy'] or PPMonth
     if acct_policy in ( PPMonth,BOMonth):
-        if utils.is_expire(user.get('expire_date')):
+        if utils.is_expire(user.get('expired')):
             resp['Framed-Pool'] = store.get_param("expire_addrpool")
             
     elif acct_policy in (PPTimes,PPFlow):
@@ -46,29 +46,11 @@ def process(req=None,resp=None,user=None,**kwargs):
     return resp
 
 
-def _calculate_left_time(_user):
-    date, time = _user['expire_date'], ''
-    if _user['expire_date']:
-        now = datetime.datetime.now()
-        _expire_datetime = datetime.datetime.strptime(_user['expire_date'] + ' 23:59:59', 
-                                                      '%Y-%m-%d %H:%M:%S')
-        if now > _expire_datetime:
-            date = ''
-
-    if _user['coin']:
-        times = _user['coin']*3*60
-        time = '{:02d}:{:02d}'.format(int(times/3600), int(times%3600/60))
-
-    _user['left_time'] = ' + '.join([date, time])
-
 def _check_expire_date(_user):
     '''
     '''
-    if not _user['expire_date']:
-        return True
     now = datetime.datetime.now()
-    _expire_datetime = datetime.datetime.strptime(_user['expire_date']+' 23:59:59', '%Y-%m-%d %H:%M:%S')
-    if now > _expire_datetime:
+    if now > _user['expired']:
         return True
     return False
 
@@ -79,8 +61,6 @@ def _check_account(_user):
     '''
         bd_account
     '''
-    expired, rejected = False, False
-    expired = _check_expire_date(_user)
-    if expired:
-        rejected = _check_left_time(_user)
-    return expired, rejected
+    return  _check_expire_date(_user)
+    # if expired:
+    #     rejected = _check_left_time(_user)

@@ -27,11 +27,10 @@ def process(req=None, resp=None, user=None, **kwargs):
     if policy == 0:
         # normal billing pocily
         # user is not nansha wireless city account
-        if user['expire_date']:
-            _expire_datetime = datetime.datetime.strptime(user['expire_date']+' 00:00:00',"%Y-%m-%d %H:%M:%S")
-            _datetime = datetime.datetime.now()
-            if _datetime > _expire_datetime:
-                session_timeout += (_expire_datetime - _datetime).seconds
+        _now = datetime.datetime.now()
+        if user['expired'] > _now:
+            seconds = (user['expired'] - _now).seconds
+            session_timeout = CONFIG['SESSION_TIMEOUT'] if seconds > CONFIG['SESSION_TIMEOUT'] else seconds
         else:
             session_timeout = 0
 
@@ -41,9 +40,9 @@ def process(req=None, resp=None, user=None, **kwargs):
         if 'Framed-Pool' in resp:
             session_timeout = 60
 
-        if session_timeout <= 60:
-            if user['coin']>0:
-                session_timeout = session_timeout + user['coin']*180
+        # if session_timeout <= 60:
+        #     if user['coin']>0:
+        #         session_timeout = session_timeout + user['coin']*180
 
     resp['Session-Timeout'] = session_timeout
     # resp['Session-Timeout'] = 600

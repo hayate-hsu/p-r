@@ -47,14 +47,13 @@ def process(req=None, user=None, runstat=None, coa_clients=None, **kwargs):
     # check user pay type, only pay by times account record billing 
     #    2**8 : day
     #    2**9 : times
-    if user['expire_date']:
-        expire_date = user['expire_date']
-        _expire_datetime = datetime.datetime.strptime(expire_date+' 23:59:59', '%Y-%m-%d %H:%M:%S')
-        now = datetime.datetime.now()
-        if now < _expire_datetime:
-            # account hasn't expired, ingore billing record
-            return
-    
+    now = datetime.datetime.now()
+    if user['expired'] < now:
+        # account has been expired, 
+        send_dm(coa_clients,online)
+        return
+    # account has expired, send offline notify   
+    return
     coin = int(user['coin'])
     # fisrt value may be 179, so add 1
     session_time = int(req.get_acct_sessiontime()) + 1

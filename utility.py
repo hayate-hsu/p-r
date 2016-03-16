@@ -120,29 +120,11 @@ def token2(user, _time):
     data = ''.join([user, _88hours_ago])
     return uuid.uuid5(uuid.NAMESPACE_X500, data).hex
 
-def calculate_left_time(_user):
-    date, time = _user['expire_date'], '00:00'
-    if _user['expire_date']:
-        now = datetime.datetime.now()
-        _expire_datetime = datetime.datetime.strptime(_user['expire_date'] + ' 23:59:59', 
-                                                      '%Y-%m-%d %H:%M:%S')
-        if now > _expire_datetime:
-            date = ''
-
-    if _user['coin']>0:
-        times = _user['coin']*3*60
-        time = '{:02d}:{:02d}'.format(int(times/3600), int(times%3600/60))
-
-    return ' + '.join([date, time])
-
 def _check_expire_date(_user): 
     '''
     '''
-    if not _user['expire_date']:
-        return True
     now = datetime.datetime.now()
-    _expire_datetime = datetime.datetime.strptime(_user['expire_date'] + ' 23:59:59', '%Y-%m-%d %H:%M:%S')
-    if now > _expire_datetime:
+    if now > _user['expired']:
         return True
     return False
 
@@ -154,11 +136,9 @@ def check_account_balance(_user):
         check account expired & left time
     '''
     # if (_user['mask']>>8 & 1):
-    expired, rejected = False, False
-    expired = _check_expire_date(_user)
-    if expired:
-        rejected = _check_left_time(_user)
-    return expired, rejected
+    return _check_expire_date(_user)
+    # if expired:
+    #     rejected = _check_left_time(_user)
 
 
 def _fix_key(key):

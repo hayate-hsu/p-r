@@ -407,7 +407,6 @@ def _check_token(method):
         token2 = utility.token2(user, expired)
         if token != token2:
             raise HTTPError(400, reason='Abnormal token')
-        # check expired?
 
         return method(self, *args, **kwargs)
     return wrapper
@@ -675,8 +674,8 @@ class PageHandler(BaseHandler):
                 return None
                 # raise HTTPError(403, reason=bd_errs[434])
             # ipolicy =0, check billing
-            self.expired, self.rejected = utility.check_account_balance(_user)
-            if self.rejected:
+            self.expired = utility.check_account_balance(_user)
+            if self.expired:
                 # raise HTTPError(403, reason='Account has no left time')
                 return None
         
@@ -836,8 +835,8 @@ class PageHandler(BaseHandler):
 
         if not self.profile['policy']:
             # ipolicy =0, check billing
-            self.expired, self.rejected = utility.check_account_balance(_user)
-            if self.rejected:
+            self.expired = utility.check_account_balance(_user)
+            if self.expired:
                 raise HTTPError(403, reason='Account has no left time')
 
         # allow weixin ends uses, ingore ends limit
@@ -975,8 +974,8 @@ class PortalHandler(BaseHandler):
         # if ac_ip in HM_AC:
         # if not profile['policy']:
         if not profile['policy']:
-            self.expired, self.rejected = utility.check_account_balance(self.user)
-            if self.rejected:
+            self.expired = utility.check_account_balance(self.user)
+            if self.expired:
                 # raise HTTPError(403, reason='Account has no left time')
                 raise HTTPError(403, reason=bd_errs[450])
 
@@ -1077,8 +1076,8 @@ class PortalHandler(BaseHandler):
         # if ac_ip in HM_AC:
         # if not profile['policy']:
         if not profile['policy']:
-            self.expired, self.rejected = utility.check_account_balance(self.user)
-            if self.rejected:
+            self.expired = utility.check_account_balance(self.user)
+            if self.expired:
                 # raise HTTPError(403, reason='Account has no left time')
                 raise HTTPError(403, reason=bd_errs[450])
 
@@ -1287,9 +1286,10 @@ class PortalHandler(BaseHandler):
     def set_login_cookie(self, user, days=7):
         '''
         '''
-        self.set_secure_cookie('p_user', user, expires_days=7)
-        expire_date = utility.now('%Y-%m-%d', days=days)
-        self.set_secure_cookie('p_expire', expire_date, expires_days=7)
+        pass
+        # self.set_secure_cookie('p_user', user, expires_days=7)
+        # expire_date = utility.now('%Y-%m-%d', days=days)
+        # self.set_secure_cookie('p_expire', expire_date, expires_days=7)
         
 class Packet():
     '''

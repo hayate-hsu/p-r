@@ -226,7 +226,7 @@ class Store():
 
             sql = 'select id from account where {} = "{}"'.format(column, user)
             if appid:
-                sql = sql + ' and appid={}'.format(appid)
+                sql = sql + ' and appid="{}"'.format(appid)
 
             cur.execute(sql)
             user = cur.fetchone()

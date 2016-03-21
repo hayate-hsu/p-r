@@ -45,6 +45,7 @@ def process(req=None, resp=None, user=None, **kwargs):
         #         session_timeout = session_timeout + user['coin']*180
 
     resp['Session-Timeout'] = session_timeout
+    # resp['Session-Timeout'] = 300
     # resp['Session-Timeout'] = 600
     resp['Class'] = ''.zfill(32)
 

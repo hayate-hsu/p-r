@@ -72,23 +72,7 @@ RUN_PATH = '/var/run'
 # 
 _REQUESTES_ = {}
 
-# hanming ac 
-HM_AC = config['HM_AC']
-# Ruijie ac
-RJ_AC = config['RJ_AC']
-
-H3C_AC = config['H3C_AC']
-
-XR_AC = config['XR_AC']
-
-HW_AC = config['HW_AC']
-
-TEST_AC = config['TEST_AC']
-
-BAS_IP = HM_AC | RJ_AC | H3C_AC | XR_AC | HW_AC | TEST_AC
-
-# nansha ac
-NS_AC = RJ_AC | H3C_AC
+AC_CONFIGURE = config['ac_policy']
 
 BAS_PORT = 2000
 _BUFSIZE=1024
@@ -435,7 +419,7 @@ class PageHandler(BaseHandler):
 
     def prepare_wx_wifi(self, **kwargs):
         wx_wifi = {}
-        wx_wifi['extend'] = self.b64encode(**kwargs)
+        wx_wifi['extend'] = self.b64encode(appid=self.profile['appid'], shopid=self.profile['shopid'], **kwargs)
         wx_wifi['timestamp'] = str(int(time.time()*1000))
         # portal_server = '{}://{}:{}/wx_auth'.format(self.request.protocol, 
         #                                             self.request.headers.get('Host'), 
@@ -506,13 +490,15 @@ class PageHandler(BaseHandler):
                     token = utility.token(_user['user'])
                     self.render_json_response(User=_user['user'], Token=token, Mask=_user['mask'], 
                                               Code=200, Msg='OK')
-                    return
-
-                if url:
+                elif url:
                     # self.set_header('Access-Control-Allow-Origin', '*')
                     if kwargs['urlparam']:
                         url = ''.join([url, '?', kwargs['urlparam']])
-                    return self.redirect(url)
+                    self.redirect(url)
+                # update online tables
+                store.add_online2(user=_user['user'], nas_addr=kwargs['ac_ip'], 
+                                  acct_start_time=utility.now(), framed_ipaddr=kwargs['user_ip'], 
+                                  mac_addr=kwargs['user_mac'], ap_mac=kwargs['ap_mac'])
                 return 
 
             # url = self.get_argument('wlanuserfirsturl', '') or self.get_argument('url', '')
@@ -584,56 +570,39 @@ class PageHandler(BaseHandler):
         profile = get_billing_policy(kwargs['ac_ip'], kwargs['ap_mac'], kwargs['ssid'])
         self.profile = profile
 
+    def format_mac(self, mac):
+        '''
+            output : ##:##:##:##:##:##
+        '''
+        mac = re.sub(r'[_.,; -]', ':', mac).upper()
+        if 12 == len(mac):
+            mac = ':'.join([mac[:2], mac[2:4], mac[4:6], mac[6:8], mac[8:10], mac[10:]])
+        elif 14 == len(mac):
+            mac = ':'.join([mac[:2],mac[2:4],mac[5:7],mac[7:9],mac[10:12],mac[12:14]])
+        return mac
 
     def parse_ac_parameters(self, kwargs):
-        if kwargs['ac_ip'] in HM_AC|TEST_AC:
-            kwargs['vlan'] = self.get_argument('vlan')
-            kwargs['ssid'] = self.get_argument('ssid')
-            # 
-            kwargs['user_ip'] = self.get_argument('wlanuserip')
-            kwargs['user_mac'] = self.get_argument('wlanstamac').replace('.', ':').upper()
-
-            # kwargs['apname'] = self.get_argument('apname')
-            kwargs['ap_mac'] = self.get_argument('wlanapmac').replace('.', ':').upper()
-        elif kwargs['ac_ip'] in RJ_AC:
-            kwargs['vlan'] = self.get_argument('vlan', '1')
-            kwargs['ssid'] = self.get_argument('ssid')
-
-            kwargs['user_ip'] = self.get_argument('wlanuserip')
-            ap_mac = self.get_argument('wlanapmac').upper()
-            kwargs['ap_mac'] = ':'.join([ap_mac[:2],ap_mac[2:4],ap_mac[5:7],ap_mac[7:9],ap_mac[10:12],ap_mac[12:14]])
-            mac = self.get_argument('mac').upper()
-            # kwargs['user_mac'] = ':'.join([mac[:2],mac[2:4],mac[4:6],mac[6:8],mac[8:10],mac[10:12]])
-            kwargs['user_mac'] = ':'.join([mac[:2],mac[2:4],mac[5:7],mac[7:9],mac[10:12],mac[12:14]])
-        elif kwargs['ac_ip'] in H3C_AC:
-            kwargs['vlan'] = self.get_argument('vlan', '1')
-            kwargs['ssid'] = self.get_argument('ssid', 'bidong-h3c')
-            kwargs['user_ip'] = self.get_argument('userip', '') or self.get_argument('wlanuserip', '') 
-            mac = self.get_argument('mac').upper() 
-            kwargs['user_mac'] = mac.replace('-', ':')
-
-            #
-            kwargs['ap_mac'] = '00:00:00:00:00:00'
-        elif kwargs['ac_ip'] in XR_AC:
-            logger.info('xinrui arguments: {}'.format(self.request.arguments))
-            kwargs['vlan'] = self.get_argument('vlan', '0')
-            kwargs['ssid'] = self.get_argument('ssid')
-
-            # 
-            kwargs['user_ip'] = self.get_argument('userip')
-            kwargs['user_mac'] = self.get_argument('mac').replace('-',':')
-            kwargs['ap_mac'] = self.get_argument('apmac').replace('_', ':')
-
-        elif kwargs['ac_ip'] in HW_AC:
-            kwargs['vlan'] = self.get_argument('vlan', 0)
-            kwargs['ssid'] = self.get_argument('ssid')
-            kwargs['user_ip'] = self.get_argument('userip')
-            ap_mac = self.get_argument('apmac')
-            kwargs['ap_mac'] = ':'.join([ap_mac[:2],ap_mac[2:4],ap_mac[4:6],ap_mac[6:8],ap_mac[8:10],ap_mac[10:12]])
-            mac = self.get_argument('mac').upper()
-            kwargs['user_mac'] = ':'.join([mac[:2],mac[2:4],mac[4:6],mac[6:8],mac[8:10],mac[10:12]])
-        else:
+        '''
+        '''
+        if kwargs['ac_ip'] not in AC_CONFIGURE:
             raise HTTPError(400, reason='Unknown AC: {}'.format(kwargs['ac_ip']))
+
+        kwargs['vlan'] = self.get_argument('vlan', 1)
+        kwargs['ssid'] = self.get_argument('ssid', 'NS_GOV')
+        kwargs['user_ip'] = self.get_argument('wlanuserip', '') or self.get_argument('userip', '')
+
+        # user mac address 
+        mac = self.get_argument('mac', '') or self.get_argument('wlanstamac', '') 
+        if not mac:
+            raise HTTPError(400, 'mac address can\'t be none')
+        kwargs['user_mac'] = self.format_mac(mac)
+
+        # ap mac address
+        # 00:00:00:00:00:00 - can't get ap mac address
+        ap_mac = self.get_argument('apmac', '') or self.get_argument('wlanapmac', '00:00:00:00:00:01')
+        kwargs['ap_mac'] = self.format_mac(ap_mac)
+
+
         try:
             kwargs['firsturl'] = self.get_argument('wlanuserfirsturl', '') or self.get_argument('url', '') or self.get_argument('userurl', '')
             kwargs['urlparam'] = self.get_argument('urlparam', '')
@@ -802,21 +771,19 @@ class PageHandler(BaseHandler):
     @_trace_wrapper
     def wx_login(self, openid, **kwargs):
         user, password = '', ''
-        _user = store.get_user(openid)
+        _user = store.get_user(openid, column='weixin', appid=self.profile['appid']) or store.get_user2(openid, column='weixin', appid=self.profile['appid'])
         if not _user:
-            _user = store.get_user2(openid)
-            if not _user:
-                # create new account
-                _user = store.add_user(openid, utility.generate_password())
-            if not _user:
-                raise HTTPError(400, reason='Should subscribe first')
+            # create new account
+            _user = store.add_user(openid, utility.generate_password(), self.profile['appid'])
+        if not _user:
+            raise HTTPError(400, reason='Should subscribe first')
         # user unsubscribe, the account will be forbid
         # logger.info('weixin account {}'.format(_user))
         if _user['mask']>>31 & 1:
             raise HTTPError(401, reason='Account has been frozen')
             
         # check ac ip
-        if kwargs['ac_ip'] not in BAS_IP:
+        if kwargs['ac_ip'] not in AC_CONFIGURE:
             logger.error('not avaiable ac & ap')
             raise HTTPError(403, reason='AC ip error')
 
@@ -936,22 +903,19 @@ class PortalHandler(BaseHandler):
 
         kwargs = self.b64decode(extend)
         user, password = '',''
-        _user = store.get_user(openid)
-        
+        _user = store.get_user(openid, column='weixin', appid=kwargs['appid']) or  store.get_user2(openid, column='weixin', appid=kwargs['appid'])
         if not _user:
-            _user = store.get_user2(openid)
-            if not _user:
-                # create new account
-                _user = store.add_user(openid, utility.generate_password())
-            if not _user:
-                raise HTTPError(400, reason='Should subscribe first')
+            # create new account
+            _user = store.add_user(openid, utility.generate_password(), kwargs['appid'])
+        if not _user:
+            raise HTTPError(400, reason='Should subscribe first')
         
         self.user = _user
 
         # check account left, forbin un-meaning request to ac
         ac_ip = kwargs['ac_ip']
         # check ac ip
-        if ac_ip not in BAS_IP:
+        if ac_ip not in AC_CONFIGURE:
             logger.error('not avaiable ac & ap')
             raise HTTPError(403, reason='AC ip error')
 
@@ -971,7 +935,6 @@ class PortalHandler(BaseHandler):
         
         # check billing
         # nanshan account user network freedom (check by ac_ip)
-        # if ac_ip in HM_AC:
         # if not profile['policy']:
         if not profile['policy']:
             self.expired = utility.check_account_balance(self.user)
@@ -979,12 +942,16 @@ class PortalHandler(BaseHandler):
                 # raise HTTPError(403, reason='Account has no left time')
                 raise HTTPError(403, reason=bd_errs[450])
 
-        user_ip = socket.inet_aton(user_ip)
+        # user_ip = socket.inet_aton(user_ip)
 
         self.is_weixin = True
 
-        self.login(ac_ip, user_ip, user_mac)
+        self.login(ac_ip, socket.inet_aton(user_ip), user_mac)
         self.update_mac_record(self.user, user_mac)
+
+        store.add_online2(user=self.user['user'], nas_addr=kwargs['ac_ip'], 
+                          acct_start_time=utility.now(), framed_ipaddr=kwargs['user_ip'], 
+                          mac_addr=kwargs['user_mac'], ap_mac=kwargs['ap_mac'])
 
         # self.render_json_response(Code=200, Msg='OK')
 
@@ -998,9 +965,9 @@ class PortalHandler(BaseHandler):
         _user = None
         if openid:
             # weixin client
-            _user = store.get_user(openid)
-            if not _user:
-                _user = store.get_user2(openid)
+            appid = self.get_argument('appid')
+            shopid = self.get_argument('shopid')
+            _user = store.get_user(openid, column='weixin', appid=appid) or store.get_user2(openid, column='weixin', appid=appid)
             
             if not _user:
                 raise HTTPError(404, reason=bd_errs[430])
@@ -1013,7 +980,7 @@ class PortalHandler(BaseHandler):
         # check account left, forbin un-meaning request to ac
         ac_ip = self.get_argument('ac_ip')
         # check ac ip
-        if ac_ip not in BAS_IP:
+        if ac_ip not in AC_CONFIGURE:
             logger.error('not avaiable ac & ap')
             raise HTTPError(403, reason='AC ip error')
 
@@ -1073,7 +1040,6 @@ class PortalHandler(BaseHandler):
         
         # check billing
         # nanshan account user network freedom (check by ac_ip)
-        # if ac_ip in HM_AC:
         # if not profile['policy']:
         if not profile['policy']:
             self.expired = utility.check_account_balance(self.user)
@@ -1081,20 +1047,22 @@ class PortalHandler(BaseHandler):
                 # raise HTTPError(403, reason='Account has no left time')
                 raise HTTPError(403, reason=bd_errs[450])
 
-        user_ip = socket.inet_aton(user_ip)
         # send challenge to ac
         flags = int(self.get_argument('flags', LOGIN))
         flags = LOGIN
         if flags == LOGIN:
             # portal-radius server doesn't check password, so send a 
             # no-meaning value
-            self.login(ac_ip, user_ip, user_mac)
+            self.login(ac_ip, socket.inet_aton(user_ip), user_mac)
             # update mac address
             # if ac_ip in RJ_AC:
             #     # Record nansha city user's platform
             #     # distinguish nansha_city accoutn & bidong account
             #     user_mac = user_mac.replace(':', '-')
             self.update_mac_record(self.user, user_mac)
+            store.add_online2(user=self.user['user'], nas_addr=ac_ip, 
+                              acct_start_time=utility.now(), framed_ipaddr=user_ip, 
+                              mac_addr=user_mac, ap_mac=ap_mac)
         else:
             self.logout(ac_ip, user_ip, user_mac)
 
@@ -1253,10 +1221,7 @@ class PortalHandler(BaseHandler):
             return None 
 
         if mask:
-            _user = store.get_user(value, mask)
-            if not _user:
-                _user = store.get_user2(value, mask)
-                # _id = store.add_user(value, utility.generate_password(), mask)
+            _user = store.get_user(value, column='uuid') or store.get_user2(value, column='uuid')
 
             if _user:
                 return _user
@@ -1469,88 +1434,52 @@ class Header():
 
 # ap billing profile should refress each 7200 seconds
 
-# holder: 10001  bidong project's ap  
-_DEFAULT_PROFILE = {'pn':10001, 'portal':'login.html', 
-                    'policy':0, 'ispri':0, 
-                    'note':'', 'ssid':'', 'logo':'', 
-                    'appid':'', 'shopid':'', 'secret':''}
-
-TEST_PROFILE = {'pn':'15371', 'portal':'login.html', 
-                'policy':0, 'ispri':0, 
-                'note':'', 'ssid':'hmwifi', 'logo':'', 
-                'appid':'', 'shopid':'', 'secret':''}
-
-# holder: 10002 nansha_city's ap
-_NANSHA_PROFILE = {'pn':10002, 'portal':'nansha_login.html', 
-                   'policy':1, 'ispri':0, 
-                   'note':'', 'ssid':'', 'logo':'', 
-                   'appid':'wxa7c14e6853105a84', 'shopid':'4209818', 
-                   'secret':'406df0f942536d1cd75ec428b5aefc60'}
-# _NANSHA_PN_PROFILE = {'pn':10003, 'portal':'login.html', 
-#                       'policy':1, 'ispri':0, 
-#                       'note':'', 'ssid':'NS_GOV', 'logo':'', 
-#                       'appid':'wxa7c14e6853105a84', 'shopid':'4312678', 
-#                       'secret':'cefa412068232ef108d1877b7305bd87'}
-_NANSHA_PN_PROFILE = {}
-_XR_PN_PROFILE = {}
-
 EXPIRE = 7200
+
 def get_billing_policy(nas_addr, ap_mac, ssid):
     '''
-        nas_addr : ipv4
-        ap_mac : ':' separated
-        return value: {'portal':'', 'policy':0}
+        1. check ap profile
+        2. check ssid profile
+        3. check ac profile
     '''
-    # NANSHA aps use _NANSHA_PROFILE profile 
-    if nas_addr in NS_AC:
-        if ssid == 'NS_GOV':
-            global _NANSHA_PN_PROFILE
-            if not _NANSHA_PN_PROFILE:
-                _NANSHA_PN_PROFILE = store.query_pn_policy(pn=10003, ssid='NS_GOV')
-                return _NANSHA_PN_PROFILE
-            return _NANSHA_PN_PROFILE
-        else:
-            _NANSHA_PROFILE['ssid'] = ssid
-            return _NANSHA_PROFILE
+    configure = AC_CONFIGURE[nas_addr]
+    if (configure['mask'])>>2 & 1:
+        # check ap prifile in cache?
+        if ap_mac in AP_MAPS:
+            profile = PN_PROFILE[AP_MAPS[ap_mac]].get(ssid, None)
+            if profile and int(time.time()) < profile['expired']:
+                return profile
 
-    if nas_addr in TEST_AC:
-        return TEST_PROFILE
+        # get policy by ap
+        profile = store.query_ap_policy(ap_mac, ssid)
+        logger.info('mac:{} ssid:{} ---- {}'.format(ap_mac, ssid, profile))
 
-    if nas_addr in XR_AC:
-        global _XR_PN_PROFILE
-        if not _XR_PN_PROFILE:
-            _XR_PN_PROFILE = store.query_pn_policy(pn=15914, ssid='PYNX_FREE')
-            return _XR_PN_PROFILE
-        return _XR_PN_PROFILE
-
-
-    if ap_mac in AP_MAPS:
-        profile = PN_PROFILE[AP_MAPS[ap_mac]].get(ssid, None)
-        if profile and int(time.time()) < profile['expired']:
-            return profile
-
-    profile = store.query_ap_policy(ap_mac, ssid)
-    logger.info('mac:{} ssid:{} ---- {}'.format(ap_mac, ssid, profile))
-    
-    if profile:
+        if not profile:
+            raise HTTPError(400, 'Abnormal, query pn failed, {} {}'.format(ap_mac, ssid))
         profile['expired'] = int(time.time()) + EXPIRE
         AP_MAPS[ap_mac] = profile['pn']
         PN_PROFILE[profile['pn']][profile['ssid']] = profile
-    else:
-        pn = store.query_ap_holder(ap_mac)
-        pn = pn['holder'] if pn else 10001
-        profile = {'pn':pn, 'ssid':ssid, 'policy':1, 'note':'', 
-                   'logo':'', 'ispri':0, 'portal':'login.html', 
-                   'expired':int(time.time())+EXPIRE, 
-                   'appid':'', 'shopid':'', 'secret':''}
+        # else:
+        #     pn = store.query_ap_holder(ap_mac)
+        #     pn = pn['holder'] if pn else 10001
+        #     profile = {'pn':pn, 'ssid':ssid, 'policy':1, 'note':'', 
+        #                'logo':'', 'ispri':0, 'portal':'login.html', 
+        #                'expired':int(time.time())+EXPIRE, 
+        #                'appid':'', 'shopid':'', 'secret':''}
 
-        AP_MAPS[ap_mac] = pn
-        PN_PROFILE[profile['pn']][profile['ssid']] = profile
+        #     AP_MAPS[ap_mac] = pn
+        #     PN_PROFILE[profile['pn']][profile['ssid']] = profile
 
-        
-    return PN_PROFILE[AP_MAPS[ap_mac]][ssid];
+            
+        return PN_PROFILE[AP_MAPS[ap_mac]][ssid]
 
-        
+    if (configure['mask'])>>1 & 1:
+        return store.query_pn_policy(pn=configure['pn'], ssid=ssid)
+
+    if (configure['mask'] & 1):
+        return store.query_pn_policy(pn=configure['pn'], ssid=ssid)
+
+
 _DEFAULT_BACKLOG = 128
 # These errnos indicate that a non-blocking operation must be retried
 # at a later time. On most paltforms they're the same value, but on 
@@ -1650,8 +1579,9 @@ def ac_data_handler(sock, data, addr):
             mac = []
             for b in attrs.mac:
                 mac.append('{:X}'.format(ord(b)))
-            print(':'.join(mac))
-            logger.info('User quit, mac: {}'.format(':'.join(mac)))
+            mac = ':'.join(mac)
+            store.delete_online2(mac)
+            logger.info('User quit, mac: {}'.format(mac))
 
 def init_log(log_folder, log_config, port):
     global logger

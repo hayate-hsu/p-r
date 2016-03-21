@@ -30,25 +30,27 @@ import utils
 import time
 import json
 import six
-import os
+
+import re
 
 import collections
 
 EXPIRE = 7200
 AP_MAPS = {}
 PN_PROFILE = collections.defaultdict(dict)
-RJ_AC = set()
-HM_AC = set()
-H3C_AC = set()
-
-TEST_AC = set()
-
-# BAS_IP = HM_AC | RJ_AC | H3C_AC
-
-# nansha ac
-NS_AC = set()
-HW_AC = set()
-XR_AC = set()
+# RJ_AC = set()
+# HM_AC = set()
+# H3C_AC = set()
+# 
+# TEST_AC = set()
+# 
+# # BAS_IP = HM_AC | RJ_AC | H3C_AC
+# 
+# # nansha ac
+# NS_AC = set()
+# HW_AC = set()
+# XR_AC = set()
+AC_CONFIGURE = {}
 
 __verson__ = '0.7'
 
@@ -80,72 +82,45 @@ def check_pn_privilege(pn, user):
 
 def get_billing_policy(req):
     '''
-        add expired mechanism
+        1. check ap profile
+        2. check ssid profile
+        3. check ac profile
     '''
     ac_ip = req.get_nas_addr()
-    # ap_mac,ssid = req.get_called_stationid().split(':')
+    if ac_ip not in AC_CONFIGURE:
+        raise ValueError('Unknown AC ip, {}'.format(ac_ip))
     data = req.get_called_stationid()
-    expired = int(time.time()) + EXPIRE
+    # expired = int(time.time()) + EXPIRE
     log.msg('called stationid: {}'.format(data))
-    if ac_ip in XR_AC:
-        return {'pn':15914, 'policy':1, 'expire':expired, 'ispri':0}
     ap_mac,ssid = data.split(':')
-    if ac_ip in NS_AC:
-        if ssid == 'NanSha_City':
-            return {'pn':10002, 'policy':1, 'expire':expired, 'ispri':0}
-        else:
-            return {'pn':10003, 'policy':1, 'expire':expired, 'ispri':0}
+    ap_mac = utils.format_mac(ap_mac)
 
-    if ac_ip in TEST_AC:
-        return {'pn':'15371', 'policy':0, 'expire':expired, 'ispri':0}
+    configure = AC_CONFIGURE[ac_ip]
+    if (configure['mask'])>>2 & 1:
+        # check ap prifile in cache?
+        if ap_mac in AP_MAPS:
+            profile = PN_PROFILE[AP_MAPS[ap_mac]].get(ssid, None)
+            if profile and int(time.time()) < profile['expired']:
+                return profile
 
-        # if ssid == 'NanSha_City':
-        #     return {'pn':10002, 'policy':0, 'expire':expired, 'ispri':0}
-        # else:
-        #     return {'pn':10003, 'policy':0, 'expire':expired, 'ispri':0}
-    # ap_mac,ssid = '',''
-    # called_stationid = req.get_called_stationid()
-    # if called_stationid:
-    #     ap_mac, ssid = called_stationid.split(':')
-    # else:
-    #     raise KeyError('Abnormal called stationid')
-        # return {'policy':0, 'expire':int(time.time())+EXPIRE}
-    if ac_ip in HW_AC:
-        ap_mac = ap_mac.replace('-', ':')
+        # get policy by ap
+        profile = store.query_ap_policy(ap_mac, ssid)
+        log.msg('mac:{} ssid:{} ---- {}'.format(ap_mac, ssid, profile))
 
-    if ac_ip in RJ_AC:
-        ap_mac = ':'.join([ap_mac[:2], ap_mac[2:4], ap_mac[4:6], ap_mac[6:8], ap_mac[8:10], ap_mac[10:12]]) 
-        ap_mac = ap_mac.upper()
-
-
-    ap_mac = ap_mac.replace('-', ':').upper()
-
-    if ap_mac in AP_MAPS:
-        profile = PN_PROFILE[AP_MAPS[ap_mac]].get(ssid, None)
-        if profile and int(time.time()) < profile['expired']:
-            log.msg('ap_mac:{}-ssid:{}, profile: {}'.format(ap_mac,ssid, profile))
-            return profile
-
-    profile = store.query_ap_policy(ap_mac, ssid)
-    log.msg('ap:{} ssid:{} ---- {}'.format(ap_mac, ssid, profile))
-    if profile:
-        profile['expired'] = expired
+        if not profile:
+            raise ValueError('Abnormal, query pn failed, {} {}'.format(ap_mac, ssid))
+        profile['expired'] = int(time.time()) + EXPIRE
         AP_MAPS[ap_mac] = profile['pn']
         PN_PROFILE[profile['pn']][profile['ssid']] = profile
-    # else:
-    #     log.msg('Unknonw ssid:{}, ap_mac:{}'.format(ssid, ap_mac))
-    #     raise ValueError('Unknonw ssid:{}, ap_mac:{}'.format(ssid, ap_mac))
-    else:
-        pn = store.query_ap_holder(ap_mac)
-        pn = pn['holder'] if pn else 10001
-        profile = {'policy':1, 'expired':expired, 'ispri':0, 'pn':pn, 'ssid':ssid}
-        AP_MAPS[ap_mac] = pn
-        PN_PROFILE[profile['pn']][profile['ssid']] = profile
 
-    log.msg('ap_mac:{}-ssid:{}, profile: {}'.format(ap_mac,ssid, PN_PROFILE[AP_MAPS[ap_mac]][ssid]))
+        return PN_PROFILE[AP_MAPS[ap_mac]][ssid]
 
-    return PN_PROFILE[AP_MAPS[ap_mac]][ssid]
-        
+    if (configure['mask'])>>1 & 1:
+        return store.query_pn_policy(pn=configure['pn'], ssid=ssid)
+
+    if (configure['mask'] & 1):
+        return store.query_pn_policy(pn=configure['pn'], ssid=ssid)
+
 class PacketError(Exception):pass
 
 ###############################################################################
@@ -282,9 +257,7 @@ class RADIUSAccess(RADIUS):
         
         reply = req.CreateReply()
         reply.source = req.source
-        user = store.get_bd_user(req.get_user_name())
-        if not user:
-            user = store.get_bd_user2(req.get_user_name())
+        user = store.get_bd_user(req.get_user_name()) or store.get_bd_user2(req.get_user_name())
         if user:
             # get billing policy
 
@@ -299,9 +272,6 @@ class RADIUSAccess(RADIUS):
                 if user:
                     expired = check_account_balance(user)
                     if expired:
-                        # if go to this branch, (req.get_user_name()) is mac address
-                        # user has no time left, set user=None
-                        # goto portal authenication
                         user = None
         if user:
             self.user_trace.push(user['user'],req)
@@ -351,9 +321,7 @@ class RADIUSAccounting(RADIUS):
             self.midware.process(plugin,req=req)
                  
         # user = store.get_bd_user_by_mac(req.get_user_name())
-        user = store.get_bd_user(req.get_user_name())
-        if not user:
-            user = store.get_bd_user2(req.get_user_name())
+        user = store.get_bd_user(req.get_user_name()) or store.get_bd_user2(req.get_user_name())
         if user:
             self.user_trace.push(user['user'],req)        
             # get billing policy
@@ -411,14 +379,17 @@ def run(config):
     authport = config['authport']
     acctport = config['acctport']
     adminport = config['adminport']
-    global HM_AC, RJ_AC, H3C_AC, NS_AC, HW_AC, XR_AC, TEST_AC
-    HM_AC = config['HM_AC']
-    RJ_AC = config['RJ_AC']
-    H3C_AC = config['H3C_AC']
-    HW_AC = config['HW_AC']
-    XR_AC = config['XR_AC'] 
-    TEST_AC = config['TEST_AC']
-    NS_AC = RJ_AC | H3C_AC | XR_AC | HW_AC
+    # global HM_AC, RJ_AC, H3C_AC, NS_AC, HW_AC, XR_AC, TEST_AC
+    # HM_AC = config['HM_AC']
+    # RJ_AC = config['RJ_AC']
+    # H3C_AC = config['H3C_AC']
+    # HW_AC = config['HW_AC']
+    # XR_AC = config['XR_AC'] 
+    # TEST_AC = config['TEST_AC']
+    # NS_AC = RJ_AC | H3C_AC | XR_AC | HW_AC
+    global AC_CONFIGURE
+    AC_CONFIGURE = config['ac_policy']
+
     #parse dictfile
     dictfile = config.get('dictfile', None)
     if not dictfile or not os.path.exists(dictfile):

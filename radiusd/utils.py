@@ -23,6 +23,7 @@ import hashlib
 import six
 import time
 import decimal
+import re
 # import functools
 
 decimal.getcontext().prec = 11
@@ -43,6 +44,17 @@ PacketStatusTypeMap = {
     44 : 'CoAACK',
     45 : 'CoANAK',
 }
+
+def format_mac(mac):
+    '''
+        output : ##:##:##:##:##:##
+    '''
+    mac = re.sub(r'[_.,; -]', ':', mac).upper()
+    if 12 == len(mac):
+        mac = ':'.join([mac[:2], mac[2:4], mac[4:6], mac[6:8], mac[8:10], mac[10:]])
+    elif 14 == len(mac):
+        mac = ':'.join([mac[:2],mac[2:4],mac[5:7],mac[7:9],mac[10:12],mac[12:14]])
+    return mac
 
 def is_expire(dstr):
     if not dstr:

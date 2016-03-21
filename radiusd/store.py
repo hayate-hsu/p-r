@@ -182,7 +182,7 @@ class Store():
             holder = cur.fetchone()
             return holder['holder'] if holder else ''
 
-    def add_user(self, user, password, ends=2**5):
+    def add_user(self, user, password, appid='', ends=2**5):
         '''
             user : uuid or weixin openid
             password : user encrypted password
@@ -215,16 +215,19 @@ class Store():
                 mask = 0 + 2**2 + 2**7
                 sql = '''insert into account (uuid, mask, create_time) 
                 values ("{}", {}, "{}")'''.format(user, mask, now)
-            else:
+            elif (ends>>5 & 1) and appid:
                 # from weixin
                 column = 'weixin'
                 mask = 0 + 2**2 + 2**5
-                sql = '''insert into account (weixin, mask, create_time)
-                values ("{}", {}, "{}")'''.format(user, mask, now)
+                sql = '''insert into account (appid, weixin, mask, create_time)
+                values ("{}", "{}", {}, "{}")'''.format(appid, user, mask, now)
 
             cur.execute(sql)
 
             sql = 'select id from account where {} = "{}"'.format(column, user)
+            if appid:
+                sql = sql + ' and appid={}'.format(appid)
+
             cur.execute(sql)
             user = cur.fetchone()
             #
@@ -244,7 +247,7 @@ class Store():
             return user
 
 
-    def get_user(self, user, ends=0):
+    def get_user(self, user, column='weixin', appid=''):
         '''
             arguments as add_user
             ends:
@@ -252,25 +255,27 @@ class Store():
                     0 : weixin
         '''
         with Cursor(self.dbpool) as cur:
-            column = 'weixin'
-            if ends:
-                column = 'uuid'
+            # column = 'weixin'
+            # if ends:
+            #     column = 'uuid'
             sql = '''select bd_account.* from bd_account, account where 
-            account.{} = "{}" and cast(account.id as char) = bd_account.user'''.format(column, user)
+            account.{} = "{}" and account.appid="{}" and 
+            cast(account.id as char) = bd_account.user'''.format(column, user, appid)
             cur.execute(sql)
             return cur.fetchone()
 
-    def get_user2(self, user, ends=0):
+    def get_user2(self, user, column='weixin', appid=''):
         '''
         '''
         with Connect(self.dbpool) as conn:
             conn.commit()
             cur = conn.cursor(MySQLdb.cursors.DictCursor)
-            column = 'weixin'
-            if ends:
-                column = 'uuid'
+            # column = 'weixin'
+            # if ends:
+            #     column = 'uuid'
             sql = '''select bd_account.* from bd_account, account where 
-            account.{} = "{}" and cast(account.id as char) = bd_account.user'''.format(column, user)
+            account.{} = "{}" and account.appid="{}" and 
+            cast(account.id as char) = bd_account.user'''.format(column, user, appid)
             cur.execute(sql)
             return cur.fetchone()
 
@@ -294,13 +299,16 @@ class Store():
         '''
         with Cursor(self.dbpool) as cur:
             sql = ''
-            if user.count(':') == 5:
-                sql = '''select bd_account.* from mac_history, bd_account 
-                where mac_history.mac = "{}" and mac_history.user = bd_account.user'''.format(user)
-            else:
-                sql = 'select * from bd_account where user = "{}"'.format(user)
-                if password:
-                    sql = 'select * from bd_account where user = "{}" and password = "{}"'.format(user, password)
+            # if user.count(':') == 5:
+            #     sql = '''select bd_account.* from mac_history, bd_account 
+            #     where mac_history.mac = "{}" and mac_history.user = bd_account.user'''.format(user)
+            # else:
+            #     sql = 'select * from bd_account where user = "{}"'.format(user)
+            #     if password:
+            #         sql = 'select * from bd_account where user = "{}" and password = "{}"'.format(user, password)
+            sql = 'select * from bd_account where user = "{}"'.format(user)
+            if password:
+                sql = sql + ' and password = "{}"'.format(password)
             cur.execute(sql)
             user = cur.fetchone()
             # if user and user['mask'] & 1<<5:
@@ -327,12 +335,15 @@ class Store():
         with Connect(self.dbpool) as conn:
             conn.commit()
             cur = conn.cursor(MySQLdb.cursors.DictCursor)
-            sql = ''
-            if user.count(':') == 5:
-                sql = '''select bd_account.* from mac_history, bd_account 
-                where mac_history.mac = "{}" and mac_history.user = bd_account.user'''.format(user)
-            else:
-                sql = 'select * from bd_account where user = "{}"'.format(user)
+            # sql = ''
+            # if user.count(':') == 5:
+            #     sql = '''select bd_account.* from mac_history, bd_account 
+            #     where mac_history.mac = "{}" and mac_history.user = bd_account.user'''.format(user)
+            # else:
+            #     sql = 'select * from bd_account where user = "{}"'.format(user)
+            sql = 'select * from bd_account where user = "{}"'.format(user)
+            if password:
+                sql = sql + ' and password = "{}"'.format(password)
             cur.execute(sql)
             user = cur.fetchone()
             return user
@@ -546,6 +557,20 @@ class Store():
             cur.execute(sql)
             conn.commit()
 
+    def add_online2(self, **kwargs):
+        with Connect(self.dbpool) as conn:
+            assert kwargs and ('mac_addr' in kwargs)
+            cur = conn.cursor(MySQLdb.cursors.DictCursor)
+
+            sql = 'delete from online where mac_addr = "{}"'.format(kwargs['mac_addr'])
+            cur.execute(sql)
+
+            keys = ','.join(kwargs.keys())
+            vals = ','.join(['"%s"'%c for c in kwargs.values()])
+            sql = 'insert into online ({}) values({})'.format(keys, vals)
+            cur.execute(sql)
+            conn.commit()
+
     def update_online(self, online):
         with Connect(self.dbpool) as conn:
             cur = conn.cursor()
@@ -558,6 +583,15 @@ class Store():
                        online['output_total'], online['nas_addr'], 
                        online['acct_session_id'])
             cur.execute(online_sql)
+            conn.commit()
+
+    def delete_online2(self, mac):
+        '''
+            mac : '##:##:##:##:##:##'
+        '''
+        with Connect(self.dbpool) as conn:
+            cur = conn.cursor()
+            cur.execute('delete from online where mac_addr="{}"'.format(mac))
             conn.commit()
 
     def update_billing(self, billing, coin=0):

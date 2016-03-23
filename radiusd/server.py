@@ -89,13 +89,15 @@ def get_billing_policy(req):
     ac_ip = req.get_nas_addr()
     if ac_ip not in AC_CONFIGURE:
         raise ValueError('Unknown AC ip, {}'.format(ac_ip))
+
+    configure = AC_CONFIGURE[ac_ip]
+    if ac_ip in ('10.10.0.80', '121.46.0.119'):
+        return {'pn':15914, 'policy':1, 'ispri':0}
     data = req.get_called_stationid()
     # expired = int(time.time()) + EXPIRE
     log.msg('called stationid: {}'.format(data))
     ap_mac,ssid = data.split(':')
     ap_mac = utils.format_mac(ap_mac)
-
-    configure = AC_CONFIGURE[ac_ip]
     if (configure['mask'])>>2 & 1:
         # check ap prifile in cache?
         if ap_mac in AP_MAPS:

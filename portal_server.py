@@ -995,11 +995,11 @@ class PortalHandler(BaseHandler):
         # self.profile = {'logo':profile[0], 'pn':profile[1], 'note':profile[2], 
         #                 'policy':profile[3], 'ispri':profile[4], 'portal':profile[5]}
 
-        mask = int(self.get_argument('mask', 0))
-        if mask:
-            _user = self.check_app_account(user_mac)
-            user = _user['user']
-            password = _user['password']
+        # mask = int(self.get_argument('mask', 0))
+        # if mask:
+        #     _user = self.check_app_account(user_mac)
+        #     user = _user['user']
+        #     password = _user['password']
         # else:
         #     if ac_ip in NS_AC or (':' in user and profile.get('policy', 0)):
         #         # nansha ac or user is mac account and profile in free module
@@ -1012,12 +1012,14 @@ class PortalHandler(BaseHandler):
             # room number
             holder = self.get_holder(self.get_argument('ap_mac'))
             user = str(holder) + user
-        _user = store.get_bd_user(user, password)
+        _user = store.get_bd_user(user)
         if not _user:
             # raise HTTPError(401, reason='Please check your input account or password')
             raise HTTPError(401, reason=bd_errs[431])
-        # if password != _user['password']:
-        #     raise HTTPError(401, reason='Password error')
+
+        if password not in (_user['password'], utility.md5(_user['password']).hexdigest()):
+            raise HTTPError(401, reason=bd_errs[431])
+            # raise HTTPError(401, reason='Password error')
 
         # check account status & account ends number on networt
         if _user['mask']>>30 & 1:

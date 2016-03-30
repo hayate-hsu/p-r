@@ -182,7 +182,7 @@ class Store():
             holder = cur.fetchone()
             return holder['holder'] if holder else ''
 
-    def add_user(self, user, password, appid='', ends=2**5):
+    def add_user(self, user, password, appid='', mobile='', ends=2**5):
         '''
             user : uuid or weixin openid
             password : user encrypted password
@@ -192,7 +192,7 @@ class Store():
 
                 2^6 : app(android)                opendid or other unique id 
                 2^7 : app(ios)
-                2**9: user pay by time
+                2^8 : mobile (verify mobile number)
 
                 2**28 : acount forzened
                 # 4 : web                         token & account
@@ -207,20 +207,20 @@ class Store():
             column = 'uuid'
             if ends>>6 & 1:
                 weixin, uuid = '', user
-                column = 'uuid'
                 mask = 0 + 2**2 + 2**6
-                sql = '''insert into account (uuid, mask, create_time) 
-                values ("{}", {}, "{}")'''.format(user, mask, now)
+                sql = 'insert into account (uuid, mask) values ("{}", {})'.format(user, mask)
             elif ends>>7 & 1:
                 mask = 0 + 2**2 + 2**7
-                sql = '''insert into account (uuid, mask, create_time) 
-                values ("{}", {}, "{}")'''.format(user, mask, now)
+                sql = 'insert into account (uuid, mask) values ("{}", {})'.format(user, mask)
+            elif ends>>8 & 1:
+                column = 'mobile'
+                mask = 0 + 2**2 + 2**8
+                sql = 'insert into account (mobile, mask) values ("{}", {})'.format(mobile, mask)
             elif (ends>>5 & 1) and appid:
                 # from weixin
                 column = 'weixin'
                 mask = 0 + 2**2 + 2**5
-                sql = '''insert into account (appid, weixin, mask, create_time)
-                values ("{}", "{}", {}, "{}")'''.format(appid, user, mask, now)
+                sql = 'insert into account (appid, weixin, mask)values ("{}", "{}", {})'.format(appid, user, mask)
 
             cur.execute(sql)
 
@@ -235,9 +235,9 @@ class Store():
             coin = 60
             user = str(user['id'])
 
-            sql = '''insert into bd_account (user, password, mask, coin, expired, holder, ends) 
-            values("{}", "{}", {}, {}, "{}", 0, 2)
-            '''.format(user, password, mask, coin, expired)
+            sql = '''insert into bd_account (user, password, mask, coin, expired, holder, ends, mobile) 
+            values("{}", "{}", {}, {}, "{}", 0, 2, "{}")
+            '''.format(user, password, mask, coin, expired, mobile)
             cur.execute(sql)
 
             sql = 'select * from bd_account where user = "{}"'.format(user)
@@ -347,6 +347,16 @@ class Store():
             cur.execute(sql)
             user = cur.fetchone()
             return user
+
+    def update_account_mobile(self, user, mobile):
+        '''
+        '''
+        with Connect(self.dbpool) as conn:
+            cur = conn.cursor(MySQLdb.cursors.DictCursor)
+            cur.execute('update account set mobile="{}" where id={}'.format(mobile, user))
+
+            cur.execute('update bd_account set mobile="{}" where user="{}"'.format(mobile, user))
+            conn.commit()
 
     def get_pn(self, pn, ispri=1):
         '''
@@ -459,6 +469,13 @@ class Store():
             cur.execute(sql)
             return cur.fetchone()
 
+    def get_account_by_mobile_or_mac(self, mobile, mac):
+        '''
+        '''
+        with Cursor(self.dbpool) as cur:
+            sql = 'select * from account where mobile="{}" or (uuid="{}" and mask>>6 &1)'.format(mobile, mac)
+            cur.execute(sql)
+            return cur.fetchone()
 
     def get_user_records_by_mac(self, mac):
         with Cursor(self.dbpool) as cur:

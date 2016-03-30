@@ -91,8 +91,8 @@ def get_billing_policy(req):
         raise ValueError('Unknown AC ip, {}'.format(ac_ip))
 
     configure = AC_CONFIGURE[ac_ip]
-    if ac_ip in ('10.10.0.80', '121.46.0.119'):
-        return {'pn':15914, 'policy':1, 'ispri':0}
+    # if ac_ip in ('10.10.0.80', '121.46.0.119'):
+    #     return {'pn':15914, 'policy':1, 'ispri':0}
     data = req.get_called_stationid()
     # expired = int(time.time()) + EXPIRE
     log.msg('called stationid: {}'.format(data))
@@ -259,7 +259,11 @@ class RADIUSAccess(RADIUS):
         
         reply = req.CreateReply()
         reply.source = req.source
-        user = store.get_bd_user(req.get_user_name()) or store.get_bd_user2(req.get_user_name())
+        req_user = req.get_user_name()
+        # if req_user == 'user':
+        #     return None 
+
+        user = store.get_bd_user(req_user) or store.get_bd_user2(req_user)
         if user:
             # get billing policy
 

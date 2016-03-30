@@ -94,6 +94,8 @@ PN_PROFILE = collections.defaultdict(dict)
 # {ap_mac:pn}  : ap_mac(11:22:33:44:55:66)
 AP_MAPS = {}
 
+# MOBILE_PATTERN = re.compile(r'^(?:13[0-9]|14[57]|15[0-35-9]|17[678]|18[0-9])\d{8}$')
+
 class Application(tornado.web.Application):
     '''
         Web application class.
@@ -477,6 +479,8 @@ class PageHandler(BaseHandler):
             # process weixin argument
             self.prepare_wx_wifi(**kwargs)
 
+            # logger.info('{}'.format(kwargs))
+
             # check mac address, login by mac address
             # if login successfully, return _user, else return None
             _user = self.login_auto_by_mac(**kwargs)
@@ -774,7 +778,7 @@ class PageHandler(BaseHandler):
         _user = store.get_user(openid, column='weixin', appid=self.profile['appid']) or store.get_user2(openid, column='weixin', appid=self.profile['appid'])
         if not _user:
             # create new account
-            _user = store.add_user(openid, utility.generate_password(), self.profile['appid'])
+            _user = store.add_user(openid, utility.generate_password(), appid=self.profile['appid'])
         if not _user:
             raise HTTPError(400, reason='Should subscribe first')
         # user unsubscribe, the account will be forbid
@@ -906,7 +910,7 @@ class PortalHandler(BaseHandler):
         _user = store.get_user(openid, column='weixin', appid=kwargs['appid']) or  store.get_user2(openid, column='weixin', appid=kwargs['appid'])
         if not _user:
             # create new account
-            _user = store.add_user(openid, utility.generate_password(), kwargs['appid'])
+            _user = store.add_user(openid, utility.generate_password(), appid=kwargs['appid'])
         if not _user:
             raise HTTPError(400, reason='Should subscribe first')
         
@@ -963,6 +967,25 @@ class PortalHandler(BaseHandler):
         user = self.get_argument('user', '')
         password = self.get_argument('password', '')
         _user = None
+
+        ac_ip = self.get_argument('ac_ip')
+        # check ac ip
+        if ac_ip not in AC_CONFIGURE:
+            logger.error('not avaiable ac & ap')
+            raise HTTPError(403, reason='AC ip error')
+
+        ap_mac = self.get_argument('ap_mac')
+        user_mac = self.get_argument('user_mac')
+        user_ip = self.get_argument('user_ip')
+
+        # vlanId = self.get_argument('vlan')
+        ssid = self.get_argument('ssid')
+
+        profile = get_billing_policy(ac_ip, ap_mac, ssid)
+
+        # flags = self.get_argument('flags', 0)
+        _user = ''
+
         if openid:
             # weixin client
             appid = self.get_argument('appid')
@@ -977,49 +1000,21 @@ class PortalHandler(BaseHandler):
                 # _user = store.get_bd_user(_user['id'])
             user = _user['user']
             password = _user['password']
-        # check account left, forbin un-meaning request to ac
-        ac_ip = self.get_argument('ac_ip')
-        # check ac ip
-        if ac_ip not in AC_CONFIGURE:
-            logger.error('not avaiable ac & ap')
-            raise HTTPError(403, reason='AC ip error')
+        else:
+            # user is mobile number and password is verify code
+            # _user = self.check_mobile_account(user, user_mac) 
+            _user = store.get_bd_user(user)
+            # else:
+            #     # portal by mobile & code, ingore input password
+            #     password = _user['password']
 
-        ap_mac = self.get_argument('ap_mac')
-        user_mac = self.get_argument('user_mac')
-        user_ip = self.get_argument('user_ip')
-
-        # vlanId = self.get_argument('vlan')
-        ssid = self.get_argument('ssid')
-        profile = get_billing_policy(ac_ip, ap_mac, ssid)
-        # profile = get_billing_policy(kwargs['ac_ip'], kwargs['ap_mac'], kwargs['ssid'])
-        # self.profile = {'logo':profile[0], 'pn':profile[1], 'note':profile[2], 
-        #                 'policy':profile[3], 'ispri':profile[4], 'portal':profile[5]}
-
-        # mask = int(self.get_argument('mask', 0))
-        # if mask:
-        #     _user = self.check_app_account(user_mac)
-        #     user = _user['user']
-        #     password = _user['password']
-        # else:
-        #     if ac_ip in NS_AC or (':' in user and profile.get('policy', 0)):
-        #         # nansha ac or user is mac account and profile in free module
-        #         user = self.check_mac_account(user_mac)
-        #     elif not password:
-        #         logger.error('Password can\'t null')
-        #         raise HTTPError(403, 'Password can\'t null')
-
-        if len(user) == 4:
-            # room number
-            holder = self.get_holder(self.get_argument('ap_mac'))
-            user = str(holder) + user
-        _user = store.get_bd_user(user)
+        # _user = store.get_bd_user(user)
         if not _user:
-            # raise HTTPError(401, reason='Please check your input account or password')
             raise HTTPError(401, reason=bd_errs[431])
 
         if password not in (_user['password'], utility.md5(_user['password']).hexdigest()):
+            # password or user account error
             raise HTTPError(401, reason=bd_errs[431])
-            # raise HTTPError(401, reason='Password error')
 
         # check account status & account ends number on networt
         if _user['mask']>>30 & 1:
@@ -1106,6 +1101,8 @@ class PortalHandler(BaseHandler):
             if header.err == 0x02:
                 # linked has been established, has been authed 
                 logger.info('user: {} has been authed, mac:{}'.format(user, ':'.join(_mac)))
+                if self.is_weixin:
+                    return
                 raise HTTPError(435, reason=bd_errs[435])
             elif header.err == 0x03:
                 # user's previous link has been verifring 
@@ -1154,6 +1151,8 @@ class PortalHandler(BaseHandler):
             if header.err == 0x02:
                 # linked has been established, has been authed 
                 logger.info('user: {} has been authed, mac:{}'.format(user, ':'.join(_mac)))
+                if self.is_weixin:
+                    return
                 raise HTTPError(435, reason=bd_errs[435])
             elif header.err == 0x03:
                 # user's previous link has been verifring 

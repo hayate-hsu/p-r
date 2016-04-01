@@ -899,7 +899,7 @@ class PortalHandler(BaseHandler):
     @_trace_wrapper
     @_parse_body
     def get(self):
-        # tid = self.get_argument('tid')
+        tid = self.get_argument('tid')
         # timestamp = self.get_argument('timestamp')
         # sign = self.get_argument('sign')
         openid = self.get_argument('openId')

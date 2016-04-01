@@ -311,17 +311,18 @@ class Store():
                 sql = sql + ' and password = "{}"'.format(password)
             cur.execute(sql)
             user = cur.fetchone()
-            # if user and user['mask'] & 1<<5:
-            #     # query weixin account binded renter
-            #     sql = 'select * from bind where weixin = "{}"'.format(user)
-            #     cur.execute(sql)
-            #     record = cur.fetchone()
-            #     if record:
-            #         sql = 'select expired from bd_account where user = "{}"'.format(record['renter'])
-            #         cur.execute(sql)
-            #         ret = cur.fetchone()
-            #         if ret:
-            #             user['expired'] = ret['expired']
+            if user and user['mask']>>5 & 1:
+                # query weixin account binded renter
+                sql = 'select * from bind where weixin = "{}"'.format(user)
+                cur.execute(sql)
+                record = cur.fetchone()
+                if record:
+                    sql = 'select expired, ends from bd_account where user = "{}"'.format(record['renter'])
+                    cur.execute(sql)
+                    ret = cur.fetchone()
+                    if ret:
+                        user['expired'] = ret['expired']
+                        user['ends'] = ret['ends']
             return user
 
     def get_bd_user2(self, user, password=None):

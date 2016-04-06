@@ -546,6 +546,7 @@ class PageHandler(BaseHandler):
                                              pn_note=pn_note, pn_logo=pn_logo,  
                                              ispri=self.profile['ispri'], pn=self.profile['pn'], 
                                              note=self.profile['note'], image=self.profile['logo'], 
+                                             logo=self.profile['logo'],
                                              **kwargs)
                     
 
@@ -556,6 +557,7 @@ class PageHandler(BaseHandler):
         # return self.render('login.html', openid='', ispri=self.profile['ispri'], 
                            pn=self.profile['pn'], note=self.profile['note'], image=self.profile['logo'], 
                            appid=self.profile['appid'], shopid=self.profile['shopid'], secret=self.profile['secret'], 
+                           logo=self.profile['logo'],
                            extend=self.wx_wifi['extend'], timestamp=self.wx_wifi['timestamp'], 
                            sign=self.wx_wifi['sign'], authUrl=self.wx_wifi['auth_url'], 
                            **kwargs)

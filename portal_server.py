@@ -318,9 +318,9 @@ def _parse_body(method):
                 if isinstance(values, basestring):
                     values = [values, ]
                 elif isinstance(values, int):
-                    values = [values, ]
+                    values = [str(values), ]
                 elif isinstance(values, float):
-                    values = [values, ]
+                    values = [str(values), ]
                 else:
                     values = [v for v in values if v]
                 if values:
@@ -1483,7 +1483,9 @@ def get_billing_policy(nas_addr, ap_mac, ssid):
         return PN_PROFILE[AP_MAPS[ap_mac]][ssid]
 
     if (configure['mask'])>>1 & 1:
-        return store.query_pn_policy(pn=configure['pns'][ssid], ssid=ssid)
+        # return store.query_pn_policy(pn=configure['pns'][ssid], ssid=ssid)
+        # only based ssid, ssid must be unique
+        return store.query_pn_policy(ssid=ssid)
 
     if (configure['mask'] & 1):
         return store.query_pn_policy(pn=configure['pn'], ssid=ssid)

@@ -970,6 +970,7 @@ class PortalHandler(BaseHandler):
     @_parse_body
     def post(self):
         # parse request data
+        # logger.info(self.request.arguments)
         openid = self.get_argument('openid', None)
         user = self.get_argument('user', '')
         password = self.get_argument('password', '')

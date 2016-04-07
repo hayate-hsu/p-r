@@ -313,8 +313,13 @@ def _parse_body(method):
         # parse json format arguments in request body content
         if content_type.startswith('application/json') and self.request.body:
             arguments = json_decoder(tornado.escape.native_str(self.request.body))
+            # logger.info('arguments: {}'.format(arguments))
             for name, values in arguments.iteritems():
                 if isinstance(values, basestring):
+                    values = [values, ]
+                elif isinstance(values, int):
+                    values = [values, ]
+                elif isinstance(values, float):
                     values = [values, ]
                 else:
                     values = [v for v in values if v]

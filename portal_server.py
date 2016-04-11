@@ -912,12 +912,14 @@ class PortalHandler(BaseHandler):
         openid = self.get_argument('openId')
         extend = self.get_argument('extend')
 
+        logger.info('tid: {}'.format(tid))
+
         kwargs = self.b64decode(extend)
         user, password = '',''
         _user = store.get_user(openid, column='weixin', appid=kwargs['appid']) or  store.get_user2(openid, column='weixin', appid=kwargs['appid'])
         if not _user:
             # create new account
-            _user = store.add_user(openid, utility.generate_password(), appid=kwargs['appid'])
+            _user = store.add_user(openid, utility.generate_password(), appid=kwargs['appid'], tid=tid)
         if not _user:
             raise HTTPError(400, reason='Should subscribe first')
         

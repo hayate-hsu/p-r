@@ -182,7 +182,7 @@ class Store():
             holder = cur.fetchone()
             return holder['holder'] if holder else ''
 
-    def add_user(self, user, password, appid='', mobile='', ends=2**5):
+    def add_user(self, user, password, appid='', tid='', mobile='', ends=2**5):
         '''
             user : uuid or weixin openid
             password : user encrypted password
@@ -220,7 +220,7 @@ class Store():
                 # from weixin
                 column = 'weixin'
                 mask = 0 + 2**2 + 2**5
-                sql = 'insert into account (appid, weixin, mask)values ("{}", "{}", {})'.format(appid, user, mask)
+                sql = 'insert into account (appid, weixin, tid, mask)values ("{}", "{}", {})'.format(appid, user, tid, mask)
 
             cur.execute(sql)
 

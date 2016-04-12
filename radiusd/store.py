@@ -220,7 +220,7 @@ class Store():
                 # from weixin
                 column = 'weixin'
                 mask = 0 + 2**2 + 2**5
-                sql = 'insert into account (appid, weixin, tid, mask)values ("{}", "{}", {})'.format(appid, user, tid, mask)
+                sql = 'insert into account (appid, weixin, tid, mask)values ("{}", "{}", "{}", {})'.format(appid, user, tid, mask)
 
             cur.execute(sql)
 

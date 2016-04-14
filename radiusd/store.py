@@ -374,22 +374,11 @@ class Store():
         '''
         '''
         with Cursor(self.dbpool) as cur:
-        # with Connect(self.dbpool) as conn:
-        #     conn.commit()
-        #     cur = conn.cursor(MySQLdb.cursors.DictCursor)
-            sql = 'select * from pn_bind where user="{}" and holder={}'.format(user, pn)
+            sql = 'select pn_{pn}.mask from pn_bind, pn_{pn} where pn_bind.user="{user}" and \
+                    pn_bind.holder={pn} and pn_{pn}.mobile=pn_bind.mobile'.format(pn=pn, user=user)
             cur.execute(sql)
             return cur.fetchone()
 
-    # def get_bd_user2(self, user):
-    #     '''
-    #     '''
-    #     with Connect(self.dbpool) as conn:
-    #         conn.commit()
-    #         cur = conn.cursor(MySQLdb.cursors.DictCursor)
-    #         cur.execute('select * from bd_account where user = "{}"'.format(user))
-    #         user = cur.fetchone()
-    #         return user
 
     def merge_app_account(self, _id, user_mac):
         '''
@@ -556,15 +545,6 @@ class Store():
     def add_online(self, online):
         with Connect(self.dbpool) as conn:
             cur = conn.cursor(MySQLdb.cursors.DictCursor)
-            # temporary scheme
-            nas_addr = online['nas_addr']
-            if nas_addr in ['10.10.0.60', ]:
-                mac_addr = online['mac_addr']
-                mac_addr = mac_addr.upper()
-                online['mac_addr'] = ':'.join([mac_addr[:2], mac_addr[2:4], mac_addr[4:6], 
-                                               mac_addr[6:8], mac_addr[8:10], mac_addr[10:12]])
-                ap_mac = online['ap_mac']
-                online['ap_mac'] = ':'.join([ap_mac[:2], ap_mac[2:4], ap_mac[4:6], ap_mac[6:8], ap_mac[8:10], ap_mac[10:12]])
 
             sql = 'delete from online where mac_addr = "{}"'.format(online['mac_addr'])
             cur.execute(sql)
@@ -646,6 +626,17 @@ class Store():
     def del_online(self, nas_addr, acct_session_id):
         with Connect(self.dbpool) as conn:
             cur = conn.cursor()
+            sql = 'select * from online where \
+                    nas_addr = "{}" and acct_session_id = "{}"'.format(nas_addr, acct_session_id)
+            cur.execute(sql)
+            record = cur.fetchone()
+            if record:
+                # update user on & off record
+                keys = ','.join(record.keys())
+                vals = ','.join(['"{}"'.format(item) for item in record.values()])
+                sql = 'insert into trace ({}) values({})'.format(keys, vals)
+                cur.execute(sql)
+
             sql = '''delete from online where nas_addr = "{}" and 
                 acct_session_id = "{}"'''.format(nas_addr, acct_session_id)
             cur.execute(sql)

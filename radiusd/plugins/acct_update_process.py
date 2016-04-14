@@ -19,11 +19,12 @@ def process(req=None,user=None,runstat=None,**kwargs):
     online = store.get_online(req.get_nas_addr(),req.get_acct_sessionid())  
 
     if not online:         
-        ap_mac = ''
+        ap_mac,ssid = '',''
         called_stationid = req.get_called_stationid()
-        if called_stationid:
-            ap_mac = called_stationid.split(':')[0]
-            ap_mac = ap_mac.upper()
+        ap_mac,ssid = called_stationid.split(':')
+        ap_mac = utils.format_mac(ap_mac)
+
+        # calculate start time
         sessiontime = req.get_acct_sessiontime()
         updatetime = datetime.datetime.now()
         _starttime = updatetime - datetime.timedelta(seconds=sessiontime)       
@@ -33,9 +34,10 @@ def process(req=None,user=None,runstat=None,**kwargs):
             acct_session_id = req.get_acct_sessionid(),
             acct_start_time = _starttime.strftime("%Y-%m-%d %H:%M:%S"),
             framed_ipaddr = req.get_framed_ipaddr(),
-            mac_addr = req.get_mac_addr(),
+            mac_addr = utils.format_mac(req.get_mac_addr()),
             ap_mac = ap_mac,
-            # nas_port_id = req.get_nas_portid(),
+            ssid=ssid,
+            _location=user['policy'].get('_location', ''),
             billing_times = req.get_acct_sessiontime(),
             input_total = req.get_input_total(),
             output_total = req.get_output_total(),

@@ -505,9 +505,9 @@ class PageHandler(BaseHandler):
                         url = ''.join([url, '?', kwargs['urlparam']])
                     self.redirect(url)
                 # update online tables
-                store.add_online2(user=_user['user'], nas_addr=kwargs['ac_ip'], 
-                                  acct_start_time=utility.now(), framed_ipaddr=kwargs['user_ip'], 
-                                  mac_addr=kwargs['user_mac'], ap_mac=kwargs['ap_mac'])
+                # store.add_online2(user=_user['user'], nas_addr=kwargs['ac_ip'], ssid=kwargs['ssid'], 
+                #                   acct_start_time=utility.now(), framed_ipaddr=kwargs['user_ip'], 
+                #                   mac_addr=kwargs['user_mac'], ap_mac=kwargs['ap_mac'])
                 return 
 
             # url = self.get_argument('wlanuserfirsturl', '') or self.get_argument('url', '')
@@ -644,9 +644,9 @@ class PageHandler(BaseHandler):
         if self.profile['ispri']:
             # current network is private, check user privilege
             # logger.info('pn:{}, user:{}'.format(self.profile['pn'], _user['user']))
-            if not store.check_pn_privilege(self.profile['pn'], _user['user']):
+            ret, err = check_pn_privilege(self.profile['pn'], _user['user'])
+            if not ret:
                 return None
-                # raise HTTPError(427, reason='Can\'t access private network : {}'.format(self.profile['pn']))
 
         if not self.profile['policy']:
             if _user['mask']>>30 & 1:
@@ -808,8 +808,9 @@ class PageHandler(BaseHandler):
         if self.profile['ispri']:
             # current network is private, check user privilege
             # logger.info('pn:{}, user:{}'.format(self.profile['pn'], _user['user']))
-            if not store.check_pn_privilege(self.profile['pn'], _user['user']):
-                raise HTTPError(427, reason='Can\'t access private network : {}'.format(self.profile['pn']))
+            ret, err = check_pn_privilege(self.profile['pn'], _user['user'])
+            if not ret:
+                raise err
 
         if not self.profile['policy']:
             # ipolicy =0, check billing
@@ -868,11 +869,12 @@ class PageHandler(BaseHandler):
         m_records = {record['mac']:record for record in records}
         if mac not in m_records:
             # update mac record 
-            if (not records) or len(records) < user['ends']:
-                store.update_mac_record(user['user'], mac, '', self.agent_str, False)
-            else:
-                # records = sorted(records.values(), key=lambda item: item['datetime'])
-                store.update_mac_record(user['user'], mac, records[0]['mac'], self.agent_str, True)
+            store.update_mac_record(user['user'], mac, '', self.agent_str, False)
+            # if (not records) or len(records) < user['ends']:
+            #     store.update_mac_record(user['user'], mac, '', self.agent_str, False)
+            # else:
+            #     # records = sorted(records.values(), key=lambda item: item['datetime'])
+            #     store.update_mac_record(user['user'], mac, records[0]['mac'], self.agent_str, True)
 
     def calc_sign(self, *args):
         '''
@@ -943,8 +945,9 @@ class PortalHandler(BaseHandler):
         # check private network
         if profile['ispri']:
             # current network is private, check user privilege
-            if not store.check_pn_privilege(profile['pn'], self.user['user']):
-                raise HTTPError(427, reason='{} Can\'t access private network : {}'.format(self.user['user'], profile['pn']))
+            ret, err = check_pn_privilege(self.profile['pn'], _user['user'])
+            if not ret:
+                raise err
         
         # check billing
         # nanshan account user network freedom (check by ac_ip)
@@ -962,9 +965,9 @@ class PortalHandler(BaseHandler):
         self.login(ac_ip, socket.inet_aton(user_ip), user_mac)
         self.update_mac_record(self.user, user_mac)
 
-        store.add_online2(user=self.user['user'], nas_addr=kwargs['ac_ip'], 
-                          acct_start_time=utility.now(), framed_ipaddr=kwargs['user_ip'], 
-                          mac_addr=kwargs['user_mac'], ap_mac=kwargs['ap_mac'])
+        # store.add_online2(user=_user['user'], nas_addr=kwargs['ac_ip'], ssid=kwargs['ssid'], 
+        #                   acct_start_time=utility.now(), framed_ipaddr=kwargs['user_ip'], 
+        #                   mac_addr=kwargs['user_mac'], ap_mac=kwargs['ap_mac'])
 
         # self.render_json_response(Code=200, Msg='OK')
 
@@ -1033,17 +1036,17 @@ class PortalHandler(BaseHandler):
 
         self.user = _user
 
-        # onlines = store.get_onlines(self.user['user'])
-        # if user_mac not in onlines and len(onlines) >= self.user['ends']:
-        #     # allow user login ends 
-        #     raise HTTPError(403, reason=bd_errs[451])
-        #     # return False
+        onlines = store.get_onlines(self.user['user'])
+        if user_mac not in onlines and len(onlines) >= self.user['ends']:
+            # allow user login ends 
+            raise HTTPError(403, reason=bd_errs[451])
 
         # check private network
         if profile['ispri']:
             # current network is private, check user privilege
-            if not store.check_pn_privilege(profile['pn'], self.user['user']):
-                raise HTTPError(427, reason='{} Can\'t access private network : {}'.format(self.user['user'], profile['pn']))
+            ret, err = check_pn_privilege(self.profile['pn'], _user['user'])
+            if not ret:
+                raise err
         
         # check billing
         # nanshan account user network freedom (check by ac_ip)
@@ -1067,9 +1070,9 @@ class PortalHandler(BaseHandler):
             #     # distinguish nansha_city accoutn & bidong account
             #     user_mac = user_mac.replace(':', '-')
             self.update_mac_record(self.user, user_mac)
-            store.add_online2(user=self.user['user'], nas_addr=ac_ip, 
-                              acct_start_time=utility.now(), framed_ipaddr=user_ip, 
-                              mac_addr=user_mac, ap_mac=ap_mac)
+            # store.add_online2(user=_user['user'], nas_addr=ac_ip, ssid=ssid, 
+            #                   acct_start_time=utility.now(), framed_ipaddr=user_ip, 
+            #                   mac_addr=user_mac, ap_mac=ap_mac)
         else:
             self.logout(ac_ip, user_ip, user_mac)
 
@@ -1252,12 +1255,13 @@ class PortalHandler(BaseHandler):
         records = store.get_mac_records(user['user'])
         m_records = {record['mac']:record for record in records}
         if mac not in m_records:
+            store.update_mac_record(user['user'], mac, '', self.agent_str, False)
             # update mac record 
-            if (not records) or len(records) < user['ends']:
-                store.update_mac_record(user['user'], mac, '', self.agent_str, False)
-            else:
-                # records = sorted(records.values(), key=lambda item: item['datetime'])
-                store.update_mac_record(user['user'], mac, records[0]['mac'], self.agent_str, True)
+            # if (not records) or len(records) < user['ends']:
+            #     store.update_mac_record(user['user'], mac, '', self.agent_str, False)
+            # else:
+            #     # records = sorted(records.values(), key=lambda item: item['datetime'])
+            #     store.update_mac_record(user['user'], mac, records[0]['mac'], self.agent_str, True)
 
     def set_login_cookie(self, user, days=7):
         '''
@@ -1470,17 +1474,6 @@ def get_billing_policy(nas_addr, ap_mac, ssid):
         profile['expired'] = int(time.time()) + EXPIRE
         AP_MAPS[ap_mac] = profile['pn']
         PN_PROFILE[profile['pn']][profile['ssid']] = profile
-        # else:
-        #     pn = store.query_ap_holder(ap_mac)
-        #     pn = pn['holder'] if pn else 10001
-        #     profile = {'pn':pn, 'ssid':ssid, 'policy':1, 'note':'', 
-        #                'logo':'', 'ispri':0, 'portal':'login.html', 
-        #                'expired':int(time.time())+EXPIRE, 
-        #                'appid':'', 'shopid':'', 'secret':''}
-
-        #     AP_MAPS[ap_mac] = pn
-        #     PN_PROFILE[profile['pn']][profile['ssid']] = profile
-
             
         return PN_PROFILE[AP_MAPS[ap_mac]][ssid]
 
@@ -1491,6 +1484,18 @@ def get_billing_policy(nas_addr, ap_mac, ssid):
 
     if (configure['mask'] & 1):
         return store.query_pn_policy(pn=configure['pn'], ssid=ssid)
+
+
+def check_pn_privilege(pn, user):            
+    record = store.check_pn_privilege(pn, user)
+    if not record:
+        return False, HTTPError(427, reason='{} can\'t access private network : {}'.format(user, pn))
+
+    mask = int(record.get('mask', 0))
+    if mask>>30 & 1:
+        return False, HTTPError(433, reason=bd_errs[433])
+
+    return True, None
 
 
 _DEFAULT_BACKLOG = 128
@@ -1593,7 +1598,7 @@ def ac_data_handler(sock, data, addr):
             for b in attrs.mac:
                 mac.append('{:X}'.format(ord(b)))
             mac = ':'.join(mac)
-            store.delete_online2(mac)
+            # store.delete_online2(mac)
             logger.info('User quit, mac: {}'.format(mac))
 
 def init_log(log_folder, log_config, port):

@@ -22,9 +22,9 @@ def process(req=None, resp=None, user=None, **kwargs):
     '''
     session_timeout = CONFIG['SESSION_TIMEOUT']
 
-    policy = user['policy']
+    profile = user['policy']
     # policy: 
-    if policy == 0:
+    if profile['policy'] == 0:
         # normal billing pocily
         # user is not nansha wireless city account
         _now = datetime.datetime.now()

@@ -118,7 +118,8 @@ def get_billing_policy(req):
         return PN_PROFILE[AP_MAPS[ap_mac]][ssid]
 
     if (configure['mask'])>>1 & 1:
-        return store.query_pn_policy(pn=configure['pns'][ssid], ssid=ssid)
+        return store.query_pn_policy(ssid=ssid)
+        # return store.query_pn_policy(pn=configure['pns'][ssid], ssid=ssid)
 
     if (configure['mask'] & 1):
         return store.query_pn_policy(pn=configure['pn'], ssid=ssid)

@@ -23,20 +23,20 @@ def process(req=None,user=None,runstat=None,**kwargs):
         return log.err('user %s not exists'%req.get_user_name())
 
     runstat.acct_start += 1    
-    ap_mac = ''
+    ap_mac,ssid = '',''
     called_stationid = req.get_called_stationid()
-    if called_stationid:
-        ap_mac = called_stationid.split(':')[0]
-        ap_mac = utils.format_mac(ap_mac)
+    ap_mac,ssid = called_stationid.split(':')
+    ap_mac = utils.format_mac(ap_mac)
+
     online = utils.Storage(
         user = user['user'],
         nas_addr = req.get_nas_addr(),
         acct_session_id = req.get_acct_sessionid(),
-        acct_start_time = datetime.datetime.now().strftime( "%Y-%m-%d %H:%M:%S"),
         framed_ipaddr = req.get_framed_ipaddr(),
         mac_addr = utils.format_mac(req.get_mac_addr()),
         ap_mac = ap_mac,
-        # nas_port_id = req.get_nas_portid(),
+        ssid=ssid,
+        _location=user['policy'].get('_location', ''),
         billing_times = 0,
         input_total = 0,
         output_total = 0,

@@ -10,7 +10,8 @@ def process(req=None,resp=None,user=None,**kwargs):
     """执行计费策略校验，用户到期检测，用户余额，时长检测"""
 
     #
-    if user['policy']:
+    profile = user['policy']
+    if profile['policy']:
         return resp
 
     expired = _check_account(user)

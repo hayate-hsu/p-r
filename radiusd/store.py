@@ -487,7 +487,7 @@ class Store():
         '''
         '''
         with Cursor(self.dbpool) as cur:
-            sql = 'select count(id) as online from online where \
+            sql = 'select count(mac_addr) as online from online where \
                     nas_addr = "{}" and acct_session_id = "{}"'.format(nas_addr, acct_session_id)
             cur.execute(sql)
             return cur.fetchone()['online'] > 0
@@ -509,7 +509,7 @@ class Store():
         '''
         '''
         with Cursor(self.dbpool) as cur:
-            sql = 'select count(id) as online from online where user = "{}"'.format(account)
+            sql = 'select count(mac_addr) as online from online where user = "{}"'.format(account)
             cur.execute(sql)
             return cur.fetchone()['online']
 
@@ -624,18 +624,10 @@ class Store():
             conn.commit()
 
     def del_online(self, nas_addr, acct_session_id):
+        '''
+        '''
         with Connect(self.dbpool) as conn:
-            cur = conn.cursor()
-            sql = 'select * from online where \
-                    nas_addr = "{}" and acct_session_id = "{}"'.format(nas_addr, acct_session_id)
-            cur.execute(sql)
-            record = cur.fetchone()
-            if record:
-                # update user on & off record
-                keys = ','.join(record.keys())
-                vals = ','.join(['"{}"'.format(item) for item in record.values()])
-                sql = 'insert into trace ({}) values({})'.format(keys, vals)
-                cur.execute(sql)
+            cur = conn.cursor(MySQLdb.cursors.DictCursor)
 
             sql = '''delete from online where nas_addr = "{}" and 
                 acct_session_id = "{}"'''.format(nas_addr, acct_session_id)

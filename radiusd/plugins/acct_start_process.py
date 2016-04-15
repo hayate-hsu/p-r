@@ -12,11 +12,9 @@ def process(req=None,user=None,runstat=None,**kwargs):
     if not req.get_acct_status_type() == STATUS_TYPE_START:
         return
     
-    if store.is_online(req.get_nas_addr(),req.get_acct_sessionid()):
-        store.del_online(req.get_nas_addr(), req.get_acct_sessionid())
-        #
-        # runstat.acct_drop += 1
-        # return log.err('online %s is exists'%req.get_acct_sessionid())
+    # if store.is_online(req.get_nas_addr(),req.get_acct_sessionid()):
+    #      runstat.acct_drop += 1
+    #      return log.err('online %s is exists'%req.get_acct_sessionid())
 
     if not user:
         runstat.acct_drop += 1

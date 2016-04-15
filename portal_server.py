@@ -433,7 +433,7 @@ class PageHandler(BaseHandler):
         #                                             self.request.headers.get('Port'))
         portal_server = 'http://{}:9898/wx_auth'.format(self.request.headers.get('Host'))
         
-        wx_wifi['auth_url'] = tornado.escape.url_escape(portal_server)
+        # wx_wifi['auth_url'] = tornado.escape.url_escape(portal_server)
         wx_wifi['auth_url'] = portal_server
         wx_wifi['sign'] = self.calc_sign(self.profile['appid'], wx_wifi['extend'], wx_wifi['timestamp'], 
                                          self.profile['shopid'], wx_wifi['auth_url'], 
@@ -473,18 +473,14 @@ class PageHandler(BaseHandler):
                 # return self.redirect('http://58.241.41.148/index.html')
             self.parse_ac_parameters(kwargs)
 
-            # logger.info('Parsed arguments: {}'.format(kwargs))
 
             url = kwargs['firsturl']
             
-            # logger.info('begin get billing policy')
             self.get_current_billing_policy(**kwargs)
 
 
             # process weixin argument
             self.prepare_wx_wifi(**kwargs)
-
-            # logger.info('{}'.format(kwargs))
 
             # check mac address, login by mac address
             # if login successfully, return _user, else return None
@@ -640,10 +636,8 @@ class PageHandler(BaseHandler):
             return None
 
         # check private network
-        # logger.info('>>profile : {}'.format(self.profile))
         if self.profile['ispri']:
             # current network is private, check user privilege
-            # logger.info('pn:{}, user:{}'.format(self.profile['pn'], _user['user']))
             ret, err = check_pn_privilege(self.profile['pn'], _user['user'])
             if not ret:
                 return None
@@ -789,7 +783,6 @@ class PageHandler(BaseHandler):
         if not _user:
             raise HTTPError(400, reason='Should subscribe first')
         # user unsubscribe, the account will be forbid
-        # logger.info('weixin account {}'.format(_user))
         if _user['mask']>>31 & 1:
             raise HTTPError(401, reason='Account has been frozen')
             
@@ -807,7 +800,6 @@ class PageHandler(BaseHandler):
         #     raise HTTPError(401, reason='Password error')
         if self.profile['ispri']:
             # current network is private, check user privilege
-            # logger.info('pn:{}, user:{}'.format(self.profile['pn'], _user['user']))
             ret, err = check_pn_privilege(self.profile['pn'], _user['user'])
             if not ret:
                 raise err

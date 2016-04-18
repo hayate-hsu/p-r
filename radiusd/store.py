@@ -416,17 +416,17 @@ class Store():
                 conn.commit()
 
 
-    def update_mac_record(self, user, new_mac, old_mac, agent, isupdate=True):
+    def update_mac_record(self, user, mac, agent, isupdate=True):
         with Connect(self.dbpool) as conn:
             cur = conn.cursor()
             now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             sql = ''
             if isupdate:
-                sql = '''update mac_history set mac = "{}", tlogin = "{}", platform = "{}" 
-                where user = "{}" and mac = "{}" '''.format(new_mac, now, agent, user, old_mac)
+                sql = '''update mac_history set tlogin = "{}", platform = "{}" 
+                where user = "{}" and mac = "{}" '''.format(now, agent, user, mac)
             else:
                 sql = '''insert into mac_history (user, mac, tlogin, platform) 
-                values('{}', '{}', '{}', '{}')'''.format(user, new_mac, now, agent)
+                values('{}', '{}', '{}', '{}')'''.format(user, mac, now, agent)
             cur.execute(sql)
             conn.commit()
 

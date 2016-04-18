@@ -436,7 +436,8 @@ def run(config):
     _task = task.LoopingCall(auth_protocol.process_delay)
     _task.start(2.7)
 
-    factory = WebSocketServerFactory("ws://0.0.0.0:%s"%adminport, debug = False)
+    factory = WebSocketServerFactory("ws://0.0.0.0:%s"%adminport)
+    # factory = WebSocketServerFactory("ws://0.0.0.0:%s"%adminport, debug = False)
     factory.protocol = AdminServerProtocol
     factory.protocol.user_trace = _trace
     factory.protocol.midware = _middleware

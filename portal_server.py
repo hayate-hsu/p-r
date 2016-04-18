@@ -83,15 +83,11 @@ LOGIN = 0
 LOGOUT = 1
 
 CURRENT_PATH = os.path.abspath(os.path.dirname(__file__))
-# STATIC_PATH = os.path.join('/home/niot/wifi', 'webpro/bidong_v2')
-# TEMPLATE_PATH = os.path.join('/home/niot/wifi', 'webpro/bidong_v2/portal')
 STATIC_PATH = '/www/bidong'
 TEMPLATE_PATH = '/www/portal'
-PAGE_PATH = os.path.join(TEMPLATE_PATH, 'm')
+MOBILE_TEMPLATE_PATH = os.path.join(TEMPLATE_PATH, 'm')
 
-# PN_PROFILE {pn:{ssid1:policy, ssid2:policy}, }
 PN_PROFILE = collections.defaultdict(dict)
-# {ap_mac:pn}  : ap_mac(11:22:33:44:55:66)
 AP_MAPS = {}
 
 # MOBILE_PATTERN = re.compile(r'^(?:13[0-9]|14[57]|15[0-35-9]|17[678]|18[0-9])\d{8}$')
@@ -109,7 +105,7 @@ class Application(tornado.web.Application):
             # in product environment, use nginx to support static resources
             (r'/(.*\.(?:css|jpg|js|png))$', tornado.web.StaticFileHandler, 
              {'path':STATIC_PATH}),
-            (r'/test1$', TestHandler),
+            # (r'/test1$', TestHandler),
             # (r'/weixin', WeiXinHandler),
         ]
         settings = {
@@ -132,12 +128,12 @@ class BaseHandler(tornado.web.RequestHandler):
         override class method to adapt special demands
     '''
     LOOK_UP = mako.lookup.TemplateLookup(directories=[TEMPLATE_PATH, ], 
-                                         module_directory='/tmp/mako',
+                                         module_directory='/tmp/mako/portal',
                                          output_encoding='utf-8',
                                          input_encoding='utf-8',
                                          encoding_errors='replace')
-    LOOK_UP_MOBILE = mako.lookup.TemplateLookup(directories=[PAGE_PATH, ], 
-                                                module_directory='/tmp/mako_mobile',
+    LOOK_UP_MOBILE = mako.lookup.TemplateLookup(directories=[MOBILE_TEMPLATE_PATH, ], 
+                                                module_directory='/tmp/mako_mobile/portal',
                                                 output_encoding='utf-8',
                                                 input_encoding='utf-8',
                                                 encoding_errors='replace')
@@ -190,7 +186,7 @@ class BaseHandler(tornado.web.RequestHandler):
         '''
         directory = TEMPLATE_PATH
         if self.is_mobile:
-            directory = PAGE_PATH
+            directory = MOBILE_TEMPLATE_PATH
 
         if not os.path.exists(os.path.join(directory, filename)):
             raise HTTPError(404, 'File Not Found')
@@ -234,13 +230,13 @@ class BaseHandler(tornado.web.RequestHandler):
             Encode dict and return response to client
         '''
         callback = self.get_argument('callback', None)
-        # check should return jsonp
         if callback:
+            # return jsonp
             self.set_status(200, kwargs.get('Msg', None))
             self.finish('{}({})'.format(callback, json_encoder(kwargs)))
         else:
             self.set_status(kwargs['Code'], kwargs.get('Msg', None))
-            self.set_header('Content-Type', 'application/json')
+            self.set_header('Content-Type', 'application/json;charset=utf-8')
             self.finish(json_encoder(kwargs))
 
     def prepare(self):
@@ -279,18 +275,19 @@ class BaseHandler(tornado.web.RequestHandler):
         arguments.pop('urlparam', '')
         data = utility.b64encode(json_encoder(arguments))
         if data[-2] == '=':
-            data = data[:-2] + '2'
+            data = data[:-2] + '_2'
         elif data[-1] == '=':
-            data = data[:-1] + '1'
+            data = data[:-1] + '_1'
         else:
-            data = data + '0'
+            data = data + '_0'
         return data
 
     def b64decode(self, data):
         '''
             decode data to dict
+            data : bdata_number
         '''
-        bdata, nums = data[:-1], data[-1]
+        bdata, nums = data.split('_')
         nums = int(nums, 10)
         if nums == 2:
             bdata = bdata + '=='
@@ -367,12 +364,12 @@ def _trace_wrapper(method):
         except KeyError as ex:
             if self.application.settings.get('debug', False):
                 print(self.request)
-            logger.warning('Arguments error', exc_info=True)
+            logger.error('Arguments error', exc_info=True)
             raise HTTPError(400)
         except ValueError as ex:
             if self.application.settings.get('debug', False):
                 print(self.request)
-            logger.warning('Arguments value abnormal', exc_info=True)
+            logger.error('Arguments value abnormal', exc_info=True)
             raise HTTPError(400)
         except Exception:
             # Only catch normal exceptions
@@ -452,8 +449,8 @@ class PageHandler(BaseHandler):
         # logger.info(self.request)
         page = page.lower()
 
-        if page == 'nansha.html':
-            return self.render('nansha.html')
+        if page == 'nagivation.html':
+            return self.render('nagivation.html')
 
         if page not in ('login.html'):
             return self.redirect_to_bidong()
@@ -461,69 +458,59 @@ class PageHandler(BaseHandler):
 
         kwargs = {}
         accept = self.request.headers.get('Accept', 'text/html')
-        if page.startswith('login'):
-            kwargs['ac_ip'] = self.get_argument('wlanacip', '') or self.get_argument('nasip', '')
-            if not kwargs['ac_ip']:
-                logger.error('can\'t found ac parameter, please check ac url configuration')
-                # doesn't contain ac_ip parameter, return redirect response
-                # if user hasn't auth, ac will redirect the next request
-                # with necessary parameters
-                # return self.redirect('http://10.10.1.175:8080/index.html')
-                return self.redirect_to_bidong()
-                # return self.redirect('http://58.241.41.148/index.html')
-            self.parse_ac_parameters(kwargs)
 
+        kwargs['ac_ip'] = self.get_argument('wlanacip', '') or self.get_argument('nasip', '')
+        if not kwargs['ac_ip']:
+            logger.error('can\'t found ac parameter, please check ac url configuration')
+            # doesn't contain ac_ip parameter, return redirect response
+            # if user hasn't auth, ac will redirect the next request
+            # with necessary parameters
+            # return self.redirect('http://10.10.1.175:8080/index.html')
+            return self.redirect_to_bidong()
+            # return self.redirect('http://58.241.41.148/index.html')
+        self.parse_ac_parameters(kwargs)
 
-            url = kwargs['firsturl']
+        url = kwargs['firsturl']
+        
+        self.get_current_billing_policy(**kwargs)
+
+        # process weixin argument
+        self.prepare_wx_wifi(**kwargs)
+
+        # check mac address, login by mac address
+        # if login successfully, return _user, else return None
+        _user = self.login_auto_by_mac(**kwargs)
+        if _user:
+            # if auto login successfully, redirect to previous url 
+            if accept.startswith('application/json'):
+                # request from app (android & ios)
+                token = utility.token(_user['user'])
+                self.render_json_response(User=_user['user'], Token=token, Mask=_user['mask'], 
+                                          Code=200, Msg='OK')
+            elif url:
+                # self.set_header('Access-Control-Allow-Origin', '*')
+                if kwargs['urlparam']:
+                    url = ''.join([url, '?', kwargs['urlparam']])
+                self.redirect(url)
+            return 
+
+        if url.find('m_web/onetonet') != -1:
+            # user from weixin, parse code & and get openid
+            urlparam = parse_qs('urlparam='+kwargs['urlparam'])
+            params = parse_qs(urlparam['urlparam'][0])
             
-            self.get_current_billing_policy(**kwargs)
+            openid = self.get_openid(params['code'][0])
 
-
-            # process weixin argument
-            self.prepare_wx_wifi(**kwargs)
-
-            # check mac address, login by mac address
-            # if login successfully, return _user, else return None
-            _user = self.login_auto_by_mac(**kwargs)
-            if _user:
-                # auto login successfully
-                # redirect to previous url 
-                if accept.startswith('application/json'):
-                    # request from app (android & ios)
-                    # if mask & 1<<4 ,indicate account is nansha city account
-                    # app need create app account & merge account
-                    token = utility.token(_user['user'])
-                    self.render_json_response(User=_user['user'], Token=token, Mask=_user['mask'], 
-                                              Code=200, Msg='OK')
-                elif url:
-                    # self.set_header('Access-Control-Allow-Origin', '*')
-                    if kwargs['urlparam']:
-                        url = ''.join([url, '?', kwargs['urlparam']])
-                    self.redirect(url)
-                # update online tables
-                # store.add_online2(user=_user['user'], nas_addr=kwargs['ac_ip'], ssid=kwargs['ssid'], 
-                #                   acct_start_time=utility.now(), framed_ipaddr=kwargs['user_ip'], 
-                #                   mac_addr=kwargs['user_mac'], ap_mac=kwargs['ap_mac'])
-                return 
-
-            # url = self.get_argument('wlanuserfirsturl', '') or self.get_argument('url', '')
-            if url.find('m_web/onetonet') != -1:
-                # user from weixin, parse code & and get openid
-                urlparam = parse_qs('urlparam='+kwargs['urlparam'])
-                params = parse_qs(urlparam['urlparam'][0])
-                
-                openid = self.get_openid(params['code'][0])
-
-                # check agent
-                agent_str = self.request.headers.get('User-Agent', '')
-                if 'MicroMessenger' not in agent_str:
-                    return self.render_exception(HTTPError(400, 'Abnormal agent'))
-                try:
-                    return self.wx_login(openid, **kwargs)
-                except HTTPError as ex:
-                    return self.render_exception(ex)
-                except:
-                    return self.render_exception(HTTPError(400, 'Unknown error'))
+            # check agent
+            agent_str = self.request.headers.get('User-Agent', '')
+            if 'MicroMessenger' not in agent_str:
+                return self.render_exception(HTTPError(400, 'Abnormal agent'))
+            try:
+                return self.wx_login(openid, **kwargs)
+            except HTTPError as ex:
+                return self.render_exception(ex)
+            except:
+                return self.render_exception(HTTPError(400, 'Unknown error'))
 
         # get policy
         kwargs['user'] = ''
@@ -531,18 +518,9 @@ class PageHandler(BaseHandler):
 
         logger.info('profile: {}'.format(self.profile))
         
-        pn_ssid, pn_note, pn_logo = '', '', ''
+        pn_ssid, pn_note, pn_logo = self.profile['ssid'], self.profile['note'], self.profile['logo']
 
         if accept.startswith('application/json'):
-            # ssid key:value in kwargs
-            if not self.profile['ispri']:
-                profile = store.get_pn(self.profile['pn'])
-                if profile:
-                    pn_ssid = profile['ssid']
-                    pn_note = profile['note']
-                    pn_logo = profile['logo']
-                
-
             return self.render_json_response(Code=200, Msg='OK', openid='', pn_ssid=pn_ssid, 
                                              pn_note=pn_note, pn_logo=pn_logo,  
                                              ispri=self.profile['ispri'], pn=self.profile['pn'], 
@@ -859,14 +837,8 @@ class PageHandler(BaseHandler):
         # agent_str = self.request.headers.get('User-Agent', '')
         records = store.get_mac_records(user['user'])
         m_records = {record['mac']:record for record in records}
-        if mac not in m_records:
-            # update mac record 
-            store.update_mac_record(user['user'], mac, '', self.agent_str, False)
-            # if (not records) or len(records) < user['ends']:
-            #     store.update_mac_record(user['user'], mac, '', self.agent_str, False)
-            # else:
-            #     # records = sorted(records.values(), key=lambda item: item['datetime'])
-            #     store.update_mac_record(user['user'], mac, records[0]['mac'], self.agent_str, True)
+        is_update = True if mac in m_records else False
+        store.update_mac_record(user['user'], mac, self.agent_str, is_update)
 
     def calc_sign(self, *args):
         '''
@@ -1131,7 +1103,7 @@ class PortalHandler(BaseHandler):
         # header.serial = PortalHandler._SERIAL_NO_.pop()
         # chap_password = utility.md5(data[8], password, attrs.challenge).digest()
         # attrs = Attributes(user=user, chap_password=chap_password)
-        logger.info('user %s, password %s, challenge:%s', user, password, attrs.challenge)
+        logger.info('user %s, challenge:%s', user, attrs.challenge)
         attrs = Attributes(user=user, password=password, challenge=attrs.challenge, mac=user_mac, chap_id=data[8])
         packet = Packet(header, attrs)
         sock.settimeout(None)
@@ -1246,14 +1218,8 @@ class PortalHandler(BaseHandler):
             return
         records = store.get_mac_records(user['user'])
         m_records = {record['mac']:record for record in records}
-        if mac not in m_records:
-            store.update_mac_record(user['user'], mac, '', self.agent_str, False)
-            # update mac record 
-            # if (not records) or len(records) < user['ends']:
-            #     store.update_mac_record(user['user'], mac, '', self.agent_str, False)
-            # else:
-            #     # records = sorted(records.values(), key=lambda item: item['datetime'])
-            #     store.update_mac_record(user['user'], mac, records[0]['mac'], self.agent_str, True)
+        is_update = True if mac in m_records else False
+        store.update_mac_record(user['user'], mac, self.agent_str, is_update)
 
     def set_login_cookie(self, user, days=7):
         '''

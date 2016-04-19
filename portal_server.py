@@ -38,7 +38,7 @@ import re
 
 from urlparse import parse_qs
 
-import xml.etree.ElementTree as ET
+# import xml.etree.ElementTree as ET
 
 # Mako template
 import mako.lookup
@@ -407,13 +407,6 @@ class PageHandler(BaseHandler):
     '''
     '''
     _WX_IP = 'api.weixin.qq.com'
-    # for family,type,proto,canonname,sockaddr in socket.getaddrinfo('api.weixin.qq.com', None, socket.AF_INET, 0, socket.SOL_TCP):
-    #     _WX_IP = sockaddr[0]
-    #     # print(_WX_IP)
-    #     break
-    # _APP_ID = 'wxa7c14e6853105a84'
-    # _SHOP_ID = '4873033'
-    # _SECRET_KEY = '9db64a9e2ef817abd463e06bb50ec4e2'
 
     def redirect_to_bidong(self):
         '''
@@ -724,6 +717,10 @@ class PageHandler(BaseHandler):
         if header.type != 0x04 or header.err:
             logger.info('0x%x error, errno: 0x%x', header.type, header.err)
             sock.close()
+            if header.err == 0x02:
+                # linked has been established, has been authed 
+                logger.info('user: {} has been authed, mac:{}'.format(user, ':'.join(_mac)))
+                return
             raise HTTPError(403, reason='auth error')
             # return self.render_error(Code=403, Msg='auth error')
         # self.finish('auth successfully')
@@ -1028,15 +1025,7 @@ class PortalHandler(BaseHandler):
             # portal-radius server doesn't check password, so send a 
             # no-meaning value
             self.login(ac_ip, socket.inet_aton(user_ip), user_mac)
-            # update mac address
-            # if ac_ip in RJ_AC:
-            #     # Record nansha city user's platform
-            #     # distinguish nansha_city accoutn & bidong account
-            #     user_mac = user_mac.replace(':', '-')
             self.update_mac_record(self.user, user_mac)
-            # store.add_online2(user=_user['user'], nas_addr=ac_ip, ssid=ssid, 
-            #                   acct_start_time=utility.now(), framed_ipaddr=user_ip, 
-            #                   mac_addr=user_mac, ap_mac=ap_mac)
         else:
             self.logout(ac_ip, user_ip, user_mac)
 
@@ -1051,10 +1040,6 @@ class PortalHandler(BaseHandler):
         # mac_addr = user_mac.replace('.', ':').upper()
         user_mac = ''.join([chr(int(item, base=16)) for item in _mac])
         ver,start = 0x01,16
-        # if ac_ip in H3C_AC:
-        #     # user portal v2
-        #     ver = 0x02
-        #     start = 16 + 16
         header = Header(ver, 0x01, 0x00, 0x00, PortalHandler._SERIAL_NO_.pop(), 
                         0, user_ip, 0 , 0x00, 0x00)
         packet = Packet(header, Attributes(mac=user_mac))

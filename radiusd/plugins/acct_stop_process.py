@@ -33,8 +33,8 @@ def process(req=None,user=None,runstat=None,**kwargs):
         # ticket.acct_stop_time= _datetime.strftime( "%Y-%m-%d %H:%M:%S")
         ticket.start_source = online['start_source']
         ticket.stop_source = STATUS_TYPE_STOP
-        ticket.mac_addr = utils.format_mac(online['mac_addr'])
-        ticket.ap_mac = utils.format_mac(online['ap_mac'])
+        ticket.mac_addr = online['mac_addr']
+        ticket.ap_mac = online['ap_mac']
         store.add_ticket(ticket)
 
     log.msg('%s Accounting stop request, remove online'%req.get_user_name(),level=logging.INFO)

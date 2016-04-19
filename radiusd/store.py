@@ -23,7 +23,7 @@ ticket_fds = [
     'user', 'acct_input_octets', 'acct_output_octets', 'acct_input_packets', 'acct_output_packets', 
     'acct_session_id', 'acct_session_time', 'acct_start_time', 'acct_stop_time', 
     'acct_terminate_cause', 'frame_netmask', 'framed_ipaddr', 'is_deduct', 'nas_addr',
-    'session_timeout', 'start_source', 'stop_source', 'mac_addr'
+    'session_timeout', 'start_source', 'stop_source', 'mac_addr', 'ap_mac'
 ]
 
 class Connect:

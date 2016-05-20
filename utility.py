@@ -13,6 +13,8 @@ import datetime
 
 import json
 
+import re
+
 from Crypto.Cipher import AES
 from binascii import hexlify, unhexlify
 
@@ -95,12 +97,6 @@ def generate_password(len=6):
     '''
     return ''.join(random.sample(_PASSWORD_, len))
 
-def generate_verify_code(_len=6):
-    '''
-        generate verify code
-    '''
-    return ''.join(random.sample(_VERIFY_CODE_, _len))
-
 @check_codes
 def token(user):
     '''
@@ -120,25 +116,16 @@ def token2(user, _time):
     data = ''.join([user, _88hours_ago])
     return uuid.uuid5(uuid.NAMESPACE_X500, data).hex
 
-def _check_expire_date(_user): 
+def format_mac(mac):
     '''
+        output : ##:##:##:##:##:##
     '''
-    now = datetime.datetime.now()
-    if now > _user['expired']:
-        return True
-    return False
-
-def _check_left_time(_user):
-    return _user['coin'] <= 0
-
-def check_account_balance(_user):
-    '''
-        check account expired & left time
-    '''
-    # if (_user['mask']>>8 & 1):
-    return _check_expire_date(_user)
-    # if expired:
-    #     rejected = _check_left_time(_user)
+    mac = re.sub(r'[_.,; -]', ':', mac).upper()
+    if 12 == len(mac):
+        mac = ':'.join([mac[:2], mac[2:4], mac[4:6], mac[6:8], mac[8:10], mac[10:]])
+    elif 14 == len(mac):
+        mac = ':'.join([mac[:2],mac[2:4],mac[5:7],mac[7:9],mac[10:12],mac[12:14]])
+    return mac
 
 
 def _fix_key(key):

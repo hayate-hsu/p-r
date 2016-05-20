@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #coding=utf-8
 # from twisted.python import log
-from radiusd.store import store
+# from radiusd.store import store
 from radiusd.settings import *
 import datetime
 import decimal

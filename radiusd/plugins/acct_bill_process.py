@@ -2,12 +2,14 @@
 #coding=utf-8
 from twisted.python import log
 from radiusd.pyrad import packet
-from radiusd.store import store
+# from radiusd.store import store
 from radiusd.settings import *
 from radiusd import utils
 import logging
 import datetime
 import decimal
+
+import account
 
 decimal.getcontext().prec = 32
 decimal.getcontext().rounding = decimal.ROUND_UP
@@ -35,7 +37,7 @@ def process(req=None, user=None, runstat=None, coa_clients=None, **kwargs):
     if req.get_acct_status_type() not in (STATUS_TYPE_UPDATE,STATUS_TYPE_STOP):
         return   
 
-    online = store.get_online(req.get_nas_addr(),req.get_acct_sessionid())  
+    online = account.get_online(req.get_nas_addr(),req.get_acct_sessionid())  
     if not online:
         return
 
@@ -68,10 +70,7 @@ def process(req=None, user=None, runstat=None, coa_clients=None, **kwargs):
     # billing_coin = int(req.get_acct_sessiontime())
     # coin_left = coin - billing_coin
 
-    if coin_left < 0:
-        coin_left = 0
-
-    store.update_billing(utils.Storage(
+    account.update_billing(utils.Storage(
         user = online['user'],
         nas_addr = online['nas_addr'],
         acct_session_id = online['acct_session_id'],
@@ -85,7 +84,7 @@ def process(req=None, user=None, runstat=None, coa_clients=None, **kwargs):
         balance = 0,
         is_deduct = 1,
         time = datetime.datetime.now().strftime( "%Y-%m-%d %H:%M:%S")
-    ), coin=coin_left)
+    ))
 
     if coin_left == 0:
         send_dm(coa_clients,online)

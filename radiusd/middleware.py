@@ -1,6 +1,7 @@
 #coding=utf-8
+from __future__ import absolute_import, division, print_function, with_statement
 from twisted.python import log
-import plugins
+import radiusd.plugins
 import logging
 
 class Middleware():
@@ -11,10 +12,10 @@ class Middleware():
     def load_plugins(cls):
         if cls._plugin_loaded:
             return
-        for name in plugins.__all__:
+        for name in radiusd.plugins.__all__:
             try:
                 __import__('radiusd.plugins',globals(),locals(), [name])
-                cls.add_plugin(name,getattr(plugins,name))
+                cls.add_plugin(name,getattr(radiusd.plugins,name))
                 log.msg('Plugin %s loaded success.' % name,level=logging.INFO)
             except Exception as err:
                 log.err(err,'Fail to load plugin %s' % (name),level=logging.INFO)

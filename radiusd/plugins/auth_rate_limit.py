@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #coding=utf-8
 # from twisted.python import log
-from radiusd.store import store
+# from radiusd.store import store
 from radiusd.settings import *
 # import datetime
 
@@ -54,16 +54,16 @@ def process(req=None,resp=None,user=None,**kwargs):
     return std_rate(resp,0,0)
     
     # 
-    product = store.get_product(user['product_id']) 
-    if not product:
-        return resp
-    input_limit = product['input_max_limit']
-    output_limit = product['output_max_limit']
-    if input_limit == 0 and output_limit == 0:
-        return std_rate(resp,0,0)
+    # product = store.get_product(user['product_id']) 
+    # if not product:
+    #     return resp
+    # input_limit = product['input_max_limit']
+    # output_limit = product['output_max_limit']
+    # if input_limit == 0 and output_limit == 0:
+    #     return std_rate(resp,0,0)
 
-    _vendor = req.vendor_id or '0'
-    return rate_funcs[_vendor](resp,input_limit,output_limit)
+    # _vendor = req.vendor_id or '0'
+    # return rate_funcs[_vendor](resp,input_limit,output_limit)
     
 
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #coding=utf-8
 from radiusd.plugins import error_auth
-from radiusd.store import store
+# from radiusd.store import store
 
 def process(req=None,resp=None,user=None,**kwargs):
     """check block roster"""

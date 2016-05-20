@@ -13,116 +13,33 @@ from autobahn.twisted.websocket import WebSocketServerFactory
 
 # insert current path's parent  to system path
 # sys.path.insert(0, os.path.split(__file__)[0])
-sys.path.insert(0, os.path.abspath(os.path.pardir))
+# sys.path.insert(0, os.path.abspath(os.path.pardir))
 # radiusd module in current path
 from radiusd.settings import *
-from pyrad import dictionary
-from pyrad import host
-from pyrad import packet
-from store import store
-import middleware
+from radiusd.pyrad import dictionary
+from radiusd.pyrad import host
+from radiusd.pyrad import packet
+import radiusd.middleware
 # import settings
 import datetime
 import logging
 # import pprint
 # import socket
 import utils
-import time
 import json
 import six
 
-import re
-
 import collections
+
+import account
 
 EXPIRE = 7200
 AP_MAPS = {}
 PN_PROFILE = collections.defaultdict(dict)
-# RJ_AC = set()
-# HM_AC = set()
-# H3C_AC = set()
-# 
-# TEST_AC = set()
-# 
-# # BAS_IP = HM_AC | RJ_AC | H3C_AC
-# 
-# # nansha ac
-# NS_AC = set()
-# HW_AC = set()
-# XR_AC = set()
+
 AC_CONFIGURE = {}
 
 __verson__ = '0.7'
-
-def _check_expire_date(_user): 
-    '''
-    '''
-    now = datetime.datetime.now()
-    if now > _user['expired']:
-        return True
-    return False
-
-def _check_left_time(_user):
-    return _user['coin'] <= 0
-
-def check_account_balance(_user):
-    '''
-        check account expired & left time
-    '''
-    # if (_user['mask']>>8 & 1):
-    return _check_expire_date(_user)
-    # if expired:
-    #     rejected = _check_left_time(_user)
-
-def check_pn_privilege(pn, user):
-    '''
-        is user has privilege to access pn
-    '''
-    return True if store.check_pn_privilege(pn, user) else False
-
-def get_billing_policy(req):
-    '''
-        1. check ap profile
-        2. check ssid profile
-        3. check ac profile
-    '''
-    ac_ip = req.get_nas_addr()
-    if ac_ip not in AC_CONFIGURE:
-        raise ValueError('Unknown AC ip, {}'.format(ac_ip))
-
-    configure = AC_CONFIGURE[ac_ip]
-    # if ac_ip in ('10.10.0.80', '121.46.0.119'):
-    #     return {'pn':15914, 'policy':1, 'ispri':0}
-    data = req.get_called_stationid()
-    # expired = int(time.time()) + EXPIRE
-    log.msg('called stationid: {}'.format(data))
-    ap_mac,ssid = data.split(':')
-    ap_mac = utils.format_mac(ap_mac)
-    if (configure['mask'])>>2 & 1:
-        # check ap prifile in cache?
-        if ap_mac in AP_MAPS:
-            profile = PN_PROFILE[AP_MAPS[ap_mac]].get(ssid, None)
-            if profile and int(time.time()) < profile['expired']:
-                return profile
-
-        # get policy by ap
-        profile = store.query_ap_policy(ap_mac, ssid)
-        log.msg('mac:{} ssid:{} ---- {}'.format(ap_mac, ssid, profile))
-
-        if not profile:
-            raise ValueError('Abnormal, query pn failed, {} {}'.format(ap_mac, ssid))
-        profile['expired'] = int(time.time()) + EXPIRE
-        AP_MAPS[ap_mac] = profile['pn']
-        PN_PROFILE[profile['pn']][profile['ssid']] = profile
-
-        return PN_PROFILE[AP_MAPS[ap_mac]][ssid]
-
-    if (configure['mask'])>>1 & 1:
-        return store.query_pn_policy(ssid=ssid)
-        # return store.query_pn_policy(pn=configure['pns'][ssid], ssid=ssid)
-
-    if (configure['mask'] & 1):
-        return store.query_pn_policy(pn=configure['pn'], ssid=ssid)
 
 class PacketError(Exception):pass
 
@@ -200,7 +117,8 @@ class RADIUS(host.Host, protocol.DatagramProtocol):
         raise NotImplementedError('Attempted to use a pure base class')
 
     def datagramReceived(self, datagram, (host, port)):
-        bas = store.get_bas(host)
+        # bas = store.get_bas(host)
+        bas = account.get_bas(host)
         if not bas:
             return log.msg('Dropping packet from unknown host ' + host,level=logging.DEBUG)
         secret,vendor_id = bas['secret'],bas['vendor']
@@ -264,20 +182,18 @@ class RADIUSAccess(RADIUS):
         # if req_user == 'user':
         #     return None 
 
-        user = store.get_bd_user(req_user) or store.get_bd_user2(req_user)
+        user = account.get_bd_user(req_user)
         if user:
             # get billing policy
-
-
-            user['policy'] = get_billing_policy(req)
-            if user['policy']['ispri'] and not check_pn_privilege(user['policy']['pn'], user['user']):
+            user['policy'] = account.get_billing_policy2(req)
+            if user['policy']['ispri'] and not account.check_pn_privilege(user['policy']['pn'], user['user']):
                 user = None
 
             if user and not user['policy']:
                 if user['mask']>>30 & 1:
                     user = None
                 if user:
-                    expired = check_account_balance(user)
+                    expired = account.check_account_balance(user)
                     if expired:
                         user = None
         if user:
@@ -328,11 +244,11 @@ class RADIUSAccounting(RADIUS):
             self.midware.process(plugin,req=req)
                  
         # user = store.get_bd_user_by_mac(req.get_user_name())
-        user = store.get_bd_user(req.get_user_name()) or store.get_bd_user2(req.get_user_name())
+        user = account.get_bd_user(req.get_user_name())
         if user:
             self.user_trace.push(user['user'],req)        
             # get billing policy
-            user['policy'] = get_billing_policy(req)
+            user['policy'] = account.get_billing_policy2(req)
           
         reply = req.CreateReply()
         reply.source = req.source
@@ -386,14 +302,7 @@ def run(config):
     authport = config['authport']
     acctport = config['acctport']
     adminport = config['adminport']
-    # global HM_AC, RJ_AC, H3C_AC, NS_AC, HW_AC, XR_AC, TEST_AC
-    # HM_AC = config['HM_AC']
-    # RJ_AC = config['RJ_AC']
-    # H3C_AC = config['H3C_AC']
-    # HW_AC = config['HW_AC']
-    # XR_AC = config['XR_AC'] 
-    # TEST_AC = config['TEST_AC']
-    # NS_AC = RJ_AC | H3C_AC | XR_AC | HW_AC
+
     global AC_CONFIGURE
     AC_CONFIGURE = config['ac_policy']
 
@@ -402,18 +311,16 @@ def run(config):
     if not dictfile or not os.path.exists(dictfile):
         dictfile = os.path.join(os.path.split(__file__)[0],'dicts/dictionary')
         
-    #init dbstore
-    store.setup(config)
     # update aescipher,timezone
     utils.aescipher.setup(secret)
     utils.update_tz(tz)
     # rundata
     _trace = utils.UserTrace()
     _runstat = utils.RunStat()
-    _middleware = middleware.Middleware()
+    _middleware = radiusd.middleware.Middleware()
     # init coa clients
     coa_pool = {}
-    for bas in store.list_bas():
+    for bas in account.list_bas():
         coa_pool[bas['ip']] = CoAClient(bas,
             dictionary.Dictionary(dictfile),
             debug=is_debug

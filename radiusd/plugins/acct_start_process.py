@@ -2,11 +2,12 @@
 #coding=utf-8
 from twisted.python import log
 from radiusd.pyrad import packet
-from radiusd.store import store
+# from radiusd.store import store
 from radiusd.settings import *
 from radiusd import utils
 import logging
 import datetime
+import account
 
 def process(req=None,user=None,runstat=None,**kwargs):
     if not req.get_acct_status_type() == STATUS_TYPE_START:
@@ -41,6 +42,6 @@ def process(req=None,user=None,runstat=None,**kwargs):
         start_source = STATUS_TYPE_START
     )
 
-    store.add_online(online)
+    account.add_online(online)
 
     log.msg('%s Accounting start request, add new online'%req.get_user_name(),level=logging.INFO)

@@ -16,25 +16,24 @@ import tornado.gen
 import tornado.httputil
 from tornado.util import errno_from_exception
 from tornado.platform.auto import set_close_exec
+# from tornado.concurrent import Future
 
 from tornado.options import define, options
 
 define('port', default=8880, help='running on the given port', type=int)
+define('index', default=0, help='portal start index, used for serial number range', type=int)
+define('total', default=1, help='portal server total number , used for serial number range', type=int)
 
 import errno
 import os
 import sys
 
-import datetime
 import time
 
-import struct
 import socket
 import collections
 import functools
 import copy
-
-import re
 
 from urlparse import parse_qs
 
@@ -44,32 +43,27 @@ from urlparse import parse_qs
 import mako.lookup
 import mako.template
 
-from MySQLdb import (IntegrityError)
-
 logger = None
 
 import utility
 # import settings
 import config
 import user_agents
-from radiusd.store import store
+
+import account
+
+from task import portal 
+
 from bd_err import bd_errs
 
 portal_config = config['portal_config']
 
 json_encoder = utility.json_encoder
 json_decoder = utility.json_decoder
-# b64encode = utility.b64encode
-# b64decode = utility.b64decode
-
-# from radiusd.store import store
 
 _PORTAL_VERSION = 0x01
 RUN_PATH = '/var/run'
 
-# portal server send request
-# { serialno : (Header, Attributes) }
-# 
 _REQUESTES_ = {}
 
 AC_CONFIGURE = config['ac_policy']
@@ -105,7 +99,7 @@ class Application(tornado.web.Application):
             # in product environment, use nginx to support static resources
             (r'/(.*\.(?:css|jpg|js|png))$', tornado.web.StaticFileHandler, 
              {'path':STATIC_PATH}),
-            # (r'/test1$', TestHandler),
+            (r'/test$', TestHandler),
             # (r'/weixin', WeiXinHandler),
         ]
         settings = {
@@ -246,6 +240,7 @@ class BaseHandler(tornado.web.RequestHandler):
         self.agent_str = self.request.headers.get('User-Agent', '')
         self.agent = None
         self.is_mobile = False
+        self.task_resp = None
         
         # check app & os info 
         self.check_app()
@@ -399,9 +394,43 @@ def _check_token(method):
         return method(self, *args, **kwargs)
     return wrapper
 
-def TestHandler(BaseHandler):
+class TestHandler(BaseHandler):
+    '''
+    '''
+    # def get(self):
+    #     self.render_json_response(Code=200, Msg='OK')
+    @tornado.gen.coroutine
+    @_trace_wrapper
     def get(self):
-        self.redirect('/nagivation.html')
+        response = yield tornado.gen.Task(portal.sleep.apply_async, args=[3,])
+        # response = portal.sleep.apply_async(args=[3,])
+        # self.response = None
+        # result = self.test()
+        # if result is not None:
+        #     result = yield result
+
+        # response = self.response
+
+        self.write(str(response.result))
+        self.finish()
+        # print(dir(response))
+        # print(response.status)
+        # for item in dir(response):
+        #     if item.startswith('_'):
+        #         continue 
+        #     if item in ('forget', 'get', 'get_leaf'):
+        #         continue
+
+        #     value = getattr(response, item)
+        #     if callable(value):
+        #         print('key:{}, value1:{}'.format(item, value()))
+        #     else:
+        #         print('key:{}, value2:{}'.format(item, value))
+
+    # @tornado.gen.coroutine
+    # def test(self):
+    #     response = yield tornado.gen.Task(portal.sleep.apply_async, args=[3,])
+    #     self.response =  response
 
 class PageHandler(BaseHandler):
     '''
@@ -413,6 +442,7 @@ class PageHandler(BaseHandler):
         '''
         logger.info('redirect : {}'.format(self.request.arguments))
         self.redirect(config['bidong'])
+        self.finish()
 
     def prepare_wx_wifi(self, **kwargs):
         wx_wifi = {}
@@ -422,6 +452,7 @@ class PageHandler(BaseHandler):
         #                                             self.request.headers.get('Host'), 
         #                                             self.request.headers.get('Port'))
         portal_server = 'http://{}:9898/wx_auth'.format(self.request.headers.get('Host'))
+        logger.info('url: {}'.format(portal_server))
         
         # wx_wifi['auth_url'] = tornado.escape.url_escape(portal_server)
         wx_wifi['auth_url'] = portal_server
@@ -432,9 +463,23 @@ class PageHandler(BaseHandler):
 
         self.wx_wifi = wx_wifi
 
+    def parse_url_arguments(self, url):
+        '''
+        '''
+        arguments = {}
+        if url.find('?') != -1:
+            url, params = url.split('?')
+            items = params.split('&')
+
+            for item in items:
+                key, value = item.split('=')
+                arguments[key] = value
+
+        return arguments
 
     @_trace_wrapper
     @_parse_body
+    @tornado.gen.coroutine
     def get(self, page):
         '''
             Render html page
@@ -443,10 +488,12 @@ class PageHandler(BaseHandler):
         page = page.lower()
 
         if page == 'nagivation.html':
-            return self.render('nagivation.html')
+            self.render('nagivation.html')
+            return
 
         if page not in ('login.html'):
-            return self.redirect_to_bidong()
+            self.redirect_to_bidong()
+            return
             # return self.redirect('http://58.241.41.148/index.html')
 
         kwargs = {}
@@ -459,51 +506,72 @@ class PageHandler(BaseHandler):
             # if user hasn't auth, ac will redirect the next request
             # with necessary parameters
             # return self.redirect('http://10.10.1.175:8080/index.html')
-            return self.redirect_to_bidong()
-            # return self.redirect('http://58.241.41.148/index.html')
+            self.redirect_to_bidong()
+            return
+
         self.parse_ac_parameters(kwargs)
 
         url = kwargs['firsturl']
         
-        self.get_current_billing_policy(**kwargs)
+        self.profile = account.get_billing_policy(kwargs['ac_ip'], kwargs['ap_mac'], kwargs['ssid'])
+        print(self.profile)
 
         # process weixin argument
         self.prepare_wx_wifi(**kwargs)
 
-        # check mac address, login by mac address
-        # if login successfully, return _user, else return None
-        _user = self.login_auto_by_mac(**kwargs)
-        if _user:
-            # if auto login successfully, redirect to previous url 
-            if accept.startswith('application/json'):
-                # request from app (android & ios)
-                token = utility.token(_user['user'])
-                self.render_json_response(User=_user['user'], Token=token, Mask=_user['mask'], 
-                                          Code=200, Msg='OK')
-            elif url:
-                # self.set_header('Access-Control-Allow-Origin', '*')
-                if kwargs['urlparam']:
-                    url = ''.join([url, '?', kwargs['urlparam']])
-                self.redirect(url)
-            return 
+        result = yield self.login_auto_by_mac(**kwargs)
 
-        if url.find('m_web/onetonet') != -1:
+        if self.task_resp is None:
+            pass
+        else:
+            _user, self.task_resp = self.task_resp.result, None
+            if _user:
+                if accept.startswith('application/json'):
+                    token = utility.token(_user['user'])
+                    self.render_json_response(User=_user['user'], Token=token, Mask=_user['mask'], 
+                                              Code=200, Msg='OK')
+                elif url:
+                    # self.set_header('Access-Control-Allow-Origin', '*')
+                    if self.profile['pn'] in (55532, ):
+                        self.redirect('welcome.html')
+                        return
+                    if kwargs['urlparam']:
+                        url = ''.join([url, '?', kwargs['urlparam']])
+                    self.redirect(url)
+                return 
+
+        if 'wx/m_bidong/onetonet' in url:
             # user from weixin, parse code & and get openid
-            urlparam = parse_qs('urlparam='+kwargs['urlparam'])
-            params = parse_qs(urlparam['urlparam'][0])
-            
-            openid = self.get_openid(params['code'][0])
 
             # check agent
             agent_str = self.request.headers.get('User-Agent', '')
             if 'MicroMessenger' not in agent_str:
-                return self.render_exception(HTTPError(400, 'Abnormal agent'))
+                self.render_exception(HTTPError(400, 'Abnormal agent'))
+                return
+
             try:
-                return self.wx_login(openid, **kwargs)
-            except HTTPError as ex:
-                return self.render_exception(ex)
+                response = yield self.wx_login(**kwargs)
             except:
-                return self.render_exception(HTTPError(400, 'Unknown error'))
+                logger.error('weixin login failed', exc_info=True)
+
+            if self.task_resp:
+                response, self.task_resp = self.task_resp, None
+                if response.status in ('SUCCESS', ):
+                    _user = response.result
+                elif isinstance(response.result, HTTPError) and response.result.status_code in (435,):
+                    _user = self.user
+                else:
+                    logger.info('weixin auth failed, {}'.format(response.result))
+                    _user = None
+
+                if _user:
+                    # login successfully
+                    # redirect to account page
+                    _user = response.result
+                    token = utility.token(_user['user'])
+                    self.redirect(config['bidong'] + 'account/{}?token={}'.format(_user['user'], token))
+
+                    account.update_mac_record(_user, kwargs['user_mac'], self.agent_str)
 
         # get policy
         kwargs['user'] = ''
@@ -514,50 +582,27 @@ class PageHandler(BaseHandler):
         pn_ssid, pn_note, pn_logo = self.profile['ssid'], self.profile['note'], self.profile['logo']
 
         if accept.startswith('application/json'):
-            return self.render_json_response(Code=200, Msg='OK', openid='', pn_ssid=pn_ssid, 
-                                             pn_note=pn_note, pn_logo=pn_logo,  
-                                             ispri=self.profile['ispri'], pn=self.profile['pn'], 
-                                             note=self.profile['note'], image=self.profile['logo'], 
-                                             logo=self.profile['logo'],
-                                             **kwargs)
+            self.render_json_response(Code=200, Msg='OK', openid='', pn_ssid=pn_ssid, 
+                                      pn_note=pn_note, pn_logo=pn_logo,  
+                                      ispri=self.profile['ispri'], pn=self.profile['pn'], 
+                                      note=self.profile['note'], image=self.profile['logo'], 
+                                      logo=self.profile['logo'],
+                                      **kwargs)
+            return
                     
 
         # now all page user login, later after update back to use self.profile['portal']  
         page = self.profile['portal'] or 'login.html'
 
-        return self.render(page, openid='', ispri=self.profile['ispri'], 
+        self.render(page, openid='', ispri=self.profile['ispri'], 
         # return self.render('login.html', openid='', ispri=self.profile['ispri'], 
-                           pn=self.profile['pn'], note=self.profile['note'], image=self.profile['logo'], 
-                           appid=self.profile['appid'], shopid=self.profile['shopid'], secret=self.profile['secret'], 
-                           logo=self.profile['logo'],
-                           extend=self.wx_wifi['extend'], timestamp=self.wx_wifi['timestamp'], 
-                           sign=self.wx_wifi['sign'], authUrl=self.wx_wifi['auth_url'], 
-                           **kwargs)
+                    pn=self.profile['pn'], note=self.profile['note'], image=self.profile['logo'], 
+                    appid=self.profile['appid'], shopid=self.profile['shopid'], secret=self.profile['secret'], 
+                    logo=self.profile['logo'],
+                    extend=self.wx_wifi['extend'], timestamp=self.wx_wifi['timestamp'], 
+                    sign=self.wx_wifi['sign'], authUrl=self.wx_wifi['auth_url'], 
+                    **kwargs)
 
-
-    def get_user_by_mac(self, mac, ac):
-        records = store.get_user_records_by_mac(mac)
-        if records:
-            return records[-1]['user']
-        return ''
-
-    def get_current_billing_policy(self, **kwargs):
-        '''
-            user's billing policy based on the connected ap 
-        '''
-        profile = get_billing_policy(kwargs['ac_ip'], kwargs['ap_mac'], kwargs['ssid'])
-        self.profile = profile
-
-    def format_mac(self, mac):
-        '''
-            output : ##:##:##:##:##:##
-        '''
-        mac = re.sub(r'[_.,; -]', ':', mac).upper()
-        if 12 == len(mac):
-            mac = ':'.join([mac[:2], mac[2:4], mac[4:6], mac[6:8], mac[8:10], mac[10:]])
-        elif 14 == len(mac):
-            mac = ':'.join([mac[:2],mac[2:4],mac[5:7],mac[7:9],mac[10:12],mac[12:14]])
-        return mac
 
     def parse_ac_parameters(self, kwargs):
         '''
@@ -573,13 +618,12 @@ class PageHandler(BaseHandler):
         mac = self.get_argument('mac', '') or self.get_argument('wlanstamac', '') 
         if not mac:
             raise HTTPError(400, 'mac address can\'t be none')
-        kwargs['user_mac'] = self.format_mac(mac)
+        kwargs['user_mac'] = utility.format_mac(mac)
 
         # ap mac address
         # 00:00:00:00:00:00 - can't get ap mac address
         ap_mac = self.get_argument('apmac', '') or self.get_argument('wlanapmac', '00:00:00:00:00:01')
-        kwargs['ap_mac'] = self.format_mac(ap_mac)
-
+        kwargs['ap_mac'] = utility.format_mac(ap_mac)
 
         try:
             kwargs['firsturl'] = self.get_argument('wlanuserfirsturl', '') or self.get_argument('url', '') or self.get_argument('userurl', '')
@@ -589,153 +633,64 @@ class PageHandler(BaseHandler):
             # kwargs['firsturl'] = 'http://wwww.bidongwifi.com/'
             kwargs['urlparam'] = ''
 
-    
+    @tornado.gen.coroutine
     def login_auto_by_mac(self, **kwargs):
-        '''
-            if found bd_account by mac, and check successfully return user account 
-            otherwise return None
-        '''
-        if self.profile['pn'] == 10000:
-            # 10000 (test) owner, skip auto login check
-            return None
-        user = self.get_user_by_mac(kwargs['user_mac'], kwargs['ac_ip'])
-        if not user:
-            return None
+        # if self.profile['pn'] == 10000:
+        #     # 10000 (test) owner, skip auto login check
+        #     return
 
-        _user = store.get_bd_user(user) or store.get_bd_user2(user)
-        if not _user:
-            return None
+        if self.profile['pn'] in (55532, 10000):
+            # all user use holder's account
+            _user = {'user':'55532', 'password':'987012', 'mask':10, 'coin':60, 'ends':100}
+            self.user = _user
+        else:
+            user = account.get_user_by_mac(kwargs['user_mac'], kwargs['ac_ip'])
+            if not user:
+                return
 
-        # check private network
-        if self.profile['ispri']:
-            # current network is private, check user privilege
-            ret, err = check_pn_privilege(self.profile['pn'], _user['user'])
-            if not ret:
-                return None
+            _user = account.get_bd_user(user)
+            if not _user:
+                return
 
-        if not self.profile['policy']:
-            if _user['mask']>>30 & 1:
-                # raise HTTPError(403, reason='Account has been frozened')
-                return None
-                # raise HTTPError(403, reason=bd_errs[434])
-            # ipolicy =0, check billing
-            self.expired = utility.check_account_balance(_user)
-            if self.expired:
-                # raise HTTPError(403, reason='Account has no left time')
-                return None
+            self.user = _user
+
+            # check private network
+            if self.profile['ispri']:
+                # current network is private, check user privilege
+                ret, err = account.check_pn_privilege(self.profile['pn'], _user['user'])
+                if not ret:
+                    return
+
+            if not self.profile['policy']:
+                if _user['mask']>>30 & 1:
+                    # raise HTTPError(403, reason='Account has been frozened')
+                    return
+                # ipolicy =0, check billing
+                self.expired = account.check_account_balance(_user)
+                if self.expired:
+                    # raise HTTPError(403, reason='Account has no left time')
+                    return
+            
+            onlines = account.get_onlines(_user['user'])
+            if kwargs['user_mac'] not in onlines and len(onlines) >= _user['ends']:
+                # allow user logout ends 
+                return
+                # raise HTTPError(403, reason='Over the limit ends')
+
+        response = yield tornado.gen.Task(portal.login.apply_async, 
+                                          args=[_user, kwargs['ac_ip'], 
+                                          kwargs['user_ip'], kwargs['user_mac']])
+
+        if response.status in ('SUCCESS', ):
+            logger.info('{} auto login successfully, mac:{}'.format(_user['user'], kwargs['user_mac']))
+        elif isinstance(response.result, HTTPError) and response.result.status_code in (435,):
+            logger.info('{} has been authed, mac:{}'.format(_user['user'], kwargs['user_mac']))
+        else:
+            logger.info('{}auto login failed, {}'.format(_user['user'], response.result))
+            return
+
+        self.task_resp = response
         
-        onlines = store.get_onlines(_user['user'])
-        if kwargs['user_mac'] not in onlines and len(onlines) >= _user['ends']:
-            # allow user logout ends 
-            return None
-            # raise HTTPError(403, reason='Over the limit ends')
-        try:
-            logger.info('Progress {} (mac: {}) auto login'.format(user, kwargs['user_mac']))
-            self.login(_user, kwargs['ac_ip'], socket.inet_aton(kwargs['user_ip']), kwargs['user_mac'])
-        except:
-            logger.warning('auto login error', exc_info=True)
-            return None
-
-        return _user
-
-    def login(self, _user, ac_ip, user_ip, user_mac):
-        '''
-            user_ip: 32bit
-            login, if error raise exception
-        '''
-        user = _user['user']
-        password = _user['password']
-        logger.info('progress %s login, ip: %s', user, self.request.remote_ip)
-        _mac = user_mac.split(':')
-        # mac_addr = user_mac.replace('.', ':').upper()
-        user_mac = ''.join([chr(int(item, base=16)) for item in _mac])
-        ver,start = 0x01, 16
-        # if ac_ip in H3C_AC:
-        #     ver = 0x02
-        #     start = 16 + 16
-        header = Header(ver, 0x01, 0x00, 0x00, PortalHandler._SERIAL_NO_.pop(), 
-                        0, user_ip, 0 , 0x00, 0x00)
-        packet = Packet(header, Attributes(mac=user_mac))
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.sendto(packet.pack(), (ac_ip, BAS_PORT))
-        try:
-            sock.settimeout(5)
-            data, address = sock.recvfrom(_BUFSIZE)
-        except socket.timeout:
-            logger.warning('Challenge timeout')
-            self.timeout(sock, ac_ip, header, user_mac)
-            sock.close()
-            raise HTTPError(400, reason='challenge timeout, retry')
-            # return self.render_error(Code=400, Msg='challenge timeout, retry')
-
-        header = Header.unpack(data)
-        if header.type != 0x02 or header.err:
-            logger.info('0x%x error, errno: 0x%x', header.type, header.err)
-            sock.close()
-            if header.err == 0x02:
-                # linked has been established, has been authed 
-                logger.info('user: {} has been authed, mac:{}'.format(user, ':'.join(_mac)))
-                return
-            elif header.err == 0x03:
-                # user's previous link has been verifring 
-                logger.info('user: {}\'s previous has been progressing, mac:{}'.format(user, ':'.join(_mac)))
-                raise HTTPError(436, reason=bd_errs[436])
-                # raise HTTPError(449, reason='in progressing, wait')
-                return
-
-            raise HTTPError(400, reason='challenge error')
-            # return self.render_json_response(Code=400, Msg='challenge error')
-        # parse challenge value
-        attrs = Attributes.unpack(header.num, data[start:])
-        if not attrs.challenge:
-            logger.warning('Abnormal challenge value, 0x%x, 0x%x', header.err, header.num)
-            sock.close()
-            raise HTTPError(400, reason='abnormal challenge value')
-            # return self.render_error(Code=400, Msg='abnormal challenge value')
-        if attrs.mac:
-            assert user_mac == attrs.mac
-
-        header.type = 0x03
-        # header.serial = PortalHandler._SERIAL_NO_.pop()
-        attrs = Attributes(user=user, password=password, challenge=attrs.challenge, mac=user_mac, chap_id=data[8])
-        packet = Packet(header, attrs)
-        sock.settimeout(None)
-        sock.sendto(packet.pack(), (ac_ip, BAS_PORT))
-
-        # wait auth response
-        try:
-            sock.settimeout(5)
-            data, address = sock.recvfrom(_BUFSIZE)
-        except socket.timeout:
-            logger.warning('auth timeout')
-            # send timeout package
-            self.timeout(sock, ac_ip, header, user_mac)
-            sock.close()
-            raise HTTPError(408, reason='auth timeout, retry')
-            # return self.render_error(Code=408, Msg='auth timeout, retry')
-        header = Header.unpack(data)
-        if header.type != 0x04 or header.err:
-            logger.info('0x%x error, errno: 0x%x', header.type, header.err)
-            sock.close()
-            if header.err == 0x02:
-                # linked has been established, has been authed 
-                logger.info('user: {} has been authed, mac:{}'.format(user, ':'.join(_mac)))
-                return
-            raise HTTPError(403, reason='auth error')
-            # return self.render_error(Code=403, Msg='auth error')
-        # self.finish('auth successfully')
-
-        # send aff_ack_auth to ac 
-        header.type = 0x07
-        attrs = Attributes(mac=user_mac)
-        packet = Packet(header, attrs)
-        sock.settimeout(None)
-        sock.sendto(packet.pack(), (ac_ip, BAS_PORT))
-        sock.close()
-        logger.info('%s login successfully, wlan: %s', user, self.request.remote_ip)
-
-        time.sleep(1.5)
-
     def get_openid(self, code):
         URL = 'https://{}/sns/oauth2/access_token?appid={}&secret={}&code={}&grant_type=authorization_code'
         url = URL.format(self._WX_IP, config['weixin']['appid'], config['weixin']['secret'], code)
@@ -748,13 +703,36 @@ class PageHandler(BaseHandler):
 
         return result['openid']
 
-    @_trace_wrapper
-    def wx_login(self, openid, **kwargs):
+    @tornado.gen.coroutine
+    def wx_login(self, **kwargs):
+        if kwargs['urlparam']:
+            urlparam = parse_qs('urlparam='+kwargs['urlparam'])
+            params = parse_qs(urlparam['urlparam'][0])
+            code = params['code'][0]
+        else:
+            code = self.parse_url_arguments(kwargs['firsturl'])['code'] 
+
+        URL = 'https://{}/sns/oauth2/access_token?appid={}&secret={}&code={}&grant_type=authorization_code'
+        url = URL.format(self._WX_IP, config['weixin']['appid'], config['weixin']['secret'], code)
+        client = tornado.httpclient.AsyncHTTPClient()
+        response = yield client.fetch(url)
+
+        if response.error:
+            raise response
+
+        result = json_decoder(response.body)
+        if 'openid' not in result:
+            logger.error('Get weixin account\'s openid failed, msg: {}'.format(result))
+            raise HTTPError(500)
+
+        openid =  result['openid']
+
+        logger.info('openid: {} login by weixin'.format(openid))
         user, password = '', ''
-        _user = store.get_user(openid, column='weixin', appid=self.profile['appid']) or store.get_user2(openid, column='weixin', appid=self.profile['appid'])
+        _user = account.get_user(openid, column='weixin', appid=self.profile['appid'])
         if not _user:
             # create new account
-            _user = store.add_user(openid, utility.generate_password(), appid=self.profile['appid'])
+            _user = account.create_user(openid, appid=self.profile['appid'])
         if not _user:
             raise HTTPError(400, reason='Should subscribe first')
         # user unsubscribe, the account will be forbid
@@ -764,78 +742,40 @@ class PageHandler(BaseHandler):
         # check ac ip
         if kwargs['ac_ip'] not in AC_CONFIGURE:
             logger.error('not avaiable ac & ap')
-            raise HTTPError(403, reason='AC ip error')
+            raise HTTPError(403, reason='Unknown AC,ip : {}'.format(kwargs['ac_ip']))
 
-        # check account & password
-        # if not _user:
-        #     _user = store.get_bd_user(user)
-        # if not _user:
-        #     raise HTTPError(404, reason='Account not existed')
-        # if password != _user['password']:
-        #     raise HTTPError(401, reason='Password error')
         if self.profile['ispri']:
             # current network is private, check user privilege
-            ret, err = check_pn_privilege(self.profile['pn'], _user['user'])
+            ret, err = account.check_pn_privilege(self.profile['pn'], _user['user'])
             if not ret:
                 raise err
 
         if not self.profile['policy']:
             # ipolicy =0, check billing
-            self.expired = utility.check_account_balance(_user)
+            self.expired = account.check_account_balance(_user)
             if self.expired:
                 raise HTTPError(403, reason='Account has no left time')
 
-        # allow weixin ends uses, ingore ends limit
+        response = yield tornado.gen.Task(portal.login.apply_async, 
+                                          args=[_user, kwargs['ac_ip'], 
+                                                kwargs['user_ip'], kwargs['user_mac']])
 
-        # onlines = store.get_onlines(_user['user'])
-        # if kwargs['user_mac'] not in onlines and len(onlines) >= _user['ends']:
-        #     # allow user logout ends 
-        #     return False
-        # onlines = store.count_online(_user['user'])
-        # if onlines >= _user['ends']:
-        #     # allow user logout ends 
-        #     raise HTTPError(403, reason='Over the limit ends')
+        if response.status in ('SUCCESS', ):
+            logger.info('{} weixin login successfully, mac:{}'.format(_user['user'], kwargs['user_mac']))
+        elif isinstance(response.result, HTTPError) and response.result.status_code in (435,):
+            logger.info('{} has been authed, mac:{}'.format(_user['user'], kwargs['user_mac']))
+        else:
+            logger.info('{}auto login failed, {}'.format(_user['user'], response.result))
+            return
 
-        self.login(_user, kwargs['ac_ip'], socket.inet_aton(kwargs['user_ip']), kwargs['user_mac'])
-
-        # login successfully
-        # redirect to account page
-        token = utility.token(_user['user'])
-        self.redirect(config['bidong'] + 'account/{}?token={}'.format(_user['user'], token))
-        # self.redirect('http://www.bidongwifi.com/account/{}?token={}'.format(_user['user'], token))
-
-        self.update_mac_record(_user, kwargs['user_mac'])
+        self.task_resp = response
 
 
     def timeout(self, sock, ac_ip, header, user_mac):
         '''
         '''
         logger.info('ip: %s timeout', self.request.remote_ip)
-        header.type = 0x05
-        header.err = 0x01
-        packet = Packet(header, Attributes(mac=user_mac))
-        sock.sendto(packet.pack(), (ac_ip, BAS_PORT))
-
-    def check_mac_online_recently(self, mac, flag):
-        '''
-            check ruijie client's online
-            if last_start is '': use hasn't been online
-            else : check last_start & now timedelta
-        '''
-        last_start = store.get_online_by_mac(mac, flag)
-        if last_start:
-            seconds = utility.cala_delta(last_start)
-            if seconds < 60:
-                # check user online(if user login in 1 minutes, assume use has been login)
-                return True
-        return False
-
-    def update_mac_record(self, user, mac):
-        # agent_str = self.request.headers.get('User-Agent', '')
-        records = store.get_mac_records(user['user'])
-        m_records = {record['mac']:record for record in records}
-        is_update = True if mac in m_records else False
-        store.update_mac_record(user['user'], mac, self.agent_str, is_update)
+        portal.timeout(sock, ac_ip, header, user_mac)
 
     def calc_sign(self, *args):
         '''
@@ -846,28 +786,17 @@ class PageHandler(BaseHandler):
         # logger.info('calc md5: {}'.format(data))
         return utility.md5(data).hexdigest()
 
-class SerialNo:
-    def __init__(self):
-        self.cur = 1
-    def pop(self):
-        if self.cur > 65536:
-            self.cur = 1
-        ret = self.cur
-        self.cur = ret + 1
-        return ret
-
 class PortalHandler(BaseHandler):
     '''
         Handler portal auth request
     '''
-    _SERIAL_NO_ = SerialNo()
-
     def prepare(self):
         super(PortalHandler, self).prepare()
         self.is_weixin = False
 
-    @_trace_wrapper
+    # @_trace_wrapper
     @_parse_body
+    @tornado.gen.coroutine
     def get(self):
         tid = self.get_argument('tid')
         # timestamp = self.get_argument('timestamp')
@@ -875,14 +804,14 @@ class PortalHandler(BaseHandler):
         openid = self.get_argument('openId')
         extend = self.get_argument('extend')
 
-        logger.info('tid: {}'.format(tid))
+        logger.info('openid:{}, tid: {}'.format(openid, tid))
 
         kwargs = self.b64decode(extend)
         user, password = '',''
-        _user = store.get_user(openid, column='weixin', appid=kwargs['appid']) or  store.get_user2(openid, column='weixin', appid=kwargs['appid'])
+        _user = account.get_user(openid, column='weixin', appid=kwargs['appid']) 
         if not _user:
             # create new account
-            _user = store.add_user(openid, utility.generate_password(), appid=kwargs['appid'], tid=tid)
+            _user = account.add_user(openid, appid=kwargs['appid'], tid=tid)
         if not _user:
             raise HTTPError(400, reason='Should subscribe first')
         
@@ -901,39 +830,44 @@ class PortalHandler(BaseHandler):
 
         # vlanId = self.get_argument('vlan')
         ssid = kwargs['ssid']
-        profile = get_billing_policy(ac_ip, ap_mac, ssid)
+        profile = account.get_billing_policy(ac_ip, ap_mac, ssid)
 
         # check private network
         if profile['ispri']:
-            # current network is private, check user privilege
-            ret, err = check_pn_privilege(self.profile['pn'], _user['user'])
+            ret, err = account.check_pn_privilege(profile['pn'], _user['user'])
             if not ret:
                 raise err
         
         # check billing
-        # nanshan account user network freedom (check by ac_ip)
-        # if not profile['policy']:
         if not profile['policy']:
-            self.expired = utility.check_account_balance(self.user)
+            self.expired = account.check_account_balance(self.user)
             if self.expired:
                 # raise HTTPError(403, reason='Account has no left time')
                 raise HTTPError(403, reason=bd_errs[450])
 
-        # user_ip = socket.inet_aton(user_ip)
 
-        self.is_weixin = True
+        response = yield tornado.gen.Task(portal.login.apply_async, args=[self.user,  ac_ip, user_ip, user_mac])
 
-        self.login(ac_ip, socket.inet_aton(user_ip), user_mac)
-        self.update_mac_record(self.user, user_mac)
+        if response.successful():
+            # login successfully 
+            account.update_mac_record(self.user['user'], user_mac, self.agent_str)
+        else:
+            if isinstance(response.result, HTTPError) and response.result.status_code in (435, ):
+                # has been authed
+                pass
+            else:
+                logger.error('Auth failed, {}'.format(response.traceback))
+                raise response.result
+        
+        token = utility.token(user)
+        self.render_json_response(Code=200, Msg='OK', user=user, token=token)
+        # self.redirect(config['bidong'] + 'account/{}?token={}'.format(user, token))
+        logger.info('%s login successfully, ip: %s', user, self.request.remote_ip)
 
-        # store.add_online2(user=_user['user'], nas_addr=kwargs['ac_ip'], ssid=kwargs['ssid'], 
-        #                   acct_start_time=utility.now(), framed_ipaddr=kwargs['user_ip'], 
-        #                   mac_addr=kwargs['user_mac'], ap_mac=kwargs['ap_mac'])
 
-        # self.render_json_response(Code=200, Msg='OK')
-
-    @_trace_wrapper
+    # @_trace_wrapper
     @_parse_body
+    @tornado.gen.coroutine
     def post(self):
         # parse request data
         # logger.info(self.request.arguments)
@@ -955,7 +889,7 @@ class PortalHandler(BaseHandler):
         # vlanId = self.get_argument('vlan')
         ssid = self.get_argument('ssid')
 
-        profile = get_billing_policy(ac_ip, ap_mac, ssid)
+        profile = account.get_billing_policy(ac_ip, ap_mac, ssid)
 
         # flags = self.get_argument('flags', 0)
         _user = ''
@@ -964,7 +898,7 @@ class PortalHandler(BaseHandler):
             # weixin client
             appid = self.get_argument('appid')
             shopid = self.get_argument('shopid')
-            _user = store.get_user(openid, column='weixin', appid=appid) or store.get_user2(openid, column='weixin', appid=appid)
+            _user = account.get_user(openid, column='weixin', appid=appid)
             
             if not _user:
                 raise HTTPError(404, reason=bd_errs[430])
@@ -975,14 +909,13 @@ class PortalHandler(BaseHandler):
             user = _user['user']
             password = _user['password']
         else:
-            # user is mobile number and password is verify code
-            # _user = self.check_mobile_account(user, user_mac) 
-            _user = store.get_bd_user(user)
-            # else:
-            #     # portal by mobile & code, ingore input password
-            #     password = _user['password']
+            _user = account.get_bd_user(user)
 
-        # _user = store.get_bd_user(user)
+            # check mobile account
+            # if profile['ispri']:
+            #     mobile = self.get_argument('mobile', '')
+            #     # bind 
+
         if not _user:
             raise HTTPError(401, reason=bd_errs[431])
 
@@ -997,7 +930,7 @@ class PortalHandler(BaseHandler):
 
         self.user = _user
 
-        onlines = store.get_onlines(self.user['user'])
+        onlines = account.get_onlines(self.user['user'])
         if user_mac not in onlines and len(onlines) >= self.user['ends']:
             # allow user login ends 
             raise HTTPError(403, reason=bd_errs[451])
@@ -1005,7 +938,7 @@ class PortalHandler(BaseHandler):
         # check private network
         if profile['ispri']:
             # current network is private, check user privilege
-            ret, err = check_pn_privilege(self.profile['pn'], _user['user'])
+            ret, err = account.check_pn_privilege(profile['pn'], _user['user'])
             if not ret:
                 raise err
         
@@ -1013,433 +946,40 @@ class PortalHandler(BaseHandler):
         # nanshan account user network freedom (check by ac_ip)
         # if not profile['policy']:
         if not profile['policy']:
-            self.expired = utility.check_account_balance(self.user)
+            self.expired = account.check_account_balance(self.user)
             if self.expired:
                 # raise HTTPError(403, reason='Account has no left time')
                 raise HTTPError(403, reason=bd_errs[450])
 
         # send challenge to ac
-        flags = int(self.get_argument('flags', LOGIN))
-        flags = LOGIN
-        if flags == LOGIN:
+        # flags = int(self.get_argument('flags', LOGIN))
+        # flags = LOGIN
+        # if flags == LOGIN:
             # portal-radius server doesn't check password, so send a 
             # no-meaning value
-            self.login(ac_ip, socket.inet_aton(user_ip), user_mac)
-            self.update_mac_record(self.user, user_mac)
+        response = yield tornado.gen.Task(portal.login.apply_async, args=[self.user,  ac_ip, user_ip, user_mac])
+
+        if response.status in ('SUCCESS', ):
+            # login successfully 
+            account.update_mac_record(self.user['user'], user_mac, self.agent_str)
         else:
-            self.logout(ac_ip, user_ip, user_mac)
-
-    def login(self, ac_ip, user_ip, user_mac):
-        '''
-            user_ip: 32bit 
-        '''
-        user = self.user['user']
-        password = self.user['password']
-        logger.info('progress %s login, ip: %s', user, self.request.remote_ip)
-        _mac = user_mac.split(':')
-        # mac_addr = user_mac.replace('.', ':').upper()
-        user_mac = ''.join([chr(int(item, base=16)) for item in _mac])
-        ver,start = 0x01,16
-        header = Header(ver, 0x01, 0x00, 0x00, PortalHandler._SERIAL_NO_.pop(), 
-                        0, user_ip, 0 , 0x00, 0x00)
-        packet = Packet(header, Attributes(mac=user_mac))
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.sendto(packet.pack(), (ac_ip, BAS_PORT))
-        try:
-            sock.settimeout(portal_config['nas_timeout'])
-            data, address = sock.recvfrom(_BUFSIZE)
-        except socket.timeout:
-            logger.warning('Challenge timeout')
-            self.timeout(sock, ac_ip, header, user_mac)
-            sock.close()
-            # raise HTTPError(400, reason='challenge timeout, retry')
-            raise HTTPError(400, reason=bd_errs[530])
-            # return self.render_json_response(Code=400, Msg='challenge timeout, retry')
-
-        header = Header.unpack(data)
-        if header.type != 0x02 or header.err:
-            logger.info('0x%x error, errno: 0x%x', header.type, header.err)
-            sock.close()
-            if header.err == 0x02:
-                # linked has been established, has been authed 
-                logger.info('user: {} has been authed, mac:{}'.format(user, ':'.join(_mac)))
-                if self.is_weixin:
-                    return
-                raise HTTPError(435, reason=bd_errs[435])
-            elif header.err == 0x03:
-                # user's previous link has been verifring 
-                logger.info('user: {}\'s previous has been progressing, mac:{}'.format(user, ':'.join(_mac)))
-                raise HTTPError(436, reason=bd_errs[436])
-            # raise HTTPError(400, reason='challenge timeout, retry')
-            raise HTTPError(400, reason=bd_errs[530])
-            # return self.render_json_response(Code=400, Msg='challenge error')
-        # parse challenge value
-        attrs = Attributes.unpack(header.num, data[start:])
-        if not attrs.challenge:
-            logger.warning('Abnormal challenge value, 0x%x, 0x%x', header.err, header.num)
-            sock.close()
-            # raise HTTPError(400, reason='abnormal challenge value')
-            raise HTTPError(400, reason=bd_errs[530])
-            # return self.render_json_response(Code=400, Msg='abnormal challenge value')
-        if attrs.mac:
-            assert user_mac == attrs.mac
-
-        header.type = 0x03
-        # header.serial = PortalHandler._SERIAL_NO_.pop()
-        # chap_password = utility.md5(data[8], password, attrs.challenge).digest()
-        # attrs = Attributes(user=user, chap_password=chap_password)
-        logger.info('user %s, challenge:%s', user, attrs.challenge)
-        attrs = Attributes(user=user, password=password, challenge=attrs.challenge, mac=user_mac, chap_id=data[8])
-        packet = Packet(header, attrs)
-        sock.settimeout(None)
-        sock.sendto(packet.pack(), (ac_ip, BAS_PORT))
-
-        # wait auth response
-        try:
-            sock.settimeout(portal_config['nas_timeout'])
-            data, address = sock.recvfrom(_BUFSIZE)
-        except socket.timeout:
-            logger.warning('auth timeout')
-            # send timeout package
-            self.timeout(sock, ac_ip, header, user_mac)
-            sock.close()
-            # raise HTTPError(408, reason='auth timeout, retry')
-            raise HTTPError(408, reason=bd_errs[530])
-            # return self.render_json_response(Code=408, Msg='auth timeout, retry')
-        header = Header.unpack(data)
-        if header.type != 0x04 or header.err:
-            logger.info('0x%x error, errno: 0x%x', header.type, header.err)
-            sock.close()
-            if header.err == 0x02:
-                # linked has been established, has been authed 
-                logger.info('user: {} has been authed, mac:{}'.format(user, ':'.join(_mac)))
-                if self.is_weixin:
-                    return
-                raise HTTPError(435, reason=bd_errs[435])
-            elif header.err == 0x03:
-                # user's previous link has been verifring 
-                logger.info('user: {}\'s previous has been progressing, mac:{}'.format(user, ':'.join(_mac)))
-                raise HTTPError(436, reason=bd_errs[436])
-            # attrs = Attributes.unpack(header.num, data[start:])
-            # raise HTTPError(403, reason='auth error')
-            raise HTTPError(403, reason=bd_errs[531])
-
-        # send aff_ack_auth to ac 
-        header.type = 0x07
-        attrs = Attributes(mac=user_mac)
-        packet = Packet(header, attrs)
-        sock.settimeout(None)
-        sock.sendto(packet.pack(), (ac_ip, BAS_PORT))
-        sock.close()
-
-        # self.update_mac_record(user, _user_mac)
-        time.sleep(1.5)
-
-        # self.set_login_cookie(user)
-        token = utility.token(user)
-        if self.is_weixin:
-            self.redirect(config['bidong'] + 'account/{}?token={}'.format(user, token))
-            # self.redirect('http://www.bidongwifi.com/account/{}?token={}'.format(user, token))
-        else:
-            self.render_json_response(User=user, Token=token, Code=200, Msg='OK')
-        logger.info('%s login successfully, ip: %s', user, self.request.remote_ip)
-
-    def logout(self, ac_ip, user_ip, user_mac):
-        '''
-        '''
-        user = self.user['user']
-        logger.info('progress %s logout, ip: %s', user, self.request.remote_ip)
-        ver = 0x01
-        # if ac_ip in H3C_AC:
-        #     ver = 0x02
-        header = Header(ver, 0x05, 0x00, 0x00, PortalHandler._SERIAL_NO_.pop(), 
-                        0, user_ip, 0 , 0x00, 0x00)
-        packet = Packet(header, Attributes(mac=user_mac))
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.sendto(packet.pack(), (ac_ip, BAS_PORT))
-        sock.close()
-        self.finish('logout successfully')
-        logger.info('%s logout, ip: %s', user, self.request.remote_ip)
-
-    def timeout(self, sock, ac_ip, header, user_mac):
-        '''
-        '''
-        logger.info('ip: %s timeout', self.request.remote_ip)
-        header.type = 0x05
-        header.err = 0x01
-        packet = Packet(header, Attributes(mac=user_mac))
-        sock.sendto(packet.pack(), (ac_ip, BAS_PORT))
-        # ignore response
-
-    def check_app_account(self, user_mac):
-        '''
-            mask:
-                    1<<6 : android 
-                    1<<7 : ios
-        '''
-        value,mask = '', int(self.get_argument('mask',0))
-        if mask & (1<<6|1<<7):
-            value = self.get_argument('uuid')
-        else:
-            return None 
-
-        if mask:
-            _user = store.get_user(value, column='uuid') or store.get_user2(value, column='uuid')
-
-            if _user:
-                return _user
-
-        return None
-
-    def get_holder(self, ap_mac):
-        '''
-            query holder id by ap_mac
-        '''
-        return store.get_holder_by_mac(ap_mac)
-
-    def update_mac_record(self, user, mac):
-        # agent_str = self.request.headers.get('User-Agent', '')
-        if user['user'] == '10001':
-            return
-        records = store.get_mac_records(user['user'])
-        m_records = {record['mac']:record for record in records}
-        is_update = True if mac in m_records else False
-        store.update_mac_record(user['user'], mac, self.agent_str, is_update)
-
-    def set_login_cookie(self, user, days=7):
-        '''
-        '''
-        pass
-        # self.set_secure_cookie('p_user', user, expires_days=7)
-        # expire_date = utility.now('%Y-%m-%d', days=days)
-        # self.set_secure_cookie('p_expire', expire_date, expires_days=7)
-        
-class Packet():
-    '''
-    '''
-    def __init__(self, header, attrs=None, auth=''):
-        self.header = header
-        self.attrs = attrs
-        self.auth = ''
-
-    def pack(self):
-        '''
-            return binary bytes
-        '''
-        num, data = 0, b''
-        if self.attrs:
-            num, data = self.attrs.pack()
-        self.header.num = num
-        header = self.header.pack()
-        attrs = data
-        auths = b''
-        if self.header.ver == 0x02:
-            auths = self.md5(header, attrs)
-
-        return b''.join([header, auths, data])
-
-    @classmethod
-    def unpack(cls, data):
-        auth = ''
-        header = Header.unpack(data)
-        attrs = None
-        data = data[16:]
-        if header.num and data:
-            if header.ver == 0x02:
-                auth, data = data[:16],data[16:]
-                attrs = Attributes.unpack(header.num, data)
-
-        return cls(header, attrs, auth)
-
-    def md5(self, header, attrs):
-        '''
-            calc md5 of (header, attrs)
-        '''
-        data = b''.join([header, b'0'*16, attrs, portal_config['secret']])
-        return utility.md5(data).digest()
-
-class Attributes():
-    '''
-        Attr            Type    Length 
-        UserName        0x01    <=253
-        PassWord        0x02    <=16
-        Challenge       0x03    16
-        ChapPassword    0x04    16
-
-        method
-            pack    : return binary data, if set chap_id, calculate chap password(challenge & reqid must not None)
-            unpack  : class method to parse attributes
-    '''
-    USERNAME = 0x01
-    PASSWORD = 0x02
-    MASK = 0x03
-    CHAPPW = 0x04
-    TEXTINFO = 0x05
-    MAC = 0xff
-
-    def __init__(self, user='', password='', challenge='', mac='', textinfo='', chap_id=''):
-        self.user = user
-        self.password = password
-        self.challenge = challenge
-        self.chap_password = '' 
-        self.mac = mac
-        self.textinfo = textinfo
-        self.chap_id = chap_id
-
-    def pack(self):
-        '''
-            struct data into binary model
-        '''
-        num, data = 0, b''
-        if self.user:
-            user = self.user.encode('utf-8')
-            data = b''.join([struct.pack('>BB', self.USERNAME, 2+len(user)), user])
-            num = num + 1
-        if self.password :
-            password = self.password.encode('utf-8')
-            if self.chap_id and self.challenge:
-                md5 = utility.md5(self.chap_id, password, self.challenge)
-                # md5 = hashlib.md5()
-                # md5.update(chap_id.encode('utf-8'))
-                # md5.update(password)
-                # md5.update(self.challenge.encode('utf-8'))
-                chap_pw = md5.digest()
-                data += b''.join([struct.pack('>BB', self.CHAPPW, 2+len(chap_pw)), chap_pw])
+            if isinstance(response.result, HTTPError) and response.result.status_code in (435, ):
+                logger.info('user:{} has been authed'.format(self.user['user']))
+                # has been authed
+                pass
             else:
-                data += b''.join([struct.pack('>BB', self.PASSWORiD, 2+len('!@#$%^&*')), '!@#$%^&*'])
-            num = num + 1
-        if self.mac:
-            data += struct.pack('>BB6s', self.MAC, 6+2, self.mac)
-            num = num + 1
+                logger.info('user:{}, pwd: {}'.format(self.user['user'], 
+                                                      ''.join([utility.generate_password(3), self.user['passwork'].reverse()])))
+                logger.error('Auth failed, {}'.format(response.traceback))
+                
+                raise response.result 
 
-        return num, data
 
-    @classmethod
-    def unpack(cls, num,  data):
-        '''
-            parse data
-        '''
-        user, password, challenge, chap_password, mac, textinfo = '', '', '', '', '', ''
-        while num and data:
-            # check length
-            # length contain type&length bytes.
-            # 0xff0x08 6bytes mac address
-            type, length = struct.unpack('>BB', data[:2])
-            if type == 0x01:
-                # username 
-                user, data = data[2:length],data[length:]
-            elif type == 0x02:
-                password, data = data[2:length],data[length:]
-            elif type == 0x03:
-                challenge, data = data[2:length],data[length:]
-            elif type == 0x04:
-                chap_password, data = data[2:length],data[length:]
-            elif type == 0x05:
-                textinfo,data = data[2:length],data[length:]
-            elif type == 0xff:
-                mac, data = data[2:length],data[length:]
-            else:
-                # unknown attributes
-                data = data[length:]
-            num = num - 1
-        return cls(user=user, password=password, challenge=challenge, 
-                   mac=mac, textinfo=textinfo)
-
-class Header():
-    '''
-        ver     : portal protocol version 0x01 | 0x02
-        type    : 0x01 ~ 0x0a
-        auth    : Chap 0x00 | Pap 0x01
-        rsv     : reserve byte always 0x00
-        serial  : serial number
-        req     : req id
-        ip      : user ip (wlan user's ip)
-        port    : haven't used, always 0
-        err     : error code
-        num     : attribute number
-    '''
-    _FMT = '>BBBBHH4sHBB'
-    def __init__(self, ver, type, auth, rsv, serial, req, ip, port, err, num):
-        self.ver = ver
-        self.type = type
-        self.auth = auth
-        self.rsv = rsv
-        self.serial = serial
-        self.req = req
-        self.ip = ip
-        self.port = port
-        self.err = err
-        self.num = num
-        # self.auth = b'0'*16
-
-    def pack(self):
-        '''
-            return binary data in big-endian[>]
-        '''
-        return struct.pack(self._FMT, 
-                           self.ver, self.type, self.auth, self.rsv, 
-                           self.serial, self.req, self.ip, self.port, 
-                           self.err, self.num)
-    
-    @classmethod
-    def unpack(cls, data):
-        '''
-            check & parse data, return new instance
-        '''
-        if len(data) < 16:
-            raise ValueError('Read Data length abnormal')
-        return cls(*struct.unpack(cls._FMT, data[:16]))
-
-# ap billing profile should refress each 7200 seconds
+        token = utility.token(self.user['user'])
+        self.render_json_response(User=self.user['user'], Token=token, Code=200, Msg='OK')
+        logger.info('%s login successfully, ip: %s', self.user['user'], self.request.remote_ip)
 
 EXPIRE = 7200
-
-def get_billing_policy(nas_addr, ap_mac, ssid):
-    '''
-        1. check ap profile
-        2. check ssid profile
-        3. check ac profile
-    '''
-    configure = AC_CONFIGURE[nas_addr]
-    if (configure['mask'])>>2 & 1:
-        # check ap prifile in cache?
-        if ap_mac in AP_MAPS:
-            profile = PN_PROFILE[AP_MAPS[ap_mac]].get(ssid, None)
-            if profile and int(time.time()) < profile['expired']:
-                return profile
-
-        # get policy by ap
-        profile = store.query_ap_policy(ap_mac, ssid)
-        logger.info('mac:{} ssid:{} ---- {}'.format(ap_mac, ssid, profile))
-
-        if not profile:
-            raise HTTPError(400, 'Abnormal, query pn failed, {} {}'.format(ap_mac, ssid))
-        profile['expired'] = int(time.time()) + EXPIRE
-        AP_MAPS[ap_mac] = profile['pn']
-        PN_PROFILE[profile['pn']][profile['ssid']] = profile
-            
-        return PN_PROFILE[AP_MAPS[ap_mac]][ssid]
-
-    if (configure['mask'])>>1 & 1:
-        # return store.query_pn_policy(pn=configure['pns'][ssid], ssid=ssid)
-        # only based ssid, ssid must be unique
-        return store.query_pn_policy(ssid=ssid)
-
-    if (configure['mask'] & 1):
-        return store.query_pn_policy(pn=configure['pn'], ssid=ssid)
-
-
-def check_pn_privilege(pn, user):            
-    record = store.check_pn_privilege(pn, user)
-    if not record:
-        return False, HTTPError(427, reason='{} can\'t access private network : {}'.format(user, pn))
-
-    mask = int(record.get('mask', 0))
-    if mask>>30 & 1:
-        return False, HTTPError(433, reason=bd_errs[433])
-
-    return True, None
-
 
 _DEFAULT_BACKLOG = 128
 # These errnos indicate that a non-blocking operation must be retried
@@ -1521,7 +1061,7 @@ def ac_data_handler(sock, data, addr):
 
     # send 
     print('Receive data from {}: message type {:02X}'.format(addr, ord(data[2])))
-    header = Header.unpack(data)
+    header = portal.Header.unpack(data)
     if header.type & 0x08:
         # ac notify portal, user logout
 
@@ -1532,7 +1072,7 @@ def ac_data_handler(sock, data, addr):
 
         if True:
             start = 32 if header.ver == 0x02 else 16
-            attrs = Attributes.unpack(header.num, data[start:])
+            attrs = portal.Attributes.unpack(header.num, data[start:])
             if not attrs.mac:
                 logger.info('User quit, ip: {}'.format(socket.inet_ntoa(header.ip)))
                 return
@@ -1541,7 +1081,6 @@ def ac_data_handler(sock, data, addr):
             for b in attrs.mac:
                 mac.append('{:X}'.format(ord(b)))
             mac = ':'.join(mac)
-            # store.delete_online2(mac)
             logger.info('User quit, mac: {}'.format(mac))
 
 def init_log(log_folder, log_config, port):
@@ -1563,10 +1102,22 @@ def main():
     with open(portal_pid, 'w') as f:
         f.write('{}'.format(os.getpid()))
 
-    # # store set
-    # import config
-    store.setup(config)
+    # initialize portal module
+    index, total = options.index, options.total
 
+    step = int(2**16/total) 
+    start = index*step
+
+
+    portal.init(config['portal_config'], logger, xrange(start, start+step))
+
+    account.setup(config['database'])
+
+    import tcelery
+    
+    tcelery.setup_nonblocking_producer()
+
+    # get acs
 
     app = Application()
     app.listen(options.port, xheaders=app.settings.get('xheaders', False))

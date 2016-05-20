@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+import logging
+
 #coding=utf-8
 # from DBUtils.PooledDB import PooledDB
 from DBUtils.PersistentDB import PersistentDB
@@ -72,8 +74,8 @@ class MySQLPool():
 pool_class = {'mysql':MySQLPool}
 
 class Store():
-    def setup(self, config):
-        self.dbpool = MySQLPool(config['database'])
+    def setup(self, db_config):
+        self.dbpool = MySQLPool(db_config)
         # global __cache_timeout__
         # __cache_timeout__ = config['cache_timeout']
 
@@ -379,6 +381,11 @@ class Store():
             cur.execute(sql)
             return cur.fetchone()
 
+    def bind_private_pn(self, pn, user, mobile):
+        with Connect(self.dbpool) as conn:
+            cur = conn.cursor(MySQLdb.cursors.DictCursor)
+            pass
+
 
     def merge_app_account(self, _id, user_mac):
         '''
@@ -423,7 +430,7 @@ class Store():
             sql = ''
             if isupdate:
                 sql = '''update mac_history set tlogin = "{}", platform = "{}" 
-                where user = "{}" and mac = "{}" '''.format(now, agent, user, mac)
+                where user = "{}" and mac = "{}"'''.format(now, agent, user, mac)
             else:
                 sql = '''insert into mac_history (user, mac, tlogin, platform) 
                 values('{}', '{}', '{}', '{}')'''.format(user, mac, now, agent)
@@ -482,6 +489,15 @@ class Store():
             cur.execute(sql)
             records = cur.fetchall()
             return records if records else []
+
+    def get_user_mac_record(self, user, mac):
+        '''
+        '''
+        with Cursor(self.dbpool) as cur:
+            sql = 'select * from mac_history where user = "{}" and mac="{}"'.format(user, mac)
+            cur.execute(sql)
+            return cur.fetchone()
+
 
     def is_online(self, nas_addr, acct_session_id):
         '''
@@ -592,15 +608,15 @@ class Store():
             cur.execute('delete from online where mac_addr="{}"'.format(mac))
             conn.commit()
 
-    def update_billing(self, billing, coin=0):
+    def update_billing(self, billing):
         '''  '''
         with Connect(self.dbpool) as conn:
             cur = conn.cursor()
             # update account
-            balance_sql = '''update bd_account set
-                coin = {} where user = "{}"
-            '''.format(coin, billing['user'])
-            cur.execute(balance_sql)
+            # balance_sql = '''update bd_account set
+            #     coin = {} where user = "{}"
+            # '''.format(coin, billing['user'])
+            # cur.execute(balance_sql)
 
             # update online
             online_sql = '''update online set

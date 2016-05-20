@@ -2,11 +2,12 @@
 #coding=utf-8
 from twisted.python import log
 from radiusd.pyrad import packet
-from radiusd.store import store
+# from radiusd.store import store
 from radiusd.settings import *
 from radiusd import utils
 import logging
 import datetime
+import account
 
 def process(req=None,user=None,runstat=None,**kwargs):
     if not req.get_acct_status_type() == STATUS_TYPE_STOP:
@@ -17,7 +18,7 @@ def process(req=None,user=None,runstat=None,**kwargs):
         ticket.nas_addr = req.source[0]
 
     _datetime = datetime.datetime.now() 
-    online = store.get_online(ticket.nas_addr,ticket.acct_session_id)    
+    online = account.get_online(ticket.nas_addr,ticket.acct_session_id)    
     if not online:
         session_time = ticket.acct_session_time 
         # stop_time = _datetime.strftime( "%Y-%m-%d %H:%M:%S")
@@ -26,16 +27,16 @@ def process(req=None,user=None,runstat=None,**kwargs):
         # ticket.acct_stop_time = stop_time
         ticket.start_source= STATUS_TYPE_STOP
         ticket.stop_source = STATUS_TYPE_STOP
-        store.add_ticket(ticket)
+        account.add_ticket(ticket)
     else:
-        store.del_online(ticket.nas_addr, ticket.acct_session_id)
+        account.del_online(ticket.nas_addr, ticket.acct_session_id)
         ticket.acct_start_time = online['acct_start_time']
         # ticket.acct_stop_time= _datetime.strftime( "%Y-%m-%d %H:%M:%S")
         ticket.start_source = online['start_source']
         ticket.stop_source = STATUS_TYPE_STOP
         ticket.mac_addr = online['mac_addr']
         ticket.ap_mac = online['ap_mac']
-        store.add_ticket(ticket)
+        account.add_ticket(ticket)
 
     log.msg('%s Accounting stop request, remove online'%req.get_user_name(),level=logging.INFO)
 

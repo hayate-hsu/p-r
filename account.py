@@ -1,138 +1,222 @@
 '''
 '''
 from __future__ import absolute_import, division, print_function, with_statement
+
 from tornado.web import HTTPError
 
-import datetime
 import time
 
-import functools
+import collections
 
 from MySQLdb import (IntegrityError)
 
+import logging
+logger = logging.getLogger()
+
 import utility
 # import settings
+# import config
 from radiusd.store import store
+from bd_err import bd_errs
+
+import mongo
+
+_REQUESTES_ = {}
+
+BAS_PORT = 2000
+_BUFSIZE=1024
+
+PORTAL_PORT = 50100
+
+PN_PROFILE = collections.defaultdict(dict)
+AP_MAPS = {}
+
+EXPIRE = 7200
+
+def setup(config):
+    store.setup(config)
+
+def get_billing_policy(nas_addr, ap_mac, ssid):
+    '''
+        1. check ap profile
+        2. check ssid profile
+        3. check ac profile
+    '''
+    # check ap prifile in cache?
+    if ap_mac in AP_MAPS:
+        profile = PN_PROFILE[AP_MAPS[ap_mac]].get(ssid, None)
+        if profile and int(time.time()) < profile['expired']:
+            return profile
+
+    # get pn by ap mac
+    result = mongo.find_one('ap_record', {'mac':ap_mac})
+
+    if result and result['_location']:
+        pn = result['_location'].split(',')[1]
+        # get pn policy by ap mac & ssid
+        profile = store.query_pn_policy(pn=pn, ssid=ssid)
+        # profile = store.query_ap_policy(ap_mac, ssid)
+        logger.info('mac:{} ssid:{} ---- {}'.format(ap_mac, ssid, profile))
+
+        if profile:
+            profile['expired'] = int(time.time()) + EXPIRE
+            AP_MAPS[ap_mac] = profile['pn']
+            PN_PROFILE[profile['pn']][profile['ssid']] = profile
+
+            return profile
+
+    # get pn policy by ssid
+    profile = store.query_pn_policy(ssid=ssid)
+
+    if profile:
+        return profile
+
+    raise HTTPError(400, 'Abnormal, query pn failed, {} {}'.format(ap_mac, ssid))
+
+    # if (configure['mask'])>>2 & 1:
+    #     # check ap prifile in cache?
+    #     if ap_mac in AP_MAPS:
+    #         profile = PN_PROFILE[AP_MAPS[ap_mac]].get(ssid, None)
+    #         if profile and int(time.time()) < profile['expired']:
+    #             return profile
+
+    #     # get policy by ap
+    #     result = mongo.find_one('aps', mac=ap_mac)
+    #     if not result['_location']:
+    #         pn,ssid = 10002,'NanSha_City'
+    #     else:
+    #         pn = result['_location'].split(',')[1]
+
+    #     profile = store.query_pn_policy(pn=pn, ssid=ssid)
+    #     # profile = store.query_ap_policy(ap_mac, ssid)
+    #     logger.info('mac:{} ssid:{} ---- {}'.format(ap_mac, ssid, profile))
+
+    #     if not profile:
+    #         raise HTTPError(400, 'Abnormal, query pn failed, {} {}'.format(ap_mac, ssid))
+
+    #     profile['expired'] = int(time.time()) + EXPIRE
+    #     AP_MAPS[ap_mac] = profile['pn']
+    #     PN_PROFILE[profile['pn']][profile['ssid']] = profile
+    #         
+    #     return PN_PROFILE[AP_MAPS[ap_mac]][ssid]
+
+    # if (configure['mask'])>>1 & 1:
+    #     # return store.query_pn_policy(pn=configure['pns'][ssid], ssid=ssid)
+    #     # only based ssid, ssid must be unique
+    #     return store.query_pn_policy(ssid=ssid)
+
+    # if (configure['mask'] & 1):
+    #     return store.query_pn_policy(pn=configure['pn'], ssid=ssid)
+
+def get_billing_policy2(req):
+    ac_ip = req.get_nas_addr()
+    
+    ap_mac, ssid = parse_called_stationid(req)
+
+    return get_billing_policy(ac_ip, ap_mac, ssid)
+
+
+def check_pn_privilege(pn, user):            
+    record = store.check_pn_privilege(pn, user)
+    if not record:
+        return False, HTTPError(427, reason='{} can\'t access private network : {}'.format(user, pn))
+
+    mask = int(record.get('mask', 0))
+    if mask>>30 & 1:
+        return False, HTTPError(433, reason=bd_errs[433])
+
+    return True, None
+
+
+def _check_expire_date(_user): 
+    '''
+    '''
+    now = datetime.datetime.now()
+    if now > _user['expired']:
+        return True
+    return False
+
+def _check_left_time(_user):
+    return _user['coin'] <= 0
+
+def check_account_balance(_user):
+    '''
+        check account expired & left time
+    '''
+    return _check_expire_date(_user)
 
 def get_user_by_mac(mac, ac):
     records = store.get_user_records_by_mac(mac)
     if records:
         return records[-1]['user']
-    return None
+    return ''
 
-def update_mac_record(user, mac, agent_str):
-    records = store.get_mac_records(user['user'])
-    m_records = {record['mac']:record for record in records}
-    if mac not in m_records:
-        # update mac record 
-        if (not records) or len(records) < user['ends']:
-            store.update_mac_record(user['user'], mac, '', agent_str, False)
-        else:
-            store.update_mac_record(user['user'], mac, records[0]['mac'], agent_str, True)
+def get_current_billing_policy(**kwargs):
+    '''
+        user's billing policy based on the connected ap 
+    '''
+    profile = get_billing_policy(kwargs['ac_ip'], kwargs['ap_mac'], kwargs['ssid'])
+    return profile
 
 def get_bd_user(user):
-    return store.get_bd_user(user)
+    '''
+        get bd_account user record
+    '''
+    return store.get_bd_user(user) or store.get_bd_user2(user)
 
-def get_user(openid):
-    return store.get_user(openid)
+def get_user(value, column='weixin', appid=''):
+    _user = store.get_user(value, column=column, appid=appid) or store.get_user2(value, column=column, appid=appid)
+    return _user
+
+def create_user(user, appid='', tid='', mobile='', ends=2**5):
+    _user = store.add_user(user, utility.generate_password(), appid=appid, 
+                           tid=tid, mobile=mobile, ends=ends)
+    return _user
 
 def get_onlines(user):
     return store.get_onlines(user)
 
-def check_mac_online_recently(self, mac, flag):
-    '''
-        check ruijie client's online
-        if last_start is '': use hasn't been online
-        else : check last_start & now timedelta
-    '''
-    last_start = store.get_online_by_mac(mac, flag)
-    if last_start:
-        seconds = utility.cala_delta(last_start)
-        if seconds < 60:
-            # check user online(if user login in 1 minutes, assume use has been login)
-            return True
-    return False
+def update_mac_record(user, mac, agent):
+    is_update = False
+    record = store.get_user_mac_record(user, mac)
+    if record:
+        is_update = True
+    store.update_mac_record(user, mac, agent, is_update)
 
-def get_holder(ap_mac):
-    '''
-        query holder id by ap_mac
-    '''
-    return store.get_holder_by_mac(ap_mac)
+def query_ap_policy(ap_mac, ssid):
+    return store.query_ap_policy(ap_mac, ssid)
 
-def check_mac_account(mac):
-    '''
-        # only ruijie ac go to this branch
-        check mac address binded acocunt
-        not found : 
-            reate bd_account by mac
-    '''
-    mac = mac.replace(':', '')
-    user = store.get_bd_user(mac)
-    if not user:
-        user = store.add_user_by_mac(mac, utility.generate_password())
-    else:
-        user = user['user']
-    return user
+def query_pn_policy(**kwargs):
+    return store.query_pn_policy(**kwargs)
 
-def check_account_avaiable(user, profile):
-    '''
-        
-    '''
-    pass
+#************************************************************
 
-'''
-    nan sha account manage
-'''
-def get_ns_employee(**kwargs):
-    '''
-        kwargs: nan sha employee table fields
-    '''
-    return store.get_ns_employee(**kwargs)
+def get_bas(ip):
+    return store.get_bas(ip)
 
-def add_ns_employee(**kwargs):
-    '''
-       name mobile gender position department ctime mtime
-       if add successfully, return new added id
-    '''
-    assert 'mobile' in kwargs
-    employee = get_ns_employee(mobile=kwargs['mobile'])
-    if employee:
-        raise HTTPError(400, reason='employee has been existed')
+def list_bas():
+    return store.list_bas()
 
-    _id = store.add_ns_employee(**kwargs)
+def unlock_online(nas_addr, session_id , status):
+    store.unlock_online(nas_addr, session_id , status)
 
-def update_ns_employee(_id, **kwargs):
-    '''
-        update  existed employee's info
-    '''
-    try:
-        store.update_ns_employee(_id, **kwargs)
-    except IntegrityError:
-        raise HTTPError(400, reason='mobile number has been existed')
+def update_billing(billing):
+    store.update_billing(billing)
 
-def get_binded_account(_id):
-    '''
-    '''
-    return store.get_binded_account(_id)
+def add_online(online):
+    store.add_online(online)
 
-def delete_ns_employee(_id):
-    '''
-    '''
-    store.delete_ns_employee(_id)
+def get_online(nas_addr, session_id):
+    return store.get_online(nas_addr, session_id)
 
-def bind_ns_account(mobile, mac, ac):
-    '''
-        bind account operator:
-            1. get ns_employee account
-            2. get mac correspond bd_account
-            3. add bind record
-    '''
-    employee = get_ns_employee(mobile=mobile)
-    if not employee:
-        raise HTTPError(404, reason='Mobile numberi: {} can\'t found'.format(mobile))
-    user = get_user_by_mac(mac, ac) 
+def del_online(nas_addr, session_id):
+    store.del_online(nas_addr, session_id)
 
-    assert user
-
-    store.bind_ns_account(employee, user)
-
+def add_ticket(ticket):
+    store.add_ticket(ticket)
+    
+def parse_called_stationid(req):
+    data = req.get_called_stationid()
+    ap_mac, ssid = data.split(':')
+    ap_mac = utility.format_mac(ap_mac) 
+    return ap_mac, ssid

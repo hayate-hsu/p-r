@@ -68,7 +68,7 @@ def login(_user, ac_ip, user_ip, user_mac):
 
     header = Header.unpack(data)
     if header.type != 0x02 or header.err:
-        logger.info('0x%x error, errno: 0x%x'.format(header.type, header.err))
+        logger.info('0x{:x} error, errno: 0x{:x}'.format(header.type, header.err))
         sock.close()
         if header.err == 0x02:
             # linked has been established, has been authed 
@@ -85,7 +85,7 @@ def login(_user, ac_ip, user_ip, user_mac):
     # parse challenge value
     attrs = Attributes.unpack(header.num, data[start:])
     if not attrs.challenge:
-        logger.warning('Abnormal challenge value, 0x%x, 0x%x'.format(header.err, header.num))
+        logger.warning('Abnormal challenge value, 0x{:x}, 0x{:x}'.format(header.err, header.num))
         sock.close()
         # raise HTTPError(400, reason='abnormal challenge value')
         raise HTTPError(400, reason=bd_errs[530])
@@ -96,7 +96,7 @@ def login(_user, ac_ip, user_ip, user_mac):
     # header.serial = PortalHandler._SERIAL_NO_.pop()
     # chap_password = utility.md5(data[8], password, attrs.challenge).digest()
     # attrs = Attributes(user=user, chap_password=chap_password)
-    logger.info('user %s, challenge:%s'.format(user, attrs.challenge))
+    logger.info('user {}, challenge:{}'.format(user, attrs.challenge))
     attrs = Attributes(user=user, password=password, challenge=attrs.challenge, mac=user_mac, chap_id=data[8])
     packet = Packet(header, attrs)
     sock.settimeout(None)
@@ -116,7 +116,7 @@ def login(_user, ac_ip, user_ip, user_mac):
         # return self.render_json_response(Code=408, Msg='auth timeout, retry')
     header = Header.unpack(data)
     if header.type != 0x04 or header.err:
-        logger.info('0x%x error, errno: 0x%x'.format(header.type, header.err))
+        logger.info('0x{:x} error, errno: 0x{:x}'.format(header.type, header.err))
         sock.close()
         if header.err == 0x02:
             # linked has been established, has been authed 

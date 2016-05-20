@@ -142,17 +142,10 @@ def login(_user, ac_ip, user_ip, user_mac):
 
     # self.update_mac_record(user, _user_mac)
     # time.sleep(1)
-    sleep(1)
+    time.sleep(1)
+    # sleep(1)
 
     return _user
-
-    # token = utility.token(user)
-    # if self.is_weixin:
-    #     self.redirect(config['bidong'] + 'account/{}?token={}'.format(user, token))
-    #     # self.redirect('http://www.bidongwifi.com/account/{}?token={}'.format(user, token))
-    # else:
-    #     self.render_json_response(User=user, Token=token, Code=200, Msg='OK')
-    # logger.info('%s login successfully, ip: %s', user, self.request.remote_ip)
 
 # @celery.task
 def timeout(sock, ac_ip, header, user_mac):
@@ -357,9 +350,8 @@ def init(config, log, _range):
         init logger & serial range
         _range : [start, end)
     '''
-    global logger, _SERIAL_NO_, _TIMEOUT_, _SECRET_
+    global _SERIAL_NO_, _TIMEOUT_, _SECRET_
     _SERIAL_NO_ = itertools.cycle(_range)
-    logger = log
     _TIMEOUT_ = config['nas_timeout']
     _SECRET_ = config['secret']
 

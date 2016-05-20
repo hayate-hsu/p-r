@@ -452,7 +452,6 @@ class PageHandler(BaseHandler):
         #                                             self.request.headers.get('Host'), 
         #                                             self.request.headers.get('Port'))
         portal_server = 'http://{}:9898/wx_auth'.format(self.request.headers.get('Host'))
-        logger.info('url: {}'.format(portal_server))
         
         # wx_wifi['auth_url'] = tornado.escape.url_escape(portal_server)
         wx_wifi['auth_url'] = portal_server
@@ -859,10 +858,10 @@ class PortalHandler(BaseHandler):
                 logger.error('Auth failed, {}'.format(response.traceback))
                 raise response.result
         
-        token = utility.token(user)
-        self.render_json_response(Code=200, Msg='OK', user=user, token=token)
+        token = utility.token(self.user['user'])
+        self.render_json_response(Code=200, Msg='OK', user=self.user['user'], token=token)
         # self.redirect(config['bidong'] + 'account/{}?token={}'.format(user, token))
-        logger.info('%s login successfully, ip: %s', user, self.request.remote_ip)
+        logger.info('%s login successfully, ip: %s', self.user['user'], self.request.remote_ip)
 
 
     # @_trace_wrapper

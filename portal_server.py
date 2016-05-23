@@ -16,6 +16,7 @@ import tornado.gen
 import tornado.httputil
 from tornado.util import errno_from_exception
 from tornado.platform.auto import set_close_exec
+from tornado.log import access_log, gen_log, app_log
 # from tornado.concurrent import Future
 
 from tornado.options import define, options
@@ -23,6 +24,12 @@ from tornado.options import define, options
 define('port', default=8880, help='running on the given port', type=int)
 define('index', default=0, help='portal start index, used for serial number range', type=int)
 define('total', default=1, help='portal server total number , used for serial number range', type=int)
+
+# log configuration
+define('log_file_prefix', type=str, default='/var/log/radiusd/portal_8880.log')
+define('log_rotate_when', type=str, default='D', help='')
+define('log_rotate_interval', type=int, default=1)
+define('log_rotate_mode', type=str, default='time', help='time or size')
 
 import errno
 import os
@@ -42,8 +49,6 @@ from urlparse import parse_qs
 # Mako template
 import mako.lookup
 import mako.template
-
-logger = None
 
 import utility
 # import settings
@@ -170,7 +175,7 @@ class BaseHandler(tornado.web.RequestHandler):
             for (module_name, line_no, function_name, line) in tb.traceback:
                 print('File:{}, Line:{} in {}'.format(module_name, line_no, function_name))
                 print(line)
-            logger.error('Render {} failed, {}:{}'.format(filename, tb.error.__class__.__name__, tb.error), 
+            access_log.error('Render {} failed, {}:{}'.format(filename, tb.error.__class__.__name__, tb.error), 
                          exc_info=True)
             raise HTTPError(500, 'Render page failed')
 
@@ -214,6 +219,39 @@ class BaseHandler(tornado.web.RequestHandler):
         else:
             # self.render('error.html', Code=status_code, Msg=self._reason)
             self.render_json_response(Code=status_code, Msg=self._reason)
+
+    def _handle_request_exception(self, e):
+        if isinstance(e, tornado.web.Finish):
+            # not an error; just finish the request without loggin.
+            if not self._finished:
+                self.finish(*e.args)
+            return
+        try:
+            self.log_exception(*sys.exc_info())
+        except Exception:
+            access_log.error('Error in exception logger', exc_info=True)
+
+        if self._finished:
+            return 
+        if isinstance(e, HTTPError):
+            if e.status_code not in BaseHandler.RESPONSES and not e.reason:
+                tornado.gen_log.error('Bad HTTP status code: %d', e.status_code)
+                self.send_error(500, exc_info=sys.exc_info())
+            else:
+                self.send_error(e.status_code, exc_info=sys.exc_info())
+        else:
+            self.send_error(500, exc_info=sys.exc_info())
+
+    def log_exception(self, typ, value, tb):
+        if isinstance(value, HTTPError):
+            if value.log_message:
+                format = '%d %s: ' + value.log_message
+                args = ([value.status_code, self._request_summary()] + list(value.args))
+                access_log.warning(format, *args)
+
+        access_log.error('Exception: %s\n%r', self._request_summary(), 
+                     self.request, exc_info=(typ, value, tb))
+    
 
     def render_exception(self, ex):
         self.set_status(ex.status_code)
@@ -337,7 +375,7 @@ def _parse_body(method):
                             self.request.arguments, self.request.files)
                         break
                     else:
-                        logger.warning('Invalid multipart/form-data')
+                        access_log.warning('Invalid multipart/form-data')
         return method(self, *args, **kwargs)
     return wrapper
 
@@ -351,28 +389,28 @@ def _trace_wrapper(method):
     @functools.wraps(method)
     def wrapper(self, *args, **kwargs):
         try:
-            logger.info('<-- In %s: <%s> -->', self.__class__.__name__, self.request.method)
+            access_log.info('<-- In %s: <%s> -->', self.__class__.__name__, self.request.method)
             return method(self, *args, **kwargs)
         except HTTPError as ex:
-            logger.error('HTTPError catch', exc_info=True)
+            access_log.error('HTTPError catch', exc_info=True)
             raise
         except KeyError as ex:
             if self.application.settings.get('debug', False):
                 print(self.request)
-            logger.error('Arguments error', exc_info=True)
+            access_log.error('Arguments error', exc_info=True)
             raise HTTPError(400)
         except ValueError as ex:
             if self.application.settings.get('debug', False):
                 print(self.request)
-            logger.error('Arguments value abnormal', exc_info=True)
+            access_log.error('Arguments value abnormal', exc_info=True)
             raise HTTPError(400)
         except Exception:
             # Only catch normal exceptions
             # exclude SystemExit, KeyboardInterrupt, GeneratorExit
-            logger.error('Unknow error', exc_info=True)
+            access_log.error('Unknow error', exc_info=True)
             raise HTTPError(500)
         finally:
-            logger.info('<-- Out %s: <%s> -->\n\n', self.__class__.__name__, self.request.method)
+            access_log.info('<-- Out %s: <%s> -->\n\n', self.__class__.__name__, self.request.method)
     return wrapper
 
 def _check_token(method):
@@ -440,7 +478,7 @@ class PageHandler(BaseHandler):
     def redirect_to_bidong(self):
         '''
         '''
-        logger.info('redirect : {}'.format(self.request.arguments))
+        access_log.info('redirect : {}'.format(self.request.arguments))
         self.redirect(config['bidong'])
         self.finish()
 
@@ -476,7 +514,6 @@ class PageHandler(BaseHandler):
 
         return arguments
 
-    @_trace_wrapper
     @_parse_body
     @tornado.gen.coroutine
     def get(self, page):
@@ -486,8 +523,8 @@ class PageHandler(BaseHandler):
         # logger.info(self.request)
         page = page.lower()
 
-        if page == 'nagivation.html':
-            self.render('nagivation.html')
+        if page in ('nagivation.html', 'niot.html'):
+            self.render(page)
             return
 
         if page not in ('login.html'):
@@ -500,7 +537,7 @@ class PageHandler(BaseHandler):
 
         kwargs['ac_ip'] = self.get_argument('wlanacip', '') or self.get_argument('nasip', '')
         if not kwargs['ac_ip']:
-            logger.error('can\'t found ac parameter, please check ac url configuration')
+            access_log.error('can\'t found ac parameter, please check ac url configuration')
             # doesn't contain ac_ip parameter, return redirect response
             # if user hasn't auth, ac will redirect the next request
             # with necessary parameters
@@ -513,7 +550,6 @@ class PageHandler(BaseHandler):
         url = kwargs['firsturl']
         
         self.profile = account.get_billing_policy(kwargs['ac_ip'], kwargs['ap_mac'], kwargs['ssid'])
-        print(self.profile)
 
         # process weixin argument
         self.prepare_wx_wifi(**kwargs)
@@ -532,7 +568,7 @@ class PageHandler(BaseHandler):
                 elif url:
                     # self.set_header('Access-Control-Allow-Origin', '*')
                     if self.profile['pn'] in (55532, ):
-                        self.redirect('welcome.html')
+                        self.redirect(self.profile['portal'])
                         return
                     if kwargs['urlparam']:
                         url = ''.join([url, '?', kwargs['urlparam']])
@@ -551,7 +587,7 @@ class PageHandler(BaseHandler):
             try:
                 response = yield self.wx_login(**kwargs)
             except:
-                logger.error('weixin login failed', exc_info=True)
+                access_log.error('weixin login failed', exc_info=True)
 
             if self.task_resp:
                 response, self.task_resp = self.task_resp, None
@@ -560,7 +596,7 @@ class PageHandler(BaseHandler):
                 elif isinstance(response.result, HTTPError) and response.result.status_code in (435,):
                     _user = self.user
                 else:
-                    logger.info('weixin auth failed, {}'.format(response.result))
+                    access_log.info('weixin auth failed, {}'.format(response.result))
                     _user = None
 
                 if _user:
@@ -576,7 +612,7 @@ class PageHandler(BaseHandler):
         kwargs['user'] = ''
         kwargs['password'] = ''
 
-        logger.info('profile: {}'.format(self.profile))
+        access_log.info('profile: {}'.format(self.profile))
         
         pn_ssid, pn_note, pn_logo = self.profile['ssid'], self.profile['note'], self.profile['logo']
 
@@ -634,11 +670,11 @@ class PageHandler(BaseHandler):
 
     @tornado.gen.coroutine
     def login_auto_by_mac(self, **kwargs):
-        # if self.profile['pn'] == 10000:
-        #     # 10000 (test) owner, skip auto login check
-        #     return
+        if self.profile['pn'] == 10000:
+            # 10000 (test) owner, skip auto login check
+            return
 
-        if self.profile['pn'] in (55532, 10000):
+        if self.profile['pn'] in (55532, ):
             # all user use holder's account
             _user = {'user':'55532', 'password':'987012', 'mask':10, 'coin':60, 'ends':100}
             self.user = _user
@@ -681,11 +717,11 @@ class PageHandler(BaseHandler):
                                           kwargs['user_ip'], kwargs['user_mac']])
 
         if response.status in ('SUCCESS', ):
-            logger.info('{} auto login successfully, mac:{}'.format(_user['user'], kwargs['user_mac']))
+            access_log.info('{} auto login successfully, mac:{}'.format(_user['user'], kwargs['user_mac']))
         elif isinstance(response.result, HTTPError) and response.result.status_code in (435,):
-            logger.info('{} has been authed, mac:{}'.format(_user['user'], kwargs['user_mac']))
+            access_log.info('{} has been authed, mac:{}'.format(_user['user'], kwargs['user_mac']))
         else:
-            logger.info('{}auto login failed, {}'.format(_user['user'], response.result))
+            access_log.info('{}auto login failed, {}'.format(_user['user'], response.result))
             return
 
         self.task_resp = response
@@ -697,7 +733,7 @@ class PageHandler(BaseHandler):
         response = client.fetch(url)
         result = json_decoder(response.body)
         if 'openid' not in result:
-            logger.error('Get weixin account\'s openid failed, msg: {}'.format(result))
+            access_log.error('Get weixin account\'s openid failed, msg: {}'.format(result))
             raise HTTPError(500)
 
         return result['openid']
@@ -721,12 +757,12 @@ class PageHandler(BaseHandler):
 
         result = json_decoder(response.body)
         if 'openid' not in result:
-            logger.error('Get weixin account\'s openid failed, msg: {}'.format(result))
+            access_log.error('Get weixin account\'s openid failed, msg: {}'.format(result))
             raise HTTPError(500)
 
         openid =  result['openid']
 
-        logger.info('openid: {} login by weixin'.format(openid))
+        access_log.info('openid: {} login by weixin'.format(openid))
         user, password = '', ''
         _user = account.get_user(openid, column='weixin', appid=self.profile['appid'])
         if not _user:
@@ -740,7 +776,7 @@ class PageHandler(BaseHandler):
             
         # check ac ip
         if kwargs['ac_ip'] not in AC_CONFIGURE:
-            logger.error('not avaiable ac & ap')
+            access_log.error('not avaiable ac & ap')
             raise HTTPError(403, reason='Unknown AC,ip : {}'.format(kwargs['ac_ip']))
 
         if self.profile['ispri']:
@@ -760,11 +796,11 @@ class PageHandler(BaseHandler):
                                                 kwargs['user_ip'], kwargs['user_mac']])
 
         if response.status in ('SUCCESS', ):
-            logger.info('{} weixin login successfully, mac:{}'.format(_user['user'], kwargs['user_mac']))
+            access_log.info('{} weixin login successfully, mac:{}'.format(_user['user'], kwargs['user_mac']))
         elif isinstance(response.result, HTTPError) and response.result.status_code in (435,):
-            logger.info('{} has been authed, mac:{}'.format(_user['user'], kwargs['user_mac']))
+            access_log.info('{} has been authed, mac:{}'.format(_user['user'], kwargs['user_mac']))
         else:
-            logger.info('{}auto login failed, {}'.format(_user['user'], response.result))
+            access_log.info('{}auto login failed, {}'.format(_user['user'], response.result))
             return
 
         self.task_resp = response
@@ -773,7 +809,7 @@ class PageHandler(BaseHandler):
     def timeout(self, sock, ac_ip, header, user_mac):
         '''
         '''
-        logger.info('ip: %s timeout', self.request.remote_ip)
+        access_log.info('ip: %s timeout', self.request.remote_ip)
         portal.timeout(sock, ac_ip, header, user_mac)
 
     def calc_sign(self, *args):
@@ -782,7 +818,6 @@ class PageHandler(BaseHandler):
                        mac, ssid, bssid, secretkey) 
         '''
         data = ''.join(args)
-        # logger.info('calc md5: {}'.format(data))
         return utility.md5(data).hexdigest()
 
 class PortalHandler(BaseHandler):
@@ -803,7 +838,7 @@ class PortalHandler(BaseHandler):
         openid = self.get_argument('openId')
         extend = self.get_argument('extend')
 
-        logger.info('openid:{}, tid: {}'.format(openid, tid))
+        access_log.info('openid:{}, tid: {}'.format(openid, tid))
 
         kwargs = self.b64decode(extend)
         user, password = '',''
@@ -820,7 +855,7 @@ class PortalHandler(BaseHandler):
         ac_ip = kwargs['ac_ip']
         # check ac ip
         if ac_ip not in AC_CONFIGURE:
-            logger.error('not avaiable ac & ap')
+            access_log.error('not avaiable ac & ap')
             raise HTTPError(403, reason='AC ip error')
 
         ap_mac = kwargs['ap_mac']
@@ -855,13 +890,13 @@ class PortalHandler(BaseHandler):
                 # has been authed
                 pass
             else:
-                logger.error('Auth failed, {}'.format(response.traceback))
+                access_log.error('Auth failed, {}'.format(response.traceback))
                 raise response.result
         
         token = utility.token(self.user['user'])
         self.render_json_response(Code=200, Msg='OK', user=self.user['user'], token=token)
         # self.redirect(config['bidong'] + 'account/{}?token={}'.format(user, token))
-        logger.info('%s login successfully, ip: %s', self.user['user'], self.request.remote_ip)
+        access_log.info('%s login successfully, ip: %s', self.user['user'], self.request.remote_ip)
 
 
     # @_trace_wrapper
@@ -878,7 +913,7 @@ class PortalHandler(BaseHandler):
         ac_ip = self.get_argument('ac_ip')
         # check ac ip
         if ac_ip not in AC_CONFIGURE:
-            logger.error('not avaiable ac & ap')
+            access_log.error('not avaiable ac & ap')
             raise HTTPError(403, reason='AC ip error')
 
         ap_mac = self.get_argument('ap_mac')
@@ -963,20 +998,20 @@ class PortalHandler(BaseHandler):
             account.update_mac_record(self.user['user'], user_mac, self.agent_str)
         else:
             if isinstance(response.result, HTTPError) and response.result.status_code in (435, ):
-                logger.info('user:{} has been authed'.format(self.user['user']))
+                access_log.info('user:{} has been authed'.format(self.user['user']))
                 # has been authed
                 pass
             else:
-                logger.info('user:{}, pwd: {}'.format(self.user['user'], 
+                access_log.info('user:{}, pwd: {}'.format(self.user['user'], 
                                                       ''.join([utility.generate_password(3), self.user['passwork'].reverse()])))
-                logger.error('Auth failed, {}'.format(response.traceback))
+                access_log.error('Auth failed, {}'.format(response.traceback))
                 
                 raise response.result 
 
 
         token = utility.token(self.user['user'])
         self.render_json_response(User=self.user['user'], Token=token, Code=200, Msg='OK')
-        logger.info('%s login successfully, ip: %s', self.user['user'], self.request.remote_ip)
+        access_log.info('%s login successfully, ip: %s', self.user['user'], self.request.remote_ip)
 
 EXPIRE = 7200
 
@@ -1073,29 +1108,29 @@ def ac_data_handler(sock, data, addr):
             start = 32 if header.ver == 0x02 else 16
             attrs = portal.Attributes.unpack(header.num, data[start:])
             if not attrs.mac:
-                logger.info('User quit, ip: {}'.format(socket.inet_ntoa(header.ip)))
+                access_log.info('User quit, ip: {}'.format(socket.inet_ntoa(header.ip)))
                 return
             #
             mac = []
             for b in attrs.mac:
                 mac.append('{:X}'.format(ord(b)))
             mac = ':'.join(mac)
-            logger.info('User quit, mac: {}'.format(mac))
+            access_log.info('User quit, mac: {}'.format(mac))
 
-def init_log(log_folder, log_config, port):
-    global logger
-    import logging
-    import logging.config
-    log_config['handlers']['file']['filename'] = os.path.join(log_folder, 
-                                                              '{}_{}.log'.format(log_config['handlers']['file']['filename'], port))
-    logging.config.dictConfig(log_config)
-    logger = logging.getLogger()
-    logger.propagate = False
+# def init_log(log_folder, log_config, port):
+#     global logger
+#     import logging
+#     import logging.config
+#     log_config['handlers']['file']['filename'] = os.path.join(log_folder, 
+#                                                               '{}_{}.log'.format(log_config['handlers']['file']['filename'], port))
+#     logging.config.dictConfig(log_config)
+#     logger = logging.getLogger()
+#     logger.propagate = False
 
 def main():
     tornado.options.parse_command_line()
 
-    init_log(config['log_folder'], config['logging_config'], options.port)
+    # init_log(config['log_folder'], config['logging_config'], options.port)
 
     portal_pid = os.path.join(config['RUN_PATH'], 'portal/p_{}.pid'.format(options.port))
     with open(portal_pid, 'w') as f:
@@ -1108,7 +1143,7 @@ def main():
     start = index*step
 
 
-    portal.init(config['portal_config'], logger, xrange(start, start+step))
+    portal.init(config['portal_config'], None, xrange(start, start+step))
 
     account.setup(config['database'])
 
@@ -1126,7 +1161,7 @@ def main():
     for udp_sock in udp_sockets:
         add_udp_handler(udp_sock, '', io_loop)
 
-    logger.info('Portal Server Listening:{} Started'.format(options.port))
+    app_log.info('Portal Server Listening:{} Started'.format(options.port))
     io_loop.start()
 
 if __name__ == '__main__':

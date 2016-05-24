@@ -165,6 +165,9 @@ def get_bd_user(user):
     '''
     return store.get_bd_user(user) or store.get_bd_user2(user)
 
+def add_user(self, user, password, appid='', tid='', mobile='', ends=2**5):
+    return store.add_user(user, password, appid, tid, mobile, ends)
+
 def get_user(value, column='weixin', appid=''):
     _user = store.get_user(value, column=column, appid=appid) or store.get_user2(value, column=column, appid=appid)
     return _user

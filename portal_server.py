@@ -955,11 +955,13 @@ class PortalHandler(BaseHandler):
 
         if password not in (_user['password'], utility.md5(_user['password']).hexdigest()):
             # password or user account error
+            access_log.error('{} password error, pwd_{}'.format(_user['user'], _user['password']))
             raise HTTPError(401, reason=bd_errs[431])
 
         # check account status & account ends number on networt
         if _user['mask']>>30 & 1:
             # raise HTTPError(403, reason='Account has been frozened')
+            access_log.error('{} has been frozened, mask: {}'.format(_user['user'], _user['mask']))
             raise HTTPError(403, reason=bd_errs[434])
 
         self.user = _user

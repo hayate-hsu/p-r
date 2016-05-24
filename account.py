@@ -13,6 +13,7 @@ from MySQLdb import (IntegrityError)
 import logging
 logger = logging.getLogger()
 
+import datetime
 import utility
 # import settings
 # import config
@@ -49,7 +50,7 @@ def get_billing_policy(nas_addr, ap_mac, ssid):
             return profile
 
     # get pn by ap mac
-    result = mongo.find_one('ap_record', {'mac':ap_mac})
+    result = mongo.find_one('aps_bind', {'mac':ap_mac})
 
     if result and result['_location']:
         pn = result['_location'].split(',')[1]

@@ -284,8 +284,13 @@ class BaseHandler(tornado.web.RequestHandler):
         self.check_app()
         
         if self.agent_str:
-            self.agent = user_agents.parse(self.agent_str)
-            self.is_mobile = self.agent.is_mobile
+            try:
+                self.agent = user_agents.parse(self.agent_str)
+                self.is_mobile = self.agent.is_mobile
+            except UnicodeDecodeError:
+                access_log.warning('Unicode decode error, agent str: {}'.format(self.agent_str))
+                # assume user platfrom is mobile
+                self.is_mobile = True
 
     def check_app(self):
         '''

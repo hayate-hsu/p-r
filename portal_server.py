@@ -27,8 +27,6 @@ define('total', default=1, help='portal server total number , used for serial nu
 
 # log configuration
 define('log_file_prefix', type=str, default='/var/log/radiusd/portal_8880.log')
-define('log_rotate_when', type=str, default='D', help='')
-define('log_rotate_interval', type=int, default=1)
 define('log_rotate_mode', type=str, default='time', help='time or size')
 
 import errno

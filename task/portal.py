@@ -39,7 +39,7 @@ _SERIAL_NO_ = itertools.cycle(xrange(2**15))
 _TIMEOUT_ = 5
 _SECRET_ = ''
 
-@celery.task
+@celery.task(throws=(HTTPError,))
 def login(_user, ac_ip, user_ip, user_mac):
     '''
         user_ip: 32bit 

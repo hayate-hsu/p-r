@@ -53,7 +53,7 @@ def get_billing_policy(nas_addr, ap_mac, ssid):
     result = mongo.find_one('aps_bind', {'mac':ap_mac})
 
     if result and result['_location']:
-        pn = result['_location'].split(',')[1]
+        pn = result['_location'].split(',')[-1]
         # get pn policy by ap mac & ssid
         profile = store.query_pn_policy(pn=pn, ssid=ssid)
         # profile = store.query_ap_policy(ap_mac, ssid)
@@ -165,7 +165,7 @@ def get_bd_user(user):
     '''
     return store.get_bd_user(user) or store.get_bd_user2(user)
 
-def add_user(self, user, appid='', tid='', mobile='', ends=2**5):
+def add_user(user, appid='', tid='', mobile='', ends=2**5):
     password = utility.generate_password(6)
     return store.add_user(user, password, appid, tid, mobile, ends)
 

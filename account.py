@@ -186,7 +186,12 @@ def update_mac_record(user, mac, agent):
     record = store.get_user_mac_record(user, mac)
     if record:
         is_update = True
-    store.update_mac_record(user, mac, agent, is_update)
+    try:
+        store.update_mac_record(user, mac, agent, is_update)
+    except IntegrityError:
+        # duplicate entry
+        pass
+
 
 def query_ap_policy(ap_mac, ssid):
     return store.query_ap_policy(ap_mac, ssid)

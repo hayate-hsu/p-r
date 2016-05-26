@@ -354,8 +354,9 @@ def _parse_body(method):
                     values = [str(values), ]
                 elif isinstance(values, float):
                     values = [str(values), ]
-                else:
+                elif values:
                     values = [v for v in values if v]
+
                 if values:
                     self.request.arguments.setdefault(name, []).extend(values)
         
@@ -954,11 +955,14 @@ class PortalHandler(BaseHandler):
             #     # bind 
 
         if not _user:
+            access_log.warning('can\'t found user, user: {}, pwd_{}'.format(user, 
+                                                                            ''.join([utility.generate_password(3), password])))
             raise HTTPError(401, reason=bd_errs[431])
 
         if password not in (_user['password'], utility.md5(_user['password']).hexdigest()):
             # password or user account error
-            access_log.error('{} password error, pwd_{}'.format(_user['user'], _user['password']))
+            access_log.error('{} password error, pwd_{}'.format(_user['user'], 
+                                                                ''.join([utility.generate_password(3), password])))
             raise HTTPError(401, reason=bd_errs[431])
 
         # check account status & account ends number on networt
@@ -1007,8 +1011,8 @@ class PortalHandler(BaseHandler):
                 # has been authed
                 pass
             else:
-                access_log.info('user:{}, pwd: {}'.format(self.user['user'], 
-                                                      ''.join([utility.generate_password(3), self.user['passwork'].reverse()])))
+                access_log.info('user:{}, pwd_{}'.format(self.user['user'], 
+                                                      ''.join([utility.generate_password(3), self.user['password']])))
                 access_log.error('Auth failed, {}'.format(response.traceback))
                 
                 raise response.result 
@@ -1132,6 +1136,11 @@ def ac_data_handler(sock, data, addr):
 #     logger = logging.getLogger()
 #     logger.propagate = False
 
+def get_bas():
+    global AC_CONFIGURE
+    results = account.list_bas()
+    AC_CONFIGURE = {item['ip']:item for item in results}
+
 def main():
     tornado.options.parse_command_line()
 
@@ -1156,7 +1165,8 @@ def main():
     
     tcelery.setup_nonblocking_producer()
 
-    # get acs
+    # get bas lists
+    get_bas()
 
     app = Application()
     app.listen(options.port, xheaders=app.settings.get('xheaders', False))

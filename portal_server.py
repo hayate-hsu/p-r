@@ -190,6 +190,14 @@ class BaseHandler(tornado.web.RequestHandler):
 
         self.finish(self.render_string(filename, **kwargs))
 
+    def _get_argument(self, name, default, source, strip=True):
+        args = self._get_arguments(name, source, strip=strip)
+        if not args:
+            if default is self._ARG_DEFAULT:
+                raise tornado.web.MissingArgumentError(name)
+            return default
+        return args[0]
+
     def set_status(self, status_code, reason=None):
         '''
             Set custom error resson
@@ -216,6 +224,9 @@ class BaseHandler(tornado.web.RequestHandler):
             self.finish()
         else:
             # self.render('error.html', Code=status_code, Msg=self._reason)
+            if status_code in (427,):
+                self.render_json_response(Code=status_code, Msg=self._reason, pn=self.profile['pn'])
+            
             self.render_json_response(Code=status_code, Msg=self._reason)
 
     def _handle_request_exception(self, e):
@@ -442,7 +453,6 @@ class TestHandler(BaseHandler):
     # def get(self):
     #     self.render_json_response(Code=200, Msg='OK')
     @tornado.gen.coroutine
-    @_trace_wrapper
     def get(self):
         response = yield tornado.gen.Task(portal.sleep.apply_async, args=[3,])
         # response = portal.sleep.apply_async(args=[3,])
@@ -539,7 +549,7 @@ class PageHandler(BaseHandler):
         kwargs = {}
         accept = self.request.headers.get('Accept', 'text/html')
 
-        kwargs['ac_ip'] = self.get_argument('wlanacip', '') or self.get_argument('nasip', '')
+        kwargs['ac_ip'] = self.get_argument('wlanacip', '') or self.get_argument('nasip', '') or self.get_argument('wip', '')
         if not kwargs['ac_ip']:
             access_log.error('can\'t found ac parameter, please check ac url configuration')
             # doesn't contain ac_ip parameter, return redirect response
@@ -550,6 +560,8 @@ class PageHandler(BaseHandler):
             return
 
         self.parse_ac_parameters(kwargs)
+
+        access_log.info('request kwargs: {}'.format(kwargs))
 
         url = kwargs['firsturl']
         
@@ -649,27 +661,39 @@ class PageHandler(BaseHandler):
         if kwargs['ac_ip'] not in AC_CONFIGURE:
             raise HTTPError(400, reason='Unknown AC: {}'.format(kwargs['ac_ip']))
 
-        kwargs['vlan'] = self.get_argument('vlan', 1)
-        kwargs['ssid'] = self.get_argument('ssid', 'NS_GOV')
-        kwargs['user_ip'] = self.get_argument('wlanuserip', '') or self.get_argument('userip', '')
+        if not AC_CONFIGURE[kwargs['ac_ip']]['mask']: 
+            kwargs['vlan'] = self.get_argument('vlan', 1)
+            kwargs['ssid'] = self.get_argument('ssid', 'NS_GOV')
+            kwargs['user_ip'] = self.get_argument('wlanuserip', '') or self.get_argument('userip', '')
 
-        # user mac address 
-        mac = self.get_argument('mac', '') or self.get_argument('wlanstamac', '') 
-        if not mac:
-            raise HTTPError(400, 'mac address can\'t be none')
-        kwargs['user_mac'] = utility.format_mac(mac)
+            # user mac address 
+            mac = self.get_argument('mac', '') or self.get_argument('wlanstamac', '') 
+            if not mac:
+                raise HTTPError(400, 'mac address can\'t be none')
+            kwargs['user_mac'] = utility.format_mac(mac)
 
-        # ap mac address
-        # 00:00:00:00:00:00 - can't get ap mac address
-        ap_mac = self.get_argument('apmac', '') or self.get_argument('wlanapmac', '00:00:00:00:00:01')
-        kwargs['ap_mac'] = utility.format_mac(ap_mac)
+            # ap mac address
+            # 00:00:00:00:00:00 - can't get ap mac address
+            ap_mac = self.get_argument('apmac', '') or self.get_argument('wlanapmac', '00:00:00:00:00:01')
+            kwargs['ap_mac'] = utility.format_mac(ap_mac)
 
-        try:
-            kwargs['firsturl'] = self.get_argument('wlanuserfirsturl', '') or self.get_argument('url', '') or self.get_argument('userurl', '')
-            kwargs['urlparam'] = self.get_argument('urlparam', '')
-        except:
+            try:
+                kwargs['firsturl'] = self.get_argument('wlanuserfirsturl', '') or self.get_argument('url', '') or self.get_argument('userurl', '')
+                kwargs['urlparam'] = self.get_argument('urlparam', '')
+            except:
+                kwargs['firsturl'] = config['bidong']
+                # kwargs['firsturl'] = 'http://wwww.bidongwifi.com/'
+                kwargs['urlparam'] = ''
+        else:
+            # bas mask == 1
+            kwargs['vlan'] = ''
+            kwargs['ssid'] = 'BD_TEST'
+            kwargs['user_ip'] = self.get_argument('userip')
+            mac = self.get_argument('MAC')
+            kwargs['user_mac'] = utility.format_mac(mac)
+            ap_mac = ''
+
             kwargs['firsturl'] = config['bidong']
-            # kwargs['firsturl'] = 'http://wwww.bidongwifi.com/'
             kwargs['urlparam'] = ''
 
     @tornado.gen.coroutine
@@ -824,6 +848,13 @@ class PageHandler(BaseHandler):
         data = ''.join(args)
         return utility.md5(data).hexdigest()
 
+class GatewayHandler(BaseHandler):
+    def get(self, path):
+        kwargs = {} 
+        kwargs['user_ip'] = self.get_argument('wlanuserip', '') or self.get_argument('userip', '')
+
+        self.render(path, **kwargs)
+
 class PortalHandler(BaseHandler):
     '''
         Handler portal auth request
@@ -917,7 +948,7 @@ class PortalHandler(BaseHandler):
         ac_ip = self.get_argument('ac_ip')
         # check ac ip
         if ac_ip not in AC_CONFIGURE:
-            access_log.error('not avaiable ac & ap')
+            access_log.error('not avaiable ac: {}'.format(ac_ip))
             raise HTTPError(403, reason='AC ip error')
 
         ap_mac = self.get_argument('ap_mac')
@@ -980,8 +1011,14 @@ class PortalHandler(BaseHandler):
 
         # check private network
         if profile['ispri']:
+            # check mobile argument
+            # mobile = self.get_argument('pmobile', '')
+            # if mobile:
+            #     # try to bind user's pns
+            #     account.bind_avaiable_pns(self.user['user'], mobile)
+
             # current network is private, check user privilege
-            ret, err = account.check_pn_privilege(profile['pn'], _user['user'])
+            ret, err = account.check_pn_privilege(profile['pn'], self.user['user'])
             if not ret:
                 raise err
         

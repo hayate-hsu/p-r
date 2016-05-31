@@ -381,10 +381,40 @@ class Store():
             cur.execute(sql)
             return cur.fetchone()
 
-    def bind_private_pn(self, pn, user, mobile):
+    def bind_avaiable_pns(self, user, mobile):
+        '''
+        '''
         with Connect(self.dbpool) as conn:
             cur = conn.cursor(MySQLdb.cursors.DictCursor)
-            pass
+            results = []
+
+            cur.execute('select * from pn_policy where ispri = 1')
+            pns = cur.fetchall()
+            cur.execute('select table_name from information_schema.tables where table_name like "pn_%"')
+            tables = cur.fetchall()
+
+            tables = [item['table_name'] for item in tables]
+
+            pns = [item for item in pns if 'pn_{}'.format(item['pn']) in tables]
+
+
+            for item in pns:
+                sql = 'select id from pn_{} where mobile = "{}"'.format(item['pn'], mobile)
+                cur.execute(sql)
+                if cur.fetchone():
+                    results.append(item)
+
+            if results:
+                for item in results:
+                    sql = 'insert into pn_bind(user, holder, mobile) values("{}", {}, "{}")'.format(user, item['pn'], mobile)
+                    try:
+                        cur.execute(sql)
+                    except MySQLdb.IntegrityError:
+                        # existed bind pair
+                        pass
+
+            conn.commit()
+            return results
 
 
     def merge_app_account(self, _id, user_mac):

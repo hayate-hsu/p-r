@@ -44,27 +44,28 @@ def get_billing_policy(nas_addr, ap_mac, ssid):
         3. check ac profile
     '''
     # check ap prifile in cache?
-    if ap_mac in AP_MAPS:
+    if ap_mac and ap_mac in AP_MAPS:
         profile = PN_PROFILE[AP_MAPS[ap_mac]].get(ssid, None)
         if profile and int(time.time()) < profile['expired']:
             return profile
 
-    # get pn by ap mac
-    result = mongo.find_one('aps_bind', {'mac':ap_mac})
+    if ap_mac:
+        # get pn by ap mac
+        result = mongo.find_one('aps_bind', {'mac':ap_mac})
 
-    if result and result['_location']:
-        pn = result['_location'].split(',')[-1]
-        # get pn policy by ap mac & ssid
-        profile = store.query_pn_policy(pn=pn, ssid=ssid)
-        # profile = store.query_ap_policy(ap_mac, ssid)
-        logger.info('mac:{} ssid:{} ---- {}'.format(ap_mac, ssid, profile))
+        if result and result['_location']:
+            pn = result['_location'].split(',')[-1]
+            # get pn policy by ap mac & ssid
+            profile = store.query_pn_policy(pn=pn, ssid=ssid)
+            # profile = store.query_ap_policy(ap_mac, ssid)
+            logger.info('mac:{} ssid:{} ---- {}'.format(ap_mac, ssid, profile))
 
-        if profile:
-            profile['expired'] = int(time.time()) + EXPIRE
-            AP_MAPS[ap_mac] = profile['pn']
-            PN_PROFILE[profile['pn']][profile['ssid']] = profile
+            if profile:
+                profile['expired'] = int(time.time()) + EXPIRE
+                AP_MAPS[ap_mac] = profile['pn']
+                PN_PROFILE[profile['pn']][profile['ssid']] = profile
 
-            return profile
+                return profile
 
     # get pn policy by ssid
     profile = store.query_pn_policy(ssid=ssid)
@@ -128,6 +129,8 @@ def check_pn_privilege(pn, user):
 
     return True, None
 
+def bind_avaiable_pns(user, mobile):
+    store.bind_avaiable_pns(user, mobile)
 
 def _check_expire_date(_user): 
     '''

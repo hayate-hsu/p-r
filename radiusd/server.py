@@ -37,8 +37,6 @@ EXPIRE = 7200
 AP_MAPS = {}
 PN_PROFILE = collections.defaultdict(dict)
 
-AC_CONFIGURE = {}
-
 __verson__ = '0.7'
 
 class PacketError(Exception):pass
@@ -117,7 +115,6 @@ class RADIUS(host.Host, protocol.DatagramProtocol):
         raise NotImplementedError('Attempted to use a pure base class')
 
     def datagramReceived(self, datagram, (host, port)):
-        # bas = store.get_bas(host)
         bas = account.get_bas(host)
         if not bas:
             return log.msg('Dropping packet from unknown host ' + host,level=logging.DEBUG)
@@ -303,8 +300,8 @@ def run(config):
     acctport = config['acctport']
     adminport = config['adminport']
 
-    global AC_CONFIGURE
-    AC_CONFIGURE = config['ac_policy']
+    # global AC_CONFIGURE
+    # AC_CONFIGURE = config['ac_policy']
 
     #parse dictfile
     dictfile = config.get('dictfile', None)

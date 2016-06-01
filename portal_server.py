@@ -594,8 +594,8 @@ class PageHandler(BaseHandler):
             # user from weixin, parse code & and get openid
 
             # check agent
-            agent_str = self.request.headers.get('User-Agent', '')
-            if 'MicroMessenger' not in agent_str:
+            # agent_str = self.request.headers.get('User-Agent', '')
+            if 'MicroMessenger' not in self.agent_str:
                 self.render_exception(HTTPError(400, 'Abnormal agent'))
                 return
 
@@ -928,8 +928,16 @@ class PortalHandler(BaseHandler):
                 raise response.result
         
         token = utility.token(self.user['user'])
-        self.render_json_response(Code=200, Msg='OK', user=self.user['user'], token=token)
-        # self.redirect(config['bidong'] + 'account/{}?token={}'.format(user, token))
+        
+        if ('WeChat' not in self.agent_str) and kwargs['firsturl']:
+            # auth by other pc 
+            url = kwargs['firsturl']
+            if kwargs['urlparam']:
+                url = ''.join([url, '?', kwargs['urlparam']])
+            self.redirect(url)
+        else:
+            self.render_json_response(Code=200, Msg='OK', user=self.user['user'], token=token)
+            # self.redirect(config['bidong'] + 'account/{}?token={}'.format(user, token))
         access_log.info('%s login successfully, ip: %s', self.user['user'], self.request.remote_ip)
 
 

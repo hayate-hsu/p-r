@@ -157,7 +157,6 @@ class BaseHandler(tornado.web.RequestHandler):
             env_kwargs = dict(
                 handler = self,
                 request = self.request,
-                # current_user = self.current_user
                 locale = self.locale,
                 _ = self.locale.translate,
                 static_url = self.static_url,
@@ -578,8 +577,8 @@ class PageHandler(BaseHandler):
             _user, self.task_resp = self.task_resp.result, None
             if _user:
                 if accept.startswith('application/json'):
-                    token = utility.token(_user['user'])
-                    self.render_json_response(User=_user['user'], Token=token, Mask=_user['mask'], 
+                    token = utility.token(self.user['user'])
+                    self.render_json_response(User=self.user['user'], Token=token, Mask=self.user['mask'], 
                                               Code=200, Msg='OK')
                 elif url:
                     # self.set_header('Access-Control-Allow-Origin', '*')
@@ -691,7 +690,7 @@ class PageHandler(BaseHandler):
             kwargs['user_ip'] = self.get_argument('userip')
             mac = self.get_argument('MAC')
             kwargs['user_mac'] = utility.format_mac(mac)
-            ap_mac = ''
+            kwargs['ap_mac'] = ''
 
             kwargs['firsturl'] = config['bidong']
             kwargs['urlparam'] = ''
@@ -899,16 +898,16 @@ class PortalHandler(BaseHandler):
 
         # vlanId = self.get_argument('vlan')
         ssid = kwargs['ssid']
-        profile = account.get_billing_policy(ac_ip, ap_mac, ssid)
+        self.profile = account.get_billing_policy(ac_ip, ap_mac, ssid)
 
         # check private network
-        if profile['ispri']:
-            ret, err = account.check_pn_privilege(profile['pn'], _user['user'])
+        if self.profile['ispri']:
+            ret, err = account.check_pn_privilege(self.profile['pn'], _user['user'])
             if not ret:
                 raise err
         
         # check billing
-        if not profile['policy']:
+        if not self.profile['policy']:
             self.expired = account.check_account_balance(self.user)
             if self.expired:
                 # raise HTTPError(403, reason='Account has no left time')
@@ -958,7 +957,7 @@ class PortalHandler(BaseHandler):
         # vlanId = self.get_argument('vlan')
         ssid = self.get_argument('ssid')
 
-        profile = account.get_billing_policy(ac_ip, ap_mac, ssid)
+        self.profile = account.get_billing_policy(ac_ip, ap_mac, ssid)
 
         # flags = self.get_argument('flags', 0)
         _user = ''
@@ -979,11 +978,6 @@ class PortalHandler(BaseHandler):
             password = _user['password']
         else:
             _user = account.get_bd_user(user)
-
-            # check mobile account
-            # if profile['ispri']:
-            #     mobile = self.get_argument('mobile', '')
-            #     # bind 
 
         if not _user:
             access_log.warning('can\'t found user, user: {}, pwd_{}'.format(user, 
@@ -1010,7 +1004,7 @@ class PortalHandler(BaseHandler):
             raise HTTPError(403, reason=bd_errs[451])
 
         # check private network
-        if profile['ispri']:
+        if self.profile['ispri']:
             # check mobile argument
             # mobile = self.get_argument('pmobile', '')
             # if mobile:
@@ -1018,14 +1012,14 @@ class PortalHandler(BaseHandler):
             #     account.bind_avaiable_pns(self.user['user'], mobile)
 
             # current network is private, check user privilege
-            ret, err = account.check_pn_privilege(profile['pn'], self.user['user'])
+            ret, err = account.check_pn_privilege(self.profile['pn'], self.user['user'])
             if not ret:
                 raise err
         
         # check billing
         # nanshan account user network freedom (check by ac_ip)
         # if not profile['policy']:
-        if not profile['policy']:
+        if not self.profile['policy']:
             self.expired = account.check_account_balance(self.user)
             if self.expired:
                 # raise HTTPError(403, reason='Account has no left time')

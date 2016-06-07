@@ -225,8 +225,8 @@ class BaseHandler(tornado.web.RequestHandler):
             # self.render('error.html', Code=status_code, Msg=self._reason)
             if status_code in (427,):
                 self.render_json_response(Code=status_code, Msg=self._reason, pn=self.profile['pn'])
-            
-            self.render_json_response(Code=status_code, Msg=self._reason)
+            else:
+                self.render_json_response(Code=status_code, Msg=self._reason)
 
     def _handle_request_exception(self, e):
         if isinstance(e, tornado.web.Finish):
@@ -559,8 +559,6 @@ class PageHandler(BaseHandler):
             return
 
         self.parse_ac_parameters(kwargs)
-
-        access_log.info('request kwargs: {}'.format(kwargs))
 
         url = kwargs['firsturl']
         
@@ -911,8 +909,8 @@ class PortalHandler(BaseHandler):
             self.expired = account.check_account_balance(self.user)
             if self.expired:
                 # raise HTTPError(403, reason='Account has no left time')
+                access_log.info('{} has no left time'.format(self.user['user']))
                 raise HTTPError(403, reason=bd_errs[450])
-
 
         response = yield tornado.gen.Task(portal.login.apply_async, args=[self.user,  ac_ip, user_ip, user_mac])
 
@@ -931,13 +929,13 @@ class PortalHandler(BaseHandler):
         
         if ('WeChat' not in self.agent_str) and kwargs['firsturl']:
             # auth by other pc 
-            url = kwargs['firsturl']
-            if kwargs['urlparam']:
-                url = ''.join([url, '?', kwargs['urlparam']])
-            self.redirect(url)
+            self.redirect(config['bidong'] + 'account/{}?token={}'.format(user, token))
+            # url = kwargs['firsturl']
+            # if kwargs['urlparam']:
+            #     url = ''.join([url, '?', kwargs['urlparam']])
+            # self.redirect(url)
         else:
             self.render_json_response(Code=200, Msg='OK', user=self.user['user'], token=token)
-            # self.redirect(config['bidong'] + 'account/{}?token={}'.format(user, token))
         access_log.info('%s login successfully, ip: %s', self.user['user'], self.request.remote_ip)
 
 
@@ -1009,6 +1007,7 @@ class PortalHandler(BaseHandler):
         onlines = account.get_onlines(self.user['user'])
         if user_mac not in onlines and len(onlines) >= self.user['ends']:
             # allow user login ends 
+            access_log.error('{} exceed edns: {}'.format(self.user['user'], self.user['ends']))
             raise HTTPError(403, reason=bd_errs[451])
 
         # check private network
@@ -1161,7 +1160,7 @@ def ac_data_handler(sock, data, addr):
             #
             mac = []
             for b in attrs.mac:
-                mac.append('{:X}'.format(ord(b)))
+                mac.append('{:2X}'.format(ord(b)))
             mac = ':'.join(mac)
             access_log.info('User quit, mac: {}'.format(mac))
 

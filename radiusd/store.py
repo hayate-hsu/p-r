@@ -375,7 +375,10 @@ class Store():
     def check_pn_privilege(self, pn, user):
         '''
         '''
-        with Cursor(self.dbpool) as cur:
+        # with Cursor(self.dbpool) as cur:
+        with Connect(self.dbpool) as conn:
+            conn.commit()
+            cur = conn.cursor(MySQLdb.cursors.DictCursor)
             sql = 'select pn_{pn}.mask from pn_bind, pn_{pn} where pn_bind.user="{user}" and \
                     pn_bind.holder={pn} and pn_{pn}.mobile=pn_bind.mobile'.format(pn=pn, user=user)
             cur.execute(sql)

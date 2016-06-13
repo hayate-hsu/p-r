@@ -1030,6 +1030,7 @@ class PortalHandler(BaseHandler):
             self.expired = account.check_account_balance(self.user)
             if self.expired:
                 # raise HTTPError(403, reason='Account has no left time')
+                access_log.error('{} has no time left, can\'t access {} network'.format(self.user['user'], self.profile['pn']))
                 raise HTTPError(403, reason=bd_errs[450])
 
         # send challenge to ac

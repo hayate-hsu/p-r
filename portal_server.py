@@ -929,7 +929,7 @@ class PortalHandler(BaseHandler):
         
         if 'WeChat' not in self.agent_str:
             # auth by other pc 
-            self.redirect(config['bidong'] + 'account/{}?token={}'.format(user, token))
+            self.redirect(config['bidong'] + 'account/{}?token={}'.format(self.user['user'], token))
             # url = kwargs['firsturl']
             # if kwargs['urlparam']:
             #     url = ''.join([url, '?', kwargs['urlparam']])

@@ -301,16 +301,14 @@ class Store():
         '''
         with Cursor(self.dbpool) as cur:
             sql = ''
-            # if user.count(':') == 5:
-            #     sql = '''select bd_account.* from mac_history, bd_account 
-            #     where mac_history.mac = "{}" and mac_history.user = bd_account.user'''.format(user)
-            # else:
-            #     sql = 'select * from bd_account where user = "{}"'.format(user)
-            #     if password:
-            #         sql = 'select * from bd_account where user = "{}" and password = "{}"'.format(user, password)
-            sql = 'select * from bd_account where user = "{}"'.format(user)
-            if password:
-                sql = sql + ' and password = "{}"'.format(password)
+            _user = user.replace('-', ':')
+            if _user.count(':') == 5:
+                sql = '''select bd_account.* from mac_history, bd_account 
+                where mac_history.mac = "{}" and bd_account.user = mac_history.user'''.format(_user)
+            else:
+                sql = 'select * from bd_account where user = "{}"'.format(user)
+                if password:
+                    sql = sql + ' and password = "{}"'.format(password)
             cur.execute(sql)
             user = cur.fetchone()
             if user and user['mask']>>5 & 1:

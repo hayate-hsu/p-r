@@ -53,7 +53,8 @@ class CoAClient(protocol.DatagramProtocol):
         self.dict = dict
         self.secret = six.b(str(self.bas['secret']))
         self.addr = self.bas['ip']
-        self.port = self.bas['coa_port']
+        # self.port = self.bas['coa_port']
+        self.port = 3799
         self.debug=debug
         reactor.listenUDP(0, self)
         

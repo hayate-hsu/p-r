@@ -117,6 +117,11 @@ def get_billing_policy2(req):
 
     return get_billing_policy(ac_ip, ap_mac, ssid)
 
+def notify_offline(bas_config):
+    if bas_config['mask'] == 1:
+        pass
+
+
 
 def check_pn_privilege(pn, user):            
     record = store.check_pn_privilege(pn, user)

@@ -684,13 +684,14 @@ class PageHandler(BaseHandler):
         else:
             # bas mask == 1
             kwargs['vlan'] = ''
-            kwargs['ssid'] = 'BD_TEST'
+            kwargs['ssid'] = 'www.gzdjy.com'
             kwargs['user_ip'] = self.get_argument('userip')
-            mac = self.get_argument('MAC')
+            mac = self.get_argument('usermac')
             kwargs['user_mac'] = utility.format_mac(mac)
             kwargs['ap_mac'] = ''
 
-            kwargs['firsturl'] = config['bidong']
+            # kwargs['firsturl'] = config['bidong']
+            kwargs['firsturl'] = self.get_argument('url', '') or config['bidong']
             kwargs['urlparam'] = ''
 
     @tornado.gen.coroutine
@@ -1161,7 +1162,7 @@ def ac_data_handler(sock, data, addr):
             #
             mac = []
             for b in attrs.mac:
-                mac.append('{:2X}'.format(ord(b)))
+                mac.append('{:02X}'.format(ord(b)))
             mac = ':'.join(mac)
             access_log.info('User quit, mac: {}'.format(mac))
 

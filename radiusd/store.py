@@ -301,10 +301,9 @@ class Store():
         '''
         with Cursor(self.dbpool) as cur:
             sql = ''
-            _user = user.replace('-', ':')
-            if _user.count(':') == 5:
+            if user.count(':') == 5:
                 sql = '''select bd_account.* from mac_history, bd_account 
-                where mac_history.mac = "{}" and bd_account.user = mac_history.user'''.format(_user)
+                where mac_history.mac = "{}" and bd_account.user = mac_history.user'''.format(user)
             else:
                 sql = 'select * from bd_account where user = "{}"'.format(user)
                 if password:
@@ -336,15 +335,14 @@ class Store():
         with Connect(self.dbpool) as conn:
             conn.commit()
             cur = conn.cursor(MySQLdb.cursors.DictCursor)
-            # sql = ''
-            # if user.count(':') == 5:
-            #     sql = '''select bd_account.* from mac_history, bd_account 
-            #     where mac_history.mac = "{}" and mac_history.user = bd_account.user'''.format(user)
-            # else:
-            #     sql = 'select * from bd_account where user = "{}"'.format(user)
-            sql = 'select * from bd_account where user = "{}"'.format(user)
-            if password:
-                sql = sql + ' and password = "{}"'.format(password)
+            sql = ''
+            if user.count(':') == 5:
+                sql = '''select bd_account.* from mac_history, bd_account 
+                where mac_history.mac = "{}" and bd_account.user = mac_history.user'''.format(user)
+            else:
+                sql = 'select * from bd_account where user = "{}"'.format(user)
+                if password:
+                    sql = sql + ' and password = "{}"'.format(password)
             cur.execute(sql)
             user = cur.fetchone()
             return user

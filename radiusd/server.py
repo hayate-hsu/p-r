@@ -177,8 +177,12 @@ class RADIUSAccess(RADIUS):
         reply = req.CreateReply()
         reply.source = req.source
         req_user = req.get_user_name()
-        # if req_user == 'user':
-        #     return None 
+        calling_stationid = req.get_calling_stationid()
+
+        # check user
+        if req_user == calling_stationid:
+            # user account is mac address
+            req_user = utility.format_mac(req_user) 
 
         user = account.get_bd_user(req_user)
         if user:
@@ -241,8 +245,15 @@ class RADIUSAccounting(RADIUS):
         for plugin in acct_before_plugins:
             self.midware.process(plugin,req=req)
                  
-        # user = store.get_bd_user_by_mac(req.get_user_name())
-        user = account.get_bd_user(req.get_user_name())
+        req_user = req.get_user_name()
+        calling_stationid = req.get_calling_stationid()
+        # check user
+        if req_user == calling_stationid:
+            # user account is mac address
+            req_user = utility.format_mac(req_user) 
+
+        user = account.get_bd_user(req_user)
+
         if user:
             self.user_trace.push(user['user'],req)        
             # get billing policy

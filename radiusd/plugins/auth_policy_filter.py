@@ -10,7 +10,7 @@ def process(req=None,resp=None,user=None,**kwargs):
     """执行计费策略校验，用户到期检测，用户余额，时长检测"""
 
     #
-    profile = user['policy']
+    profile = user['profile']
     if profile['policy']:
         return resp
 

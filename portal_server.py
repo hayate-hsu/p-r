@@ -488,44 +488,6 @@ class PageHandler(BaseHandler):
     '''
     _WX_IP = 'api.weixin.qq.com'
 
-    def redirect_to_bidong(self):
-        '''
-        '''
-        access_log.info('redirect : {}'.format(self.request.arguments))
-        self.redirect(config['bidong'])
-        self.finish()
-
-    def prepare_wx_wifi(self, **kwargs):
-        wx_wifi = {}
-        wx_wifi['extend'] = self.b64encode(appid=self.profile['appid'], shopid=self.profile['shopid'], **kwargs)
-        wx_wifi['timestamp'] = str(int(time.time()*1000))
-        # portal_server = '{}://{}:{}/wx_auth'.format(self.request.protocol, 
-        #                                             self.request.headers.get('Host'), 
-        #                                             self.request.headers.get('Port'))
-        portal_server = 'http://{}:9898/wx_auth'.format(self.request.headers.get('Host'))
-        
-        # wx_wifi['auth_url'] = tornado.escape.url_escape(portal_server)
-        wx_wifi['auth_url'] = portal_server
-        wx_wifi['sign'] = self.calc_sign(self.profile['appid'], wx_wifi['extend'], wx_wifi['timestamp'], 
-                                         self.profile['shopid'], wx_wifi['auth_url'], 
-                                         kwargs['user_mac'], self.profile['ssid'], kwargs['ap_mac'], 
-                                         self.profile['secret'])
-
-        self.wx_wifi = wx_wifi
-
-    def parse_url_arguments(self, url):
-        '''
-        '''
-        arguments = {}
-        if url.find('?') != -1:
-            url, params = url.split('?')
-            items = params.split('&')
-
-            for item in items:
-                key, value = item.split('=')
-                arguments[key] = value
-
-        return arguments
 
     @_parse_body
     @tornado.gen.coroutine
@@ -551,10 +513,6 @@ class PageHandler(BaseHandler):
         kwargs['ac_ip'] = self.get_argument('wlanacip', '') or self.get_argument('nasip', '') or self.get_argument('wip', '')
         if not kwargs['ac_ip']:
             access_log.error('can\'t found ac parameter, please check ac url configuration')
-            # doesn't contain ac_ip parameter, return redirect response
-            # if user hasn't auth, ac will redirect the next request
-            # with necessary parameters
-            # return self.redirect('http://10.10.1.175:8080/index.html')
             self.redirect_to_bidong()
             return
 
@@ -590,9 +548,6 @@ class PageHandler(BaseHandler):
 
         if 'wx/m_bidong/onetonet' in url:
             # user from weixin, parse code & and get openid
-
-            # check agent
-            # agent_str = self.request.headers.get('User-Agent', '')
             if 'MicroMessenger' not in self.agent_str:
                 self.render_exception(HTTPError(400, 'Abnormal agent'))
                 return
@@ -617,9 +572,10 @@ class PageHandler(BaseHandler):
                     # redirect to account page
                     _user = response.result
                     token = utility.token(_user['user'])
-                    self.redirect(config['bidong'] + 'account/{}?token={}'.format(_user['user'], token))
-
-                    account.update_mac_record(_user, kwargs['user_mac'], self.agent_str)
+                    self.redirect(config['bidong'] + 'account/{}?token={}'.format(self.user['user'], token))
+                    
+                    if self.profile:
+                        account.update_mac_record(self.user['user'], kwargs['user_mac'], self.profile['duration'], self.agent_str)
 
         # get policy
         kwargs['user'] = ''
@@ -632,7 +588,7 @@ class PageHandler(BaseHandler):
         if accept.startswith('application/json'):
             self.render_json_response(Code=200, Msg='OK', openid='', pn_ssid=pn_ssid, 
                                       pn_note=pn_note, pn_logo=pn_logo,  
-                                      ispri=self.profile['ispri'], pn=self.profile['pn'], 
+                                      ispri=self.profile['policy'] & 2, pn=self.profile['pn'], 
                                       note=self.profile['note'], image=self.profile['logo'], 
                                       logo=self.profile['logo'],
                                       **kwargs)
@@ -642,8 +598,7 @@ class PageHandler(BaseHandler):
         # now all page user login, later after update back to use self.profile['portal']  
         page = self.profile['portal'] or 'login.html'
 
-        self.render(page, openid='', ispri=self.profile['ispri'], 
-        # return self.render('login.html', openid='', ispri=self.profile['ispri'], 
+        self.render(page, openid='', ispri=self.profile['policy'] & 2, 
                     pn=self.profile['pn'], note=self.profile['note'], image=self.profile['logo'], 
                     appid=self.profile['appid'], shopid=self.profile['shopid'], secret=self.profile['secret'], 
                     logo=self.profile['logo'],
@@ -658,7 +613,8 @@ class PageHandler(BaseHandler):
         if kwargs['ac_ip'] not in AC_CONFIGURE:
             raise HTTPError(400, reason='Unknown AC: {}'.format(kwargs['ac_ip']))
 
-        if not AC_CONFIGURE[kwargs['ac_ip']]['mask']: 
+        if not AC_CONFIGURE[kwargs['ac_ip']]['mask'] & 1: 
+            # sangfor device
             kwargs['vlan'] = self.get_argument('vlan', 1)
             kwargs['ssid'] = self.get_argument('ssid', 'NS_GOV')
             kwargs['user_ip'] = self.get_argument('wlanuserip', '') or self.get_argument('userip', '')
@@ -716,13 +672,13 @@ class PageHandler(BaseHandler):
             self.user = _user
 
             # check private network
-            if self.profile['ispri']:
+            if self.profile['policy'] & 2:
                 # current network is private, check user privilege
                 ret, err = account.check_pn_privilege(self.profile['pn'], _user['user'])
                 if not ret:
                     return
 
-            if not self.profile['policy']:
+            if not (self.profile['policy'] & 1):
                 if _user['mask']>>30 & 1:
                     # raise HTTPError(403, reason='Account has been frozened')
                     return
@@ -752,18 +708,6 @@ class PageHandler(BaseHandler):
 
         self.task_resp = response
         
-    def get_openid(self, code):
-        URL = 'https://{}/sns/oauth2/access_token?appid={}&secret={}&code={}&grant_type=authorization_code'
-        url = URL.format(self._WX_IP, config['weixin']['appid'], config['weixin']['secret'], code)
-        client = tornado.httpclient.HTTPClient()
-        response = client.fetch(url)
-        result = json_decoder(response.body)
-        if 'openid' not in result:
-            access_log.error('Get weixin account\'s openid failed, msg: {}'.format(result))
-            raise HTTPError(500)
-
-        return result['openid']
-
     @tornado.gen.coroutine
     def wx_login(self, **kwargs):
         if kwargs['urlparam']:
@@ -796,6 +740,8 @@ class PageHandler(BaseHandler):
             _user = account.create_user(openid, appid=self.profile['appid'])
         if not _user:
             raise HTTPError(400, reason='Should subscribe first')
+
+        self.user = _user
         # user unsubscribe, the account will be forbid
         if _user['mask']>>31 & 1:
             raise HTTPError(401, reason='Account has been frozen')
@@ -805,28 +751,18 @@ class PageHandler(BaseHandler):
             access_log.error('not avaiable ac & ap')
             raise HTTPError(403, reason='Unknown AC,ip : {}'.format(kwargs['ac_ip']))
 
-        if self.profile['ispri']:
-            # current network is private, check user privilege
-            ret, err = account.check_pn_privilege(self.profile['pn'], _user['user'])
-            if not ret:
-                raise err
-
-        if not self.profile['policy']:
-            # ipolicy =0, check billing
-            self.expired = account.check_account_balance(_user)
-            if self.expired:
-                raise HTTPError(403, reason='Account has no left time')
+        self.check_account_privilege()
 
         response = yield tornado.gen.Task(portal.login.apply_async, 
-                                          args=[_user, kwargs['ac_ip'], 
+                                          args=[self.user, kwargs['ac_ip'], 
                                                 kwargs['user_ip'], kwargs['user_mac']])
 
         if response.status in ('SUCCESS', ):
-            access_log.info('{} weixin login successfully, mac:{}'.format(_user['user'], kwargs['user_mac']))
+            access_log.info('{} weixin login successfully, mac:{}'.format(self.user['user'], kwargs['user_mac']))
         elif isinstance(response.result, HTTPError) and response.result.status_code in (435,):
-            access_log.info('{} has been authed, mac:{}'.format(_user['user'], kwargs['user_mac']))
+            access_log.info('{} has been authed, mac:{}'.format(self.user['user'], kwargs['user_mac']))
         else:
-            access_log.info('{}auto login failed, {}'.format(_user['user'], response.result))
+            access_log.info('{}auto login failed, {}'.format(self.user['user'], response.result))
             return
 
         self.task_resp = response
@@ -846,12 +782,71 @@ class PageHandler(BaseHandler):
         data = ''.join(args)
         return utility.md5(data).hexdigest()
 
-class GatewayHandler(BaseHandler):
-    def get(self, path):
-        kwargs = {} 
-        kwargs['user_ip'] = self.get_argument('wlanuserip', '') or self.get_argument('userip', '')
+    def redirect_to_bidong(self):
+        '''
+        '''
+        access_log.info('redirect : {}'.format(self.request.arguments))
+        self.redirect(config['bidong'])
+        self.finish()
 
-        self.render(path, **kwargs)
+    def prepare_wx_wifi(self, **kwargs):
+        wx_wifi = {}
+        wx_wifi['extend'] = self.b64encode(appid=self.profile['appid'], shopid=self.profile['shopid'], **kwargs)
+        wx_wifi['timestamp'] = str(int(time.time()*1000))
+        # portal_server = '{}://{}:{}/wx_auth'.format(self.request.protocol, 
+        #                                             self.request.headers.get('Host'), 
+        #                                             self.request.headers.get('Port'))
+        portal_server = 'http://{}:9898/wx_auth'.format(self.request.headers.get('Host'))
+        
+        # wx_wifi['auth_url'] = tornado.escape.url_escape(portal_server)
+        wx_wifi['auth_url'] = portal_server
+        wx_wifi['sign'] = self.calc_sign(self.profile['appid'], wx_wifi['extend'], wx_wifi['timestamp'], 
+                                         self.profile['shopid'], wx_wifi['auth_url'], 
+                                         kwargs['user_mac'], self.profile['ssid'], kwargs['ap_mac'], 
+                                         self.profile['secret'])
+
+        self.wx_wifi = wx_wifi
+
+    def parse_url_arguments(self, url):
+        '''
+        '''
+        arguments = {}
+        if url.find('?') != -1:
+            url, params = url.split('?')
+            items = params.split('&')
+
+            for item in items:
+                key, value = item.split('=')
+                arguments[key] = value
+
+        return arguments
+
+    def get_openid(self, code):
+        URL = 'https://{}/sns/oauth2/access_token?appid={}&secret={}&code={}&grant_type=authorization_code'
+        url = URL.format(self._WX_IP, config['weixin']['appid'], config['weixin']['secret'], code)
+        client = tornado.httpclient.HTTPClient()
+        response = client.fetch(url)
+        result = json_decoder(response.body)
+        if 'openid' not in result:
+            access_log.error('Get weixin account\'s openid failed, msg: {}'.format(result))
+            raise HTTPError(500)
+
+        return result['openid']
+
+    def _check_account_privilege(self):
+        # check private network
+        if self.profile['policy'] & 2:
+            ret, err = account.check_pn_privilege(self.profile['pn'], self.user['user'])
+            if not ret:
+                raise err
+
+        # check account has billing? 
+        if not (self.profile['policy'] & 1):
+            self.expired = account.check_account_balance(self.user)
+            if self.expired:
+                # raise HTTPError(403, reason='Account has no left time')
+                access_log.info('{} has no left time'.format(self.user['user']))
+                raise HTTPError(403, reason=bd_errs[450])
 
 class PortalHandler(BaseHandler):
     '''
@@ -860,6 +855,21 @@ class PortalHandler(BaseHandler):
     def prepare(self):
         super(PortalHandler, self).prepare()
         self.is_weixin = False
+
+    def _check_account_privilege(self):
+        # check private network
+        if self.profile['policy'] & 2:
+            ret, err = account.check_pn_privilege(self.profile['pn'], self.user['user'])
+            if not ret:
+                raise err
+
+        # check account has billing? 
+        if not (self.profile['policy'] & 1):
+            self.expired = account.check_account_balance(self.user)
+            if self.expired:
+                # raise HTTPError(403, reason='Account has no left time')
+                access_log.info('{} has no left time'.format(self.user['user']))
+                raise HTTPError(403, reason=bd_errs[450])
 
     # @_trace_wrapper
     @_parse_body
@@ -899,25 +909,15 @@ class PortalHandler(BaseHandler):
         ssid = kwargs['ssid']
         self.profile = account.get_billing_policy(ac_ip, ap_mac, ssid)
 
-        # check private network
-        if self.profile['ispri']:
-            ret, err = account.check_pn_privilege(self.profile['pn'], _user['user'])
-            if not ret:
-                raise err
+        # check account privilege
+        self._check_account_privilege()
         
-        # check billing
-        if not self.profile['policy']:
-            self.expired = account.check_account_balance(self.user)
-            if self.expired:
-                # raise HTTPError(403, reason='Account has no left time')
-                access_log.info('{} has no left time'.format(self.user['user']))
-                raise HTTPError(403, reason=bd_errs[450])
-
         response = yield tornado.gen.Task(portal.login.apply_async, args=[self.user,  ac_ip, user_ip, user_mac])
 
-        if response.successful():
+        if response.successful() and self.profile:
             # login successfully 
-            account.update_mac_record(self.user['user'], user_mac, self.agent_str)
+            account.update_mac_record(self.user['user'], user_mac, 
+                                      self.profile['duration'], self.agent_str)
         else:
             if isinstance(response.result, HTTPError) and response.result.status_code in (435, ):
                 # has been authed
@@ -931,14 +931,9 @@ class PortalHandler(BaseHandler):
         if 'WeChat' not in self.agent_str:
             # auth by other pc 
             self.redirect(config['bidong'] + 'account/{}?token={}'.format(self.user['user'], token))
-            # url = kwargs['firsturl']
-            # if kwargs['urlparam']:
-            #     url = ''.join([url, '?', kwargs['urlparam']])
-            # self.redirect(url)
         else:
             self.render_json_response(Code=200, Msg='OK', user=self.user['user'], token=token)
         access_log.info('%s login successfully, ip: %s', self.user['user'], self.request.remote_ip)
-
 
     # @_trace_wrapper
     @_parse_body
@@ -977,10 +972,7 @@ class PortalHandler(BaseHandler):
             
             if not _user:
                 raise HTTPError(404, reason=bd_errs[430])
-                # user unsubscribe, the account will be forbid
-                # if _user['mask']>>31 & 1:
-                #     raise HTTPError(403, reason='No privilege')
-                # _user = store.get_bd_user(_user['id'])
+
             user = _user['user']
             password = _user['password']
         else:
@@ -1011,40 +1003,14 @@ class PortalHandler(BaseHandler):
             access_log.error('{} exceed edns: {}'.format(self.user['user'], self.user['ends']))
             raise HTTPError(403, reason=bd_errs[451])
 
-        # check private network
-        if self.profile['ispri']:
-            # check mobile argument
-            # mobile = self.get_argument('pmobile', '')
-            # if mobile:
-            #     # try to bind user's pns
-            #     account.bind_avaiable_pns(self.user['user'], mobile)
+        # check account privilege
+        self.check_account_privilege()
 
-            # current network is private, check user privilege
-            ret, err = account.check_pn_privilege(self.profile['pn'], self.user['user'])
-            if not ret:
-                raise err
-        
-        # check billing
-        # nanshan account user network freedom (check by ac_ip)
-        # if not profile['policy']:
-        if not self.profile['policy']:
-            self.expired = account.check_account_balance(self.user)
-            if self.expired:
-                # raise HTTPError(403, reason='Account has no left time')
-                access_log.error('{} has no time left, can\'t access {} network'.format(self.user['user'], self.profile['pn']))
-                raise HTTPError(403, reason=bd_errs[450])
-
-        # send challenge to ac
-        # flags = int(self.get_argument('flags', LOGIN))
-        # flags = LOGIN
-        # if flags == LOGIN:
-            # portal-radius server doesn't check password, so send a 
-            # no-meaning value
         response = yield tornado.gen.Task(portal.login.apply_async, args=[self.user,  ac_ip, user_ip, user_mac])
 
-        if response.status in ('SUCCESS', ):
+        if response.status in ('SUCCESS', ) and self.profile:
             # login successfully 
-            account.update_mac_record(self.user['user'], user_mac, self.agent_str)
+            account.update_mac_record(self.user['user'], user_mac, self.profile['duration'], self.agent_str)
         else:
             if isinstance(response.result, HTTPError) and response.result.status_code in (435, ):
                 access_log.info('user:{} has been authed'.format(self.user['user']))

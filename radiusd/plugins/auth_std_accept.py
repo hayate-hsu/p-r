@@ -22,7 +22,7 @@ def process(req=None, resp=None, user=None, **kwargs):
     '''
     session_timeout = CONFIG['SESSION_TIMEOUT']
 
-    profile = user['policy']
+    profile = user['profile']
     # policy: 
     if profile['policy'] == 0:
         # normal billing pocily

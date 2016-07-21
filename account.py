@@ -189,13 +189,14 @@ def create_user(user, appid='', tid='', mobile='', ends=2**5):
 def get_onlines(user):
     return store.get_onlines(user)
 
-def update_mac_record(user, mac, agent):
+def update_mac_record(user, mac, duration, agent):
     is_update = False
+
     record = store.get_user_mac_record(user, mac)
     if record:
         is_update = True
     try:
-        store.update_mac_record(user, mac, agent, is_update)
+        store.update_mac_record(user, mac, expired, agent, is_update)
     except IntegrityError:
         # duplicate entry
         pass

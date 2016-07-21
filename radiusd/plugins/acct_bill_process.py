@@ -42,7 +42,7 @@ def process(req=None, user=None, runstat=None, coa_clients=None, **kwargs):
         return
 
     log.msg('{} > Prepaid long time billing '.format(req.get_user_name()),level=logging.INFO)
-    profile = user['policy']
+    profile = user['profile']
     policy = profile.get('policy', 0)
     if (not user) or policy:
         # policy 1, free ap, doesn't charge

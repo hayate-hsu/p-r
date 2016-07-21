@@ -187,11 +187,11 @@ class RADIUSAccess(RADIUS):
         user = account.get_bd_user(req_user)
         if user:
             # get billing policy
-            user['policy'] = account.get_billing_policy2(req)
-            if user['policy']['ispri'] and not account.check_pn_privilege(user['policy']['pn'], user['user']):
+            user['profile'] = account.get_billing_policy2(req)
+            if (user['profile']['policy'] & 2) and not account.check_pn_privilege(user['profile']['pn'], user['user']):
                 user = None
 
-            if user and not user['policy']:
+            if user and not user['profile']:
                 if user['mask']>>30 & 1:
                     user = None
                 if user:
@@ -257,7 +257,7 @@ class RADIUSAccounting(RADIUS):
         if user:
             self.user_trace.push(user['user'],req)        
             # get billing policy
-            user['policy'] = account.get_billing_policy2(req)
+            user['profile'] = account.get_billing_policy2(req)
           
         reply = req.CreateReply()
         reply.source = req.source

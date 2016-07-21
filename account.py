@@ -191,6 +191,7 @@ def get_onlines(user):
 
 def update_mac_record(user, mac, duration, agent):
     is_update = False
+    expired = utility.now('%Y-%m-%d', duration) + ' 23:59:59'
 
     record = store.get_user_mac_record(user, mac)
     if record:

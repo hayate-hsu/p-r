@@ -532,6 +532,7 @@ class PageHandler(BaseHandler):
         else:
             _user, self.task_resp = self.task_resp.result, None
             if _user:
+                self._add_online_by_bas(kwargs['ac_ip'], kwargs['mac_addr'])
                 if accept.startswith('application/json'):
                     token = utility.token(self.user['user'])
                     self.render_json_response(User=self.user['user'], Token=token, Mask=self.user['mask'], 
@@ -661,12 +662,11 @@ class PageHandler(BaseHandler):
             _user = {'user':'55532', 'password':'987012', 'mask':10, 'coin':60, 'ends':100}
             self.user = _user
         else:
-            user = account.get_user_by_mac(kwargs['user_mac'], kwargs['ac_ip'])
-            if not user:
+            _user = account.get_bd_user(kwargs['user_mac']) 
+            if not _user:
                 return
 
-            _user = account.get_bd_user(user)
-            if not _user:
+            if account.check_auto_login_expired(_user):
                 return
 
             self.user = _user
@@ -700,6 +700,7 @@ class PageHandler(BaseHandler):
 
         if response.status in ('SUCCESS', ):
             access_log.info('{} auto login successfully, mac:{}'.format(_user['user'], kwargs['user_mac']))
+            self._add_online_by_bas(kwargs['ac_ip'], kwargs['user_mac'])
         elif isinstance(response.result, HTTPError) and response.result.status_code in (435,):
             access_log.info('{} has been authed, mac:{}'.format(_user['user'], kwargs['user_mac']))
         else:
@@ -848,6 +849,15 @@ class PageHandler(BaseHandler):
                 access_log.info('{} has no left time'.format(self.user['user']))
                 raise HTTPError(403, reason=bd_errs[450])
 
+    def _add_online_by_bas(self, nas_addr, mac_addr):
+        '''
+            if bas's mask & 1, add online record
+            sangfor doesn't support accounting package (Radius, AccountRequest)
+        '''
+        if AC_CONFIGURE[nas_addr]['mask'] & 1:
+            # bas is sangfor 
+            account.add_online2(nas_addr, mac_addr, self.profile['_location'], self.profile['ssid'])
+
 class PortalHandler(BaseHandler):
     '''
         Handler portal auth request
@@ -916,6 +926,7 @@ class PortalHandler(BaseHandler):
 
         if response.successful() and self.profile:
             # login successfully 
+            self._add_online_by_bas(ac_ip, user_mac)
             account.update_mac_record(self.user['user'], user_mac, 
                                       self.profile['duration'], self.agent_str)
         else:
@@ -1010,6 +1021,7 @@ class PortalHandler(BaseHandler):
 
         if response.status in ('SUCCESS', ) and self.profile:
             # login successfully 
+            self._add_online_by_bas(ac_ip, user_mac)
             account.update_mac_record(self.user['user'], user_mac, self.profile['duration'], self.agent_str)
         else:
             if isinstance(response.result, HTTPError) and response.result.status_code in (435, ):
@@ -1027,6 +1039,15 @@ class PortalHandler(BaseHandler):
         token = utility.token(self.user['user'])
         self.render_json_response(User=self.user['user'], Token=token, Code=200, Msg='OK')
         access_log.info('%s login successfully, ip: %s', self.user['user'], self.request.remote_ip)
+
+    def _add_online_by_bas(self, nas_addr, mac_addr):
+        '''
+            if bas's mask & 1, add online record
+            sangfor doesn't support accounting package (Radius, AccountRequest)
+        '''
+        if AC_CONFIGURE[nas_addr]['mask'] & 1:
+            # bas is sangfor 
+            account.add_online2(nas_addr, mac_addr, self.profile['_location'], self.profile['ssid'])
 
 EXPIRE = 7200
 
@@ -1113,11 +1134,7 @@ def ac_data_handler(sock, data, addr):
     header = portal.Header.unpack(data)
     if header.type & 0x08:
         # ac notify portal, user logout
-
-        # return ack_logout
-        # header.type = 0x07
         data = '\x01\x07' + data[2:]
-        # sock.sendto(data, addr)
 
         if True:
             start = 32 if header.ver == 0x02 else 16
@@ -1130,6 +1147,11 @@ def ac_data_handler(sock, data, addr):
             for b in attrs.mac:
                 mac.append('{:02X}'.format(ord(b)))
             mac = ':'.join(mac)
+
+            if addr[0] in AC_CONFIGURE and AC_CONFIGURE[addr[0]]['mask'] & 1:
+                # receive logout request from 
+                account.del_online2(addr[0], mac)
+
             access_log.info('User quit, mac: {}'.format(mac))
 
 # def init_log(log_folder, log_config, port):

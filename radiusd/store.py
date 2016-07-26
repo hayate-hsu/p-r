@@ -302,7 +302,7 @@ class Store():
         with Cursor(self.dbpool) as cur:
             sql = ''
             if user.count(':') == 5:
-                sql = '''select bd_account.* from mac_history, bd_account 
+                sql = '''select bd_account.*, mac_history.expired as auto_expired from mac_history, bd_account 
                 where mac_history.mac = "{}" and bd_account.user = mac_history.user'''.format(user)
             else:
                 sql = 'select * from bd_account where user = "{}"'.format(user)
@@ -337,7 +337,7 @@ class Store():
             cur = conn.cursor(MySQLdb.cursors.DictCursor)
             sql = ''
             if user.count(':') == 5:
-                sql = '''select bd_account.* from mac_history, bd_account 
+                sql = '''select bd_account.*, mac_history.expired as auto_expired from mac_history, bd_account 
                 where mac_history.mac = "{}" and bd_account.user = mac_history.user'''.format(user)
             else:
                 sql = 'select * from bd_account where user = "{}"'.format(user)
@@ -600,17 +600,15 @@ class Store():
             cur.execute(sql)
             conn.commit()
 
-    def add_online2(self, **kwargs):
+    def add_online2(self, nas_addr, mac, _location, ssid):
         with Connect(self.dbpool) as conn:
-            assert kwargs and ('mac_addr' in kwargs)
             cur = conn.cursor(MySQLdb.cursors.DictCursor)
 
-            sql = 'delete from online where mac_addr = "{}"'.format(kwargs['mac_addr'])
+            sql = 'delete from online where mac_addr = "{}"'.format(mac)
             cur.execute(sql)
 
-            keys = ','.join(kwargs.keys())
-            vals = ','.join(['"%s"'%c for c in kwargs.values()])
-            sql = 'insert into online ({}) values({})'.format(keys, vals)
+            sql = '''insert into online (nas_addr, mac_addr, _lication, ssid) 
+            values("{}", "{}", "{}", "{}")'''.format(nas_addr, mac, _location, ssid)
             cur.execute(sql)
             conn.commit()
 
@@ -678,6 +676,14 @@ class Store():
                 acct_session_id = "{}"'''.format(nas_addr, acct_session_id)
             cur.execute(sql)
             conn.commit()
+
+    def del_online2(self, nas_addr, mac_addr):
+        with Connect(self.dbpool) as conn:
+            cur = conn.cursor(MySQLdb.cursors.DictCursor)
+            sql = 'delete from online where nas_addr = "{}" and mac_addr = "{}"'.format(nas_addr, mac_addr)
+            cur.execute(sql)
+            conn.commit()
+
 
     def add_ticket(self, ticket):
         _ticket = ticket.copy()

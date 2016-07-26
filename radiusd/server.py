@@ -32,6 +32,7 @@ import six
 import collections
 
 import account
+import utility
 
 EXPIRE = 7200
 AP_MAPS = {}
@@ -191,6 +192,10 @@ class RADIUSAccess(RADIUS):
             if (user['profile']['policy'] & 2) and not account.check_pn_privilege(user['profile']['pn'], user['user']):
                 user = None
 
+            # user auth by mac address, check auto expired
+            if account.check_auto_login_expired(user):
+                user = None
+
             if user and not user['profile']:
                 if user['mask']>>30 & 1:
                     user = None
@@ -215,6 +220,7 @@ class RADIUSAccess(RADIUS):
                     
         # send accept
         reply['Reply-Message'] = 'success!'
+        # reply['Acct-Interim-Interval'] = 300
         reply.code=packet.AccessAccept
         if user:
             self.user_trace.push(user['user'],reply)

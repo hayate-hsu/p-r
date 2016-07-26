@@ -154,6 +154,12 @@ def check_account_balance(_user):
     '''
     return _check_expire_date(_user)
 
+def check_auto_login_expired(_user):
+    now = datetime.datetime.now()
+    if 'auto_expired' in _user and now > _user['auto_expired']:
+        return True
+    return False
+
 def get_user_by_mac(mac, ac):
     records = store.get_user_records_by_mac(mac)
     if records:
@@ -226,11 +232,17 @@ def update_billing(billing):
 def add_online(online):
     store.add_online(online)
 
+def add_online2(nas_addr, mac, _location, ssid):
+    store.add_online2(nas_addr, mac, _location, ssid)
+
 def get_online(nas_addr, session_id):
     return store.get_online(nas_addr, session_id)
 
 def del_online(nas_addr, session_id):
     store.del_online(nas_addr, session_id)
+
+def del_online2(nas_addr, mac):
+    store.del_online2(nas_addr, mac)
 
 def add_ticket(ticket):
     store.add_ticket(ticket)

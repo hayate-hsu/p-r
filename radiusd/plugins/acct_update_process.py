@@ -38,7 +38,7 @@ def process(req=None,user=None,runstat=None,**kwargs):
             mac_addr = utils.format_mac(req.get_mac_addr()),
             ap_mac = ap_mac,
             ssid=ssid,
-            _location=user['policy'].get('_location', ''),
+            _location=user['profile'].get('_location', ''),
             billing_times = req.get_acct_sessiontime(),
             input_total = req.get_input_total(),
             output_total = req.get_output_total(),

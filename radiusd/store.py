@@ -458,11 +458,11 @@ class Store():
             # now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             sql = ''
             if isupdate:
-                sql = '''update mac_history expired="{}", platform = "{}" 
+                sql = '''update mac_history set expired="{}", platform = "{}" 
                 where user = "{}" and mac = "{}"'''.format(expired, agent, user, mac)
             else:
                 sql = '''insert into mac_history (user, mac, expired, platform) 
-                values('{}', '{}', '{}', '{}')'''.format(user, mac, expired, agent)
+                values("{}", "{}", "{}", "{}")'''.format(user, mac, expired, agent)
             cur.execute(sql)
             conn.commit()
 

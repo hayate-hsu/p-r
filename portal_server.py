@@ -532,7 +532,7 @@ class PageHandler(BaseHandler):
         else:
             _user, self.task_resp = self.task_resp.result, None
             if _user:
-                self._add_online_by_bas(kwargs['ac_ip'], kwargs['mac_addr'])
+                self._add_online_by_bas(kwargs['ac_ip'], kwargs['user_mac'])
                 if accept.startswith('application/json'):
                     token = utility.token(self.user['user'])
                     self.render_json_response(User=self.user['user'], Token=token, Mask=self.user['mask'], 
@@ -1015,7 +1015,7 @@ class PortalHandler(BaseHandler):
             raise HTTPError(403, reason=bd_errs[451])
 
         # check account privilege
-        self.check_account_privilege()
+        self._check_account_privilege()
 
         response = yield tornado.gen.Task(portal.login.apply_async, args=[self.user,  ac_ip, user_ip, user_mac])
 

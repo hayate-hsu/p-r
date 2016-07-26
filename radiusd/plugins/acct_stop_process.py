@@ -17,6 +17,8 @@ def process(req=None,user=None,runstat=None,**kwargs):
     if not ticket.nas_addr:
         ticket.nas_addr = req.source[0]
 
+    ticket.user = user['user']
+
     _datetime = datetime.datetime.now() 
     online = account.get_online(ticket.nas_addr,ticket.acct_session_id)    
     if not online:

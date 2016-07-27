@@ -788,7 +788,7 @@ class PageHandler(BaseHandler):
         '''
         access_log.info('redirect : {}'.format(self.request.arguments))
         self.redirect(config['bidong'])
-        self.finish()
+        # self.finish()
 
     def prepare_wx_wifi(self, **kwargs):
         wx_wifi = {}

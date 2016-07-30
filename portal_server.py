@@ -510,7 +510,7 @@ class PageHandler(BaseHandler):
         kwargs = {}
         accept = self.request.headers.get('Accept', 'text/html')
 
-        kwargs['ac_ip'] = self.get_argument('wlanacip', '') or self.get_argument('nasip', '') or self.get_argument('wip', '')
+        kwargs['ac_ip'] = self.get_argument('nasip', '') or self.get_argument('wlanacip', '') or self.get_argument('wip', '')
         if not kwargs['ac_ip']:
             access_log.error('can\'t found ac parameter, please check ac url configuration')
             self.redirect_to_bidong()

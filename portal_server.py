@@ -617,7 +617,11 @@ class PageHandler(BaseHandler):
         if not AC_CONFIGURE[kwargs['ac_ip']]['mask'] & 1: 
             # sangfor device
             kwargs['vlan'] = self.get_argument('vlan', 1)
-            kwargs['ssid'] = self.get_argument('ssid', 'NS_GOV')
+            ssids = self.get_arguments('ssid')
+            ssid = ssids[-1] if kwargs['ac_ip'] in config['RJ_AC'] else ssids[0]
+            # ssid = self.get_argument('ssid')
+            kwargs['ssid'] = ssid.strip('"')
+            
             kwargs['user_ip'] = self.get_argument('wlanuserip', '') or self.get_argument('userip', '')
 
             # user mac address 
@@ -641,14 +645,14 @@ class PageHandler(BaseHandler):
         else:
             # bas mask == 1
             kwargs['vlan'] = ''
-            kwargs['ssid'] = 'www.gzdjy.com'
+            kwargs['ssid'] = 'www.gzdjy.org'
             kwargs['user_ip'] = self.get_argument('userip')
             mac = self.get_argument('usermac')
             kwargs['user_mac'] = utility.format_mac(mac)
             kwargs['ap_mac'] = ''
 
             # kwargs['firsturl'] = config['bidong']
-            kwargs['firsturl'] = self.get_argument('url', '') or config['bidong']
+            kwargs['firsturl'] = self.get_argument('url', '') or 'http://www.gzdjy.org/'
             kwargs['urlparam'] = ''
 
     @tornado.gen.coroutine
@@ -704,7 +708,7 @@ class PageHandler(BaseHandler):
         elif isinstance(response.result, HTTPError) and response.result.status_code in (435,):
             access_log.info('{} has been authed, mac:{}'.format(_user['user'], kwargs['user_mac']))
         else:
-            access_log.info('{}auto login failed, {}'.format(_user['user'], response.result))
+            access_log.info('{} auto login failed, {}'.format(_user['user'], response.result))
             return
 
         self.task_resp = response

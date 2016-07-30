@@ -607,7 +607,7 @@ class Store():
             sql = 'delete from online where mac_addr = "{}"'.format(mac)
             cur.execute(sql)
 
-            sql = '''insert into online (nas_addr, mac_addr, _lication, ssid) 
+            sql = '''insert into online (nas_addr, mac_addr, _location, ssid) 
             values("{}", "{}", "{}", "{}")'''.format(nas_addr, mac, _location, ssid)
             cur.execute(sql)
             conn.commit()

@@ -69,7 +69,7 @@ RUN_PATH = '/var/run'
 
 _REQUESTES_ = {}
 
-AC_CONFIGURE = config['ac_policy']
+AC_CONFIGURE = {}
 
 BAS_PORT = 2000
 _BUFSIZE=1024
@@ -618,7 +618,7 @@ class PageHandler(BaseHandler):
             # sangfor device
             kwargs['vlan'] = self.get_argument('vlan', 1)
             ssids = self.get_arguments('ssid')
-            ssid = ssids[-1] if kwargs['ac_ip'] in config['RJ_AC'] else ssids[0]
+            ssid = ssids[-1] if kwargs['ac_ip'] == '172.29.1.246' else ssids[0]
             # ssid = self.get_argument('ssid')
             kwargs['ssid'] = ssid.strip('"')
             

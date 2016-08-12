@@ -522,30 +522,36 @@ class PageHandler(BaseHandler):
         
         self.profile = account.get_billing_policy(kwargs['ac_ip'], kwargs['ap_mac'], kwargs['ssid'])
 
+        if (not kwargs['ap_mac']) and kwargs['ssid'] != self.profile['ssid']:
+            kwargs['ssid'] = self.profile['ssid']
+
+
         # process weixin argument
         self.prepare_wx_wifi(**kwargs)
 
-        result = yield self.login_auto_by_mac(**kwargs)
+        if not AC_CONFIGURE[kwargs['ac_ip']]['mask'] & 2: 
+            # ac doesn't support mac auth, need portal do it 
+            result = yield self.login_auto_by_mac(**kwargs)
 
-        if self.task_resp is None:
-            pass
-        else:
-            _user, self.task_resp = self.task_resp.result, None
-            if _user:
-                self._add_online_by_bas(kwargs['ac_ip'], kwargs['user_mac'])
-                if accept.startswith('application/json'):
-                    token = utility.token(self.user['user'])
-                    self.render_json_response(User=self.user['user'], Token=token, Mask=self.user['mask'], 
-                                              Code=200, Msg='OK')
-                elif url:
-                    # self.set_header('Access-Control-Allow-Origin', '*')
-                    if self.profile['pn'] in (55532, ):
-                        self.redirect(self.profile['portal'])
-                        return
-                    if kwargs['urlparam']:
-                        url = ''.join([url, '?', kwargs['urlparam']])
-                    self.redirect(url)
-                return 
+            if self.task_resp is None:
+                pass
+            else:
+                _user, self.task_resp = self.task_resp.result, None
+                if _user:
+                    self._add_online_by_bas(kwargs['ac_ip'], kwargs['user_mac'])
+                    if accept.startswith('application/json'):
+                        token = utility.token(self.user['user'])
+                        self.render_json_response(User=self.user['user'], Token=token, Mask=self.user['mask'], 
+                                                  Code=200, Msg='OK')
+                    elif url:
+                        # self.set_header('Access-Control-Allow-Origin', '*')
+                        if self.profile['pn'] in (55532, ):
+                            self.redirect(self.profile['portal'])
+                            return
+                        if kwargs['urlparam']:
+                            url = ''.join([url, '?', kwargs['urlparam']])
+                        self.redirect(url)
+                    return 
 
         if 'wx/m_bidong/onetonet' in url:
             # user from weixin, parse code & and get openid
@@ -586,6 +592,7 @@ class PageHandler(BaseHandler):
         
         pn_ssid, pn_note, pn_logo = self.profile['ssid'], self.profile['note'], self.profile['logo']
 
+        # render json response to app
         if accept.startswith('application/json'):
             self.render_json_response(Code=200, Msg='OK', openid='', pn_ssid=pn_ssid, 
                                       pn_note=pn_note, pn_logo=pn_logo,  
@@ -645,14 +652,13 @@ class PageHandler(BaseHandler):
         else:
             # bas mask == 1
             kwargs['vlan'] = ''
-            kwargs['ssid'] = 'www.gzdjy.org'
-            kwargs['user_ip'] = self.get_argument('userip')
-            mac = self.get_argument('usermac')
+            kwargs['ssid'] = 'BD_TEST'
+            kwargs['user_ip'] = self.get_argument('wlanuserip', '') or self.get_argument('userip', '')
+            mac = self.get_argument('usermac', '') or self.get_argument('wlanusermac', '')
             kwargs['user_mac'] = utility.format_mac(mac)
             kwargs['ap_mac'] = ''
 
-            # kwargs['firsturl'] = config['bidong']
-            kwargs['firsturl'] = self.get_argument('url', '') or 'http://www.gzdjy.org/'
+            kwargs['firsturl'] = self.get_argument('url', '') or self.get_argument('rehost', '') or 'http://www.gzdjy.org/'
             kwargs['urlparam'] = ''
 
     @tornado.gen.coroutine
@@ -739,24 +745,21 @@ class PageHandler(BaseHandler):
 
         access_log.info('openid: {} login by weixin'.format(openid))
         user, password = '', ''
-        _user = account.get_user(openid, column='weixin', appid=self.profile['appid'])
+        _user = account.check_weixin_user(openid, appid=self.profile['appid'], mac=kwargs['user_mac'])
         if not _user:
-            # create new account
-            _user = account.create_user(openid, appid=self.profile['appid'])
-        if not _user:
-            raise HTTPError(400, reason='Should subscribe first')
+            raise HTTPError(401, reason='Should subscribe first')
 
         self.user = _user
         # user unsubscribe, the account will be forbid
         if _user['mask']>>31 & 1:
-            raise HTTPError(401, reason='Account has been frozen')
+            raise HTTPError(403, reason='Account has been frozen')
             
         # check ac ip
         if kwargs['ac_ip'] not in AC_CONFIGURE:
             access_log.error('not avaiable ac & ap')
-            raise HTTPError(403, reason='Unknown AC,ip : {}'.format(kwargs['ac_ip']))
+            raise HTTPError(400, reason='Unknown AC,ip : {}'.format(kwargs['ac_ip']))
 
-        self.check_account_privilege()
+        self._check_account_privilege()
 
         response = yield tornado.gen.Task(portal.login.apply_async, 
                                           args=[self.user, kwargs['ac_ip'], 
@@ -890,34 +893,28 @@ class PortalHandler(BaseHandler):
     @tornado.gen.coroutine
     def get(self):
         tid = self.get_argument('tid')
-        # timestamp = self.get_argument('timestamp')
-        # sign = self.get_argument('sign')
         openid = self.get_argument('openId')
         extend = self.get_argument('extend')
 
         access_log.info('openid:{}, tid: {}'.format(openid, tid))
 
         kwargs = self.b64decode(extend)
-        user, password = '',''
-        _user = account.get_user(openid, column='weixin', appid=kwargs['appid']) 
-        if not _user:
-            # create new account
-            _user = account.add_user(openid, appid=kwargs['appid'], tid=tid)
-        if not _user:
-            raise HTTPError(400, reason='Should subscribe first')
-        
-        self.user = _user
-
-        # check account left, forbin un-meaning request to ac
         ac_ip = kwargs['ac_ip']
         # check ac ip
         if ac_ip not in AC_CONFIGURE:
             access_log.error('not avaiable ac & ap')
-            raise HTTPError(403, reason='AC ip error')
+            raise HTTPError(400, reason='AC ip error')
 
         ap_mac = kwargs['ap_mac']
         user_mac = kwargs['user_mac']
         user_ip = kwargs['user_ip']
+
+        user, password = '',''
+        _user = account.check_weixin_user(openid, appid=kwargs['appid'], tid=tid, mac=user_mac)
+        if not _user:
+            raise HTTPError(401, reason='Should subscribe first')
+        
+        self.user = _user
 
         # vlanId = self.get_argument('vlan')
         ssid = kwargs['ssid']
@@ -956,7 +953,6 @@ class PortalHandler(BaseHandler):
     def post(self):
         # parse request data
         # logger.info(self.request.arguments)
-        openid = self.get_argument('openid', None)
         user = self.get_argument('user', '')
         password = self.get_argument('password', '')
         _user = None
@@ -965,7 +961,7 @@ class PortalHandler(BaseHandler):
         # check ac ip
         if ac_ip not in AC_CONFIGURE:
             access_log.error('not avaiable ac: {}'.format(ac_ip))
-            raise HTTPError(403, reason='AC ip error')
+            raise HTTPError(400, reason='AC ip error')
 
         ap_mac = self.get_argument('ap_mac')
         user_mac = self.get_argument('user_mac')
@@ -976,22 +972,7 @@ class PortalHandler(BaseHandler):
 
         self.profile = account.get_billing_policy(ac_ip, ap_mac, ssid)
 
-        # flags = self.get_argument('flags', 0)
-        _user = ''
-
-        if openid:
-            # weixin client
-            appid = self.get_argument('appid')
-            shopid = self.get_argument('shopid')
-            _user = account.get_user(openid, column='weixin', appid=appid)
-            
-            if not _user:
-                raise HTTPError(404, reason=bd_errs[430])
-
-            user = _user['user']
-            password = _user['password']
-        else:
-            _user = account.get_bd_user(user)
+        _user = account.get_bd_user(user)
 
         if not _user:
             access_log.warning('can\'t found user, user: {}, pwd_{}'.format(user, 

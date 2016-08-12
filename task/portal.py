@@ -37,7 +37,7 @@ LOGOUT = 1
 # global variable, initilize when create
 _SERIAL_NO_ = itertools.cycle(xrange(2**15))
 _TIMEOUT_ = 5
-_SECRET_ = ''
+_SECRET_ = 'Bidong_Wifi'
 
 @celery.task(throws=(HTTPError,))
 def login(_user, ac_ip, user_ip, user_mac):
@@ -64,7 +64,7 @@ def login(_user, ac_ip, user_ip, user_mac):
         # timeout(sock, ac_ip, header, user_mac)
         sock.close()
         # raise HTTPError(400, reason='challenge timeout, retry')
-        raise HTTPError(400, reason=bd_errs[530])
+        raise HTTPError(408, reason=bd_errs[530])
 
     header = Header.unpack(data)
     if header.type != 0x02 or header.err:
@@ -81,14 +81,14 @@ def login(_user, ac_ip, user_ip, user_mac):
             logger.info('user: {}\'s previous has been progressing, mac:{}'.format(user, ':'.join(_mac)))
             raise HTTPError(436, reason=bd_errs[436])
         # raise HTTPError(400, reason='challenge timeout, retry')
-        raise HTTPError(400, reason=bd_errs[530])
+        raise HTTPError(531, reason=bd_errs[531])
     # parse challenge value
     attrs = Attributes.unpack(header.num, data[start:])
     if not attrs.challenge:
         logger.warning('Abnormal challenge value, 0x{:x}, 0x{:x}'.format(header.err, header.num))
         sock.close()
         # raise HTTPError(400, reason='abnormal challenge value')
-        raise HTTPError(400, reason=bd_errs[530])
+        raise HTTPError(531, reason=bd_errs[531])
     if attrs.mac:
         assert user_mac == attrs.mac
 
@@ -130,7 +130,7 @@ def login(_user, ac_ip, user_ip, user_mac):
             raise HTTPError(436, reason=bd_errs[436])
         # attrs = Attributes.unpack(header.num, data[start:])
         # raise HTTPError(403, reason='auth error')
-        raise HTTPError(403, reason=bd_errs[531])
+        raise HTTPError(531, reason=bd_errs[531])
 
     # send aff_ack_auth to ac 
     header.type = 0x07
@@ -176,10 +176,12 @@ def logout(ac_ip, user_ip, user_mac):
 class Packet():
     '''
     '''
-    def __init__(self, header, attrs=None, auth=''):
+    _ZERO_AUTH = b'0x00'*16
+
+    def __init__(self, header, attrs=None, auth=b''):
         self.header = header
         self.attrs = attrs
-        self.auth = ''
+        self.auth = auth
 
     def pack(self):
         '''
@@ -191,30 +193,46 @@ class Packet():
         self.header.num = num
         header = self.header.pack()
         attrs = data
-        auths = b''
+        # REQ_CHALLENGE(0x01) | REQ_AUTH(0x03) | REQ_LOGOUT(0x05) | REQ_INFO(0x0a) | NTF_LOGOUT(0x08) | AFF_ACK_AUTH(0x07)
         if self.header.ver == 0x02:
-            auths = self.md5(header, attrs)
+            self.auth = self.md5(header, Packet._ZERO_AUTH, attrs, _SECRET_)
 
-        return b''.join([header, auths, data])
+        return b''.join([header, self.auth, attrs])
 
     @classmethod
     def unpack(cls, data):
-        auth = ''
+        auth = b''
         header = Header.unpack(data)
         attrs = None
         data = data[16:]
+        if header.ver == 0x02:
+            auth = data[16:16]
+            data = data[32:]
         if header.num and data:
-            if header.ver == 0x02:
-                auth, data = data[:16],data[16:]
-                attrs = Attributes.unpack(header.num, data)
+            attrs = Attributes.unpack(header.num, data)
 
         return cls(header, attrs, auth)
+
+    def verify_packet(self, req_auth):
+        num, data = 0, b''
+        if self.attrs:
+            num, data = self.attrs.pack()
+        self.header.num = num
+        header = self.header.pack()
+        attrs = data
+        auth = self.md5(header, req_auth, attrs, _SECRET_)
+
+        # check calculate auth equal response auth 
+        if auth != self.auth:
+            return False
+
+        return True
 
     def md5(self, header, attrs):
         '''
             calc md5 of (header, attrs)
         '''
-        data = b''.join([header, b'0'*16, attrs, _SECRET_])
+        data = b''.join([header, Packet._ZERO_AUTH, attrs, _SECRET_])
         return utility.md5(data).digest()
 
 class Attributes():

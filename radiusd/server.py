@@ -181,13 +181,17 @@ class RADIUSAccess(RADIUS):
         calling_stationid = req.get_calling_stationid()
 
         # check user
+        is_auto = 0
         if req_user == calling_stationid:
             # user account is mac address
             req_user = utility.format_mac(req_user) 
+            is_auto = 1
+
 
         user = account.get_bd_user(req_user)
         if user:
             # get billing policy
+            user['is_auto'] = is_auto
             user['profile'] = account.get_billing_policy2(req)
             if (user['profile']['policy'] & 2) and not account.check_pn_privilege(user['profile']['pn'], user['user']):
                 user = None
@@ -253,14 +257,17 @@ class RADIUSAccounting(RADIUS):
                  
         req_user = req.get_user_name()
         calling_stationid = req.get_calling_stationid()
+        is_auto = 0
         # check user
         if req_user == calling_stationid:
             # user account is mac address
             req_user = utility.format_mac(req_user) 
+            is_auto = 1
 
         user = account.get_bd_user(req_user)
 
         if user:
+            user['is_auto'] = is_auto
             self.user_trace.push(user['user'],req)        
             # get billing policy
             user['profile'] = account.get_billing_policy2(req)

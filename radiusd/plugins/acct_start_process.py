@@ -29,6 +29,7 @@ def process(req=None,user=None,runstat=None,**kwargs):
 
     online = utils.Storage(
         user = user['user'],
+        is_auto = user.get('is_auto', 0),
         nas_addr = req.get_nas_addr(),
         acct_session_id = req.get_acct_sessionid(),
         framed_ipaddr = req.get_framed_ipaddr(),

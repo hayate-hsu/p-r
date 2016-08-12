@@ -110,80 +110,6 @@ class Store():
             bas = cur.fetchone()
             return bas
 
-    def get_account(self, **kwargs):
-        '''
-            get account's info
-        '''
-        with Cursor(self.dbpool) as cur:
-            query_str = self._combine_query_kwargs(**kwargs)
-            sql = 'select * from account where {}'.format(query_str)
-
-            cur.execute(sql)
-            return cur.fetchone()
-
-    def add_holder(self, weixin, password, mobile, expired,
-                      email='', address='', realname=''):
-        '''
-            add hold user, user must with tel & address
-            mask = 0 + 2**1 + [2**8]
-        '''
-        with Connect(self.dbpool) as conn:
-            cur = conn.cursor(MySQLdb.cursors.DictCursor)
-            now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            mask = 0 + 2**1
-            # if weixin:
-            #     mask = mask + 2**5
-            # insert holder account
-            sql = '''insert into account 
-            (mobile, weixin, uuid, email, mask, address, 
-            realname, ctime, expired) 
-            values("{}", "{}", "", "{}", {}, "{}", "{}", "{}", "{}")
-            '''.format(mobile, weixin, email, mask, address, 
-                       realname, now, expired)
-            cur.execute(sql)
-            sql = 'select id from account where mobile = "{}" and weixin = "{}"'.format(mobile, weixin)
-            cur.execute(sql)
-            user = cur.fetchone()
-
-            mask = mask + 2**8
-
-            sql = '''insert into bd_account (user, password, mask, 
-            expired, coin, holder, ends) values("{}", "{}", {}, 
-            "{}", 0, {}, 5)
-            '''.format(str(user['id']), password, mask, expired, user['id'])
-            cur.execute(sql)
-            conn.commit()
-            return user['id']
-
-    def add_holder_aps(self, holder, aps):
-        '''
-            aps : ((vendor, model, mac),)
-        '''
-        with Connect(self.dbpool) as conn:
-            cur = conn.cursor()
-            for vendor, model, mac_addr in aps:
-                sql = '''insert into holder_ap (holder, vendor, model, 
-                mac_addr) values({}, "{}", "{}", "{}")
-                '''.format(holder, vendor, model, mac_addr)
-                cur.execute(sql)
-            conn.commit()
-
-    def get_holder_aps(self, holder):
-        '''
-        '''
-        with Cursor(self.dbpool) as cur:
-            sql = 'select mac_addr, vendor from holder_ap where holder = "{}"'.format(int(holder))
-            cur.execute(sql)
-            results = cur.fetchall()
-            return results if results else ()
-
-    def get_holder_by_mac(self, ap_mac):
-        with Cursor(self.dbpool) as cur:
-            sql = 'select holder from holder_ap where mac = "{}"'.format(ap_mac)
-            cur.execute(sql)
-            holder = cur.fetchone()
-            return holder['holder'] if holder else ''
-
     def add_user(self, user, password, appid='', tid='', mobile='', ends=2**5):
         '''
             user : uuid or weixin openid
@@ -205,24 +131,28 @@ class Store():
             expired = now + datetime.timedelta(hours=6)
             now = now.strftime('%Y-%m-%d %H:%M:%S')
             expired = expired.strftime('%Y-%m-%d %H:%M:%S')
-            sql = ''
+            sql, filters = '', ''
             column = 'uuid'
             if ends>>6 & 1:
                 weixin, uuid = '', user
                 mask = 0 + 2**2 + 2**6
                 sql = 'insert into account (uuid, mask) values ("{}", {})'.format(user, mask)
+                filters = 'account.uuid="{}" and account.mask={}'.format(user, mask)
             elif ends>>7 & 1:
                 mask = 0 + 2**2 + 2**7
                 sql = 'insert into account (uuid, mask) values ("{}", {})'.format(user, mask)
+                filters = 'account.uuid="{}" and account.mask={}'.format(user, mask)
             elif ends>>8 & 1:
                 column = 'mobile'
                 mask = 0 + 2**2 + 2**8
                 sql = 'insert into account (mobile, mask) values ("{}", {})'.format(mobile, mask)
+                filters = 'account.mobile="{}" and account.mask={}'.format(user, mask)
             elif (ends>>5 & 1) and appid:
                 # from weixin
                 column = 'weixin'
                 mask = 0 + 2**2 + 2**5
                 sql = 'insert into account (appid, weixin, tid, mask)values ("{}", "{}", "{}", {})'.format(appid, user, tid, mask)
+                filters = 'account.weixin="{}" and account.appid="{}" and account.mask={}'.format(user, appid, mask)
 
             cur.execute(sql)
 
@@ -242,55 +172,13 @@ class Store():
             '''.format(user, password, mask, coin, expired, mobile)
             cur.execute(sql)
 
-            sql = 'select * from bd_account where user = "{}"'.format(user)
+            sql = '''select bd_account.* from bd_account 
+            right join account on bd_account.user=cast(account.id as char) 
+            where {}'''.format(filters)
             cur.execute(sql)
             user = cur.fetchone()
             conn.commit()
             return user
-
-
-    def get_user(self, user, column='weixin', appid=''):
-        '''
-            arguments as add_user
-            ends:
-                    6&7 : app
-                    0 : weixin
-        '''
-        with Cursor(self.dbpool) as cur:
-            # column = 'weixin'
-            # if ends:
-            #     column = 'uuid'
-            sql = '''select bd_account.* from bd_account, account where 
-            account.{} = "{}" and account.appid="{}" and 
-            cast(account.id as char) = bd_account.user'''.format(column, user, appid)
-            cur.execute(sql)
-            return cur.fetchone()
-
-    def get_user2(self, user, column='weixin', appid=''):
-        '''
-        '''
-        with Connect(self.dbpool) as conn:
-            conn.commit()
-            cur = conn.cursor(MySQLdb.cursors.DictCursor)
-            # column = 'weixin'
-            # if ends:
-            #     column = 'uuid'
-            sql = '''select bd_account.* from bd_account, account where 
-            account.{} = "{}" and account.appid="{}" and 
-            cast(account.id as char) = bd_account.user'''.format(column, user, appid)
-            cur.execute(sql)
-            return cur.fetchone()
-
-
-    def add_bd_user(self, user, password):
-        '''
-        '''
-        with Connect(self.dbpool) as conn:
-            cur = conn.cursor()
-            # password = random.sample(__PASSWORD__, 8)
-            sql = '''insert into bd_account (user, password, mask, coin) values(%s, %s, 3, 60)'''
-            cur.execute(sql, user, password)
-            conn.commit()
 
     def get_bd_user(self, user, password=None):
         '''
@@ -347,26 +235,72 @@ class Store():
             user = cur.fetchone()
             return user
 
-    def update_account_mobile(self, user, mobile):
+    def get_weixin_user(self, openid, appid, mac):
         '''
+            1. get weixin account by openid & appid
+            2. get account by mac where weixin column is ''
+            3. else return None
         '''
-        with Connect(self.dbpool) as conn:
-            cur = conn.cursor(MySQLdb.cursors.DictCursor)
-            cur.execute('update account set mobile="{}" where id={}'.format(mobile, user))
+        with Cursor(self.dbpool) as cur:
+            # get account by openid & appid
+            sql = '''select bd_account.*, account.weixin, account.tid from bd_account 
+            right join account on bd_account.user=cast(account.id as char)  
+            where account.weixin="{}" and account.appid="{}"'''.format(openid, appid)
+            cur.execute(sql)
+            result = cur.fetchone()
+            if result:
+                return result
 
-            cur.execute('update bd_account set mobile="{}" where user="{}"'.format(mobile, user))
-            conn.commit()
+            if mac:
+                # get account by uuid (android)
+                sql = '''select bd_account.*, account.weixin, account.tid from bd_account 
+                right join account on bd_account.user=cast(account.id as char) 
+                where account.uuid="{}" and account.mask>>6&1'''.format(mac)
+                cur.execute(sql)
+                result = cur.fetchone()
+                if result:
+                    return result
 
-    def get_pn(self, pn, ispri=1):
+                # get account by mac address
+                sql = '''select bd_account.*, account.weixin, account.tid from bd_account 
+                right join mac_history on bd_account.user=mac_history.user 
+                left join account on bd_account.user=cast(account.id as char) 
+                where mac_history.mac="{}" and account.weixin is null order by account.ctime'''.format(mac)
+                print(sql)
+                cur.execute(sql)
+
+                return cur.fetchone()
+
+            return None
+
+    def get_gw_pn_policy(self, gw_ip):
         '''
         '''
         with Cursor(self.dbpool) as cur:
-        # with Connect(self.dbpool) as conn:
-        #     conn.commit()
-        #     cur = conn.cursor(MySQLdb.cursors.DictCursor)
-            sql = 'select * from pn_policy where pn={} and ispri={}'.format(pn, ispri)
+            sql = 'select * from gw_bind where ip="{}"'.format(gw_ip)
+            cur.execute(sql)
+            result = cur.fetchone()
+            if not result:
+                return None
+
+            pn = result['_location'].split(',')[-1]
+
+            sql = 'select * from pn_policy where pn={}'.format(pn)
             cur.execute(sql)
             return cur.fetchone()
+
+    def update_account(self, _id, **kwargs):
+        '''
+            update account's column
+        '''
+        with Connect(self.dbpool) as conn:
+            cur = conn.cursor(MySQLdb.cursors.DictCursor)
+            kwargs.pop('id', '')
+            if kwargs:
+                modify_str = ', '.join(['{}="{}"'.format(key,value) for key,value in kwargs.items()])
+                sql = 'update account set {} where id={}'.format(modify_str, _id)
+                cur.execute(sql)
+                conn.commit()
 
     def check_pn_privilege(self, pn, user):
         '''
@@ -379,78 +313,6 @@ class Store():
                     pn_bind.holder={pn} and pn_{pn}.mobile=pn_bind.mobile'.format(pn=pn, user=user)
             cur.execute(sql)
             return cur.fetchone()
-
-    def bind_avaiable_pns(self, user, mobile):
-        '''
-        '''
-        with Connect(self.dbpool) as conn:
-            cur = conn.cursor(MySQLdb.cursors.DictCursor)
-            results = []
-
-            cur.execute('select * from pn_policy where ispri = 1')
-            pns = cur.fetchall()
-            cur.execute('select table_name from information_schema.tables where table_name like "pn_%"')
-            tables = cur.fetchall()
-
-            tables = [item['table_name'] for item in tables]
-
-            pns = [item for item in pns if 'pn_{}'.format(item['pn']) in tables]
-
-
-            for item in pns:
-                sql = 'select id from pn_{} where mobile = "{}"'.format(item['pn'], mobile)
-                cur.execute(sql)
-                if cur.fetchone():
-                    results.append(item)
-
-            if results:
-                for item in results:
-                    sql = 'insert into pn_bind(user, holder, mobile) values("{}", {}, "{}")'.format(user, item['pn'], mobile)
-                    try:
-                        cur.execute(sql)
-                    except MySQLdb.IntegrityError:
-                        # existed bind pair
-                        pass
-
-            conn.commit()
-            return results
-
-
-    def merge_app_account(self, _id, user_mac):
-        '''
-            merge mac account to app account
-        '''
-        with Connect(self.dbpool) as conn:
-            cur = conn.cursor(MySQLdb.cursors.DictCursor)
-            mac = user_mac.replace(':', '')
-            sql = 'select * from bd_account where user = "{}"'.format(mac)
-            cur.execute(sql)
-            user = cur.fetchone()
-            if user:
-                # delete mac_history record
-                sql = 'delete from mac_history where user = "{}"'.format(mac)
-                cur.execute(sql)
-                # delete mac account
-                sql = 'delete from bd_account where user = "{}"'.format(mac)
-                cur.execute(sql)
-
-                # update _id recordds
-                sql = '''update bd_account set 
-                expired="{}" and coin={} where user="{}"
-                '''.format(user['expired'], user['coin'], _id)
-                cur.execute(sql)
-
-                # update bind account
-                sql = 'update bind set weixin="{}" where weixin="{}"'.format(_id, mac)
-                cur.execute(sql)
-
-                # update nansha bind account
-                if user['mask'] & 1<<16:
-                    sql = 'update bind set renter="{}" where renter="{}"'.format(_id, mac)
-                    cur.execute(sql)
-
-                conn.commit()
-
 
     def update_mac_record(self, user, mac, expired, agent, isupdate=True):
         with Connect(self.dbpool) as conn:
@@ -466,18 +328,6 @@ class Store():
             cur.execute(sql)
             conn.commit()
 
-    def query_ap_policy(self, ap_mac, ssid):
-        '''
-            query who own the ap and its' policy
-        '''
-        with Cursor(self.dbpool) as cur:
-            sql = '''select pn_policy.* from pn_policy, holder_ap 
-            where holder_ap.mac="{}" and holder_ap.holder=pn_policy.pn and 
-            pn_policy.ssid="{}"'''.format(ap_mac, ssid)
-            cur.execute(sql)
-            result = cur.fetchone()
-            return result if result else {}
-
     def query_pn_policy(self, **kwargs):
         '''
             query network profile
@@ -488,36 +338,6 @@ class Store():
 
             cur.execute(sql)
             return cur.fetchone()
-
-    def query_ap_holder(self, ap_mac):
-        with Cursor(self.dbpool) as cur:
-            sql = 'select * from holder_ap where mac = "{}"'.format(ap_mac)
-            cur.execute(sql)
-            return cur.fetchone()
-
-    def get_account_by_mobile_or_mac(self, mobile, mac):
-        '''
-        '''
-        with Cursor(self.dbpool) as cur:
-            sql = 'select * from account where mobile="{}" or (uuid="{}" and mask>>6 &1)'.format(mobile, mac)
-            cur.execute(sql)
-            return cur.fetchone()
-
-    def get_user_records_by_mac(self, mac):
-        with Cursor(self.dbpool) as cur:
-            sql = 'select user, mac, tlogin from mac_history where mac = "{}" order by tlogin'.format(mac)
-            cur.execute(sql)
-            records = cur.fetchall()
-            return records if records else []
-
-    def get_mac_records(self, user):
-        '''
-        '''
-        with Cursor(self.dbpool) as cur:
-            sql = 'select user, mac, tlogin from mac_history where user = "{}" order by tlogin'.format(user)
-            cur.execute(sql)
-            records = cur.fetchall()
-            return records if records else []
 
     def get_user_mac_record(self, user, mac):
         '''
@@ -549,14 +369,6 @@ class Store():
             cur.execute(sql)
             result = cur.fetchone()
             return result['start'] if result else ''
-
-    def count_online(self, account):
-        '''
-        '''
-        with Cursor(self.dbpool) as cur:
-            sql = 'select count(mac_addr) as online from online where user = "{}"'.format(account)
-            cur.execute(sql)
-            return cur.fetchone()['online']
 
     def get_onlines(self, account):
         '''

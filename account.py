@@ -37,7 +37,7 @@ EXPIRE = 7200
 def setup(config):
     store.setup(config)
 
-def get_billing_policy(nas_addr, ap_mac, ssid):
+def get_billing_policy(ac_ip, ap_mac, ssid):
     '''
         1. check ap profile
         2. check ssid profile
@@ -67,48 +67,20 @@ def get_billing_policy(nas_addr, ap_mac, ssid):
 
                 return profile
 
-    # get pn policy by ssid
-    profile = store.query_pn_policy(ssid=ssid)
+        # get pn policy by ssid
+        profile = store.query_pn_policy(ssid=ssid)
 
-    if profile:
-        return profile
+        if profile:
+            return profile
+    else:
+        # ap_mac is False, query by nas_addr
+        profile = store.get_gw_pn_policy(ac_ip)
+        logger.info('nas_addr: {} ---- {}'.format(ac_ip, profile))
 
+        if profile:
+            return profile
+            
     raise HTTPError(400, 'Abnormal, query pn failed, {} {}'.format(ap_mac, ssid))
-
-    # if (configure['mask'])>>2 & 1:
-    #     # check ap prifile in cache?
-    #     if ap_mac in AP_MAPS:
-    #         profile = PN_PROFILE[AP_MAPS[ap_mac]].get(ssid, None)
-    #         if profile and int(time.time()) < profile['expired']:
-    #             return profile
-
-    #     # get policy by ap
-    #     result = mongo.find_one('aps', mac=ap_mac)
-    #     if not result['_location']:
-    #         pn,ssid = 10002,'NanSha_City'
-    #     else:
-    #         pn = result['_location'].split(',')[1]
-
-    #     profile = store.query_pn_policy(pn=pn, ssid=ssid)
-    #     # profile = store.query_ap_policy(ap_mac, ssid)
-    #     logger.info('mac:{} ssid:{} ---- {}'.format(ap_mac, ssid, profile))
-
-    #     if not profile:
-    #         raise HTTPError(400, 'Abnormal, query pn failed, {} {}'.format(ap_mac, ssid))
-
-    #     profile['expired'] = int(time.time()) + EXPIRE
-    #     AP_MAPS[ap_mac] = profile['pn']
-    #     PN_PROFILE[profile['pn']][profile['ssid']] = profile
-    #         
-    #     return PN_PROFILE[AP_MAPS[ap_mac]][ssid]
-
-    # if (configure['mask'])>>1 & 1:
-    #     # return store.query_pn_policy(pn=configure['pns'][ssid], ssid=ssid)
-    #     # only based ssid, ssid must be unique
-    #     return store.query_pn_policy(ssid=ssid)
-
-    # if (configure['mask'] & 1):
-    #     return store.query_pn_policy(pn=configure['pn'], ssid=ssid)
 
 def get_billing_policy2(req):
     ac_ip = req.get_nas_addr()
@@ -121,7 +93,10 @@ def notify_offline(bas_config):
     if bas_config['mask'] == 1:
         pass
 
-
+def get_gw_pn_policy(gw_ip):
+    '''
+    '''
+    return store.get_gw_pn_policy(gw_ip)
 
 def check_pn_privilege(pn, user):            
     record = store.check_pn_privilege(pn, user)
@@ -133,9 +108,6 @@ def check_pn_privilege(pn, user):
         return False, HTTPError(433, reason=bd_errs[433])
 
     return True, None
-
-def bind_avaiable_pns(user, mobile):
-    store.bind_avaiable_pns(user, mobile)
 
 def _check_expire_date(_user): 
     '''
@@ -160,12 +132,6 @@ def check_auto_login_expired(_user):
         return True
     return False
 
-def get_user_by_mac(mac, ac):
-    records = store.get_user_records_by_mac(mac)
-    if records:
-        return records[-1]['user']
-    return ''
-
 def get_current_billing_policy(**kwargs):
     '''
         user's billing policy based on the connected ap 
@@ -179,16 +145,28 @@ def get_bd_user(user):
     '''
     return store.get_bd_user(user) or store.get_bd_user2(user)
 
-def add_user(user, appid='', tid='', mobile='', ends=2**5):
-    password = utility.generate_password(6)
-    return store.add_user(user, password, appid, tid, mobile, ends)
+def check_weixin_user(openid, appid='', tid='', mobile='', mac='', ends=2**5):
+    '''
+        check account existes?
+        if existes: return existed account
+        else: create new
+    '''
+    # first get user by mac address
+    _user = store.get_weixin_user(openid, appid, mac)
+    if _user:
+        if _user['weixin']:
+            if tid and _user['tid']!=tid:
+                store.update_account(_user['user'], tid=tid)
+            return _user
+        else:
+            # found previous account by mac, update account's weixin
+            kwargs = {'weixin':openid, 'appid':appid}
+            if tid:
+                kwargs['tid'] = tid
+            store.update_account(_user['user'], **kwargs)
+            return _user
 
-def get_user(value, column='weixin', appid=''):
-    _user = store.get_user(value, column=column, appid=appid) or store.get_user2(value, column=column, appid=appid)
-    return _user
-
-def create_user(user, appid='', tid='', mobile='', ends=2**5):
-    _user = store.add_user(user, utility.generate_password(), appid=appid, 
+    _user = store.add_user(openid, utility.generate_password(), appid=appid, 
                            tid=tid, mobile=mobile, ends=ends)
     return _user
 
@@ -207,13 +185,6 @@ def update_mac_record(user, mac, duration, agent):
     except IntegrityError:
         # duplicate entry
         pass
-
-
-def query_ap_policy(ap_mac, ssid):
-    return store.query_ap_policy(ap_mac, ssid)
-
-def query_pn_policy(**kwargs):
-    return store.query_pn_policy(**kwargs)
 
 #************************************************************
 

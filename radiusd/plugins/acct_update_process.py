@@ -31,6 +31,7 @@ def process(req=None,user=None,runstat=None,**kwargs):
         _starttime = updatetime - datetime.timedelta(seconds=sessiontime)       
         online = utils.Storage(
             user = user['user'],
+            is_auto = user.get('is_auto', 0),
             nas_addr = req.get_nas_addr(),
             acct_session_id = req.get_acct_sessionid(),
             acct_start_time = _starttime.strftime("%Y-%m-%d %H:%M:%S"),

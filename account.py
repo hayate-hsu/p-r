@@ -139,11 +139,11 @@ def get_current_billing_policy(**kwargs):
     profile = get_billing_policy(kwargs['ac_ip'], kwargs['ap_mac'], kwargs['ssid'])
     return profile
 
-def get_bd_user(user):
+def get_bd_user(user, ismac=False):
     '''
         get bd_account user record
     '''
-    return store.get_bd_user(user) or store.get_bd_user2(user)
+    return store.get_bd_user(user, ismac=ismac) or store.get_bd_user2(user, ismac=ismac)
 
 def check_weixin_user(openid, appid='', tid='', mobile='', mac='', ends=2**5):
     '''

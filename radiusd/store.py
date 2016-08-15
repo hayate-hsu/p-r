@@ -247,7 +247,7 @@ class Store():
         '''
         with Cursor(self.dbpool) as cur:
             # get account by openid & appid
-            sql = '''select bd_account.*, account.weixin, account.tid from bd_account 
+            sql = '''select bd_account.*, account.weixin, account.tid, account.appid from bd_account 
             right join account on bd_account.user=cast(account.id as char)  
             where account.weixin="{}" and account.appid="{}"'''.format(openid, appid)
             cur.execute(sql)
@@ -257,7 +257,7 @@ class Store():
 
             if mac:
                 # get account by uuid (android)
-                sql = '''select bd_account.*, account.weixin, account.tid from bd_account 
+                sql = '''select bd_account.*, account.weixin, account.tid, account.appid from bd_account 
                 right join account on bd_account.user=cast(account.id as char) 
                 where account.uuid="{}" and account.mask>>6&1'''.format(mac)
                 cur.execute(sql)
@@ -266,7 +266,7 @@ class Store():
                     return result
 
                 # get account by mac address
-                sql = '''select bd_account.*, account.weixin, account.tid from bd_account 
+                sql = '''select bd_account.*, account.weixin, account.tid, account.appid from bd_account 
                 right join mac_history on bd_account.user=mac_history.user 
                 left join account on bd_account.user=cast(account.id as char) 
                 where mac_history.mac="{}" and account.weixin is null order by account.ctime'''.format(mac)

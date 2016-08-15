@@ -180,7 +180,7 @@ class Store():
             conn.commit()
             return user
 
-    def get_bd_user(self, user, password=None):
+    def get_bd_user(self, user, password=None, ismac=False):
         '''
             support auto login, user may be mac address or user account
             user:
@@ -189,9 +189,11 @@ class Store():
         '''
         with Cursor(self.dbpool) as cur:
             sql = ''
-            if user.count(':') == 5:
-                sql = '''select bd_account.*, mac_history.expired as auto_expired from mac_history, bd_account 
-                where mac_history.mac = "{}" and bd_account.user = mac_history.user'''.format(user)
+            if ismac:
+            # if user.count(':') == 5:
+                sql = '''select bd_account.*, mac_history.expired as auto_expired from bd_account 
+                right join mac_history on bd_account.user=mac_history.user 
+                where mac_history.mac="{}" order by mac_history.expired desc'''.format(user)
             else:
                 sql = 'select * from bd_account where user = "{}"'.format(user)
                 if password:
@@ -212,7 +214,7 @@ class Store():
                         user['ends'] = ret['ends']
             return user
 
-    def get_bd_user2(self, user, password=None):
+    def get_bd_user2(self, user, password=None, ismac=False):
         '''
             support auto login, user may be mac address or user account
             user:
@@ -224,9 +226,11 @@ class Store():
             conn.commit()
             cur = conn.cursor(MySQLdb.cursors.DictCursor)
             sql = ''
-            if user.count(':') == 5:
-                sql = '''select bd_account.*, mac_history.expired as auto_expired from mac_history, bd_account 
-                where mac_history.mac = "{}" and bd_account.user = mac_history.user'''.format(user)
+            if ismac:
+            # if user.count(':') == 5:
+                sql = '''select bd_account.*, mac_history.expired as auto_expired from bd_account 
+                right join mac_history on bd_account.user=mac_history.user 
+                where mac_history.mac="{}" order by mac_history.expired desc'''.format(user)
             else:
                 sql = 'select * from bd_account where user = "{}"'.format(user)
                 if password:

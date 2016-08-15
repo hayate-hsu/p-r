@@ -672,7 +672,7 @@ class PageHandler(BaseHandler):
             _user = {'user':'55532', 'password':'987012', 'mask':10, 'coin':60, 'ends':100}
             self.user = _user
         else:
-            _user = account.get_bd_user(kwargs['user_mac']) 
+            _user = account.get_bd_user(kwargs['user_mac'], ismac=True) 
             if not _user:
                 return
 

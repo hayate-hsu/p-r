@@ -188,7 +188,7 @@ class RADIUSAccess(RADIUS):
             is_auto = 1
 
 
-        user = account.get_bd_user(req_user)
+        user = account.get_bd_user(req_user, ismac=is_auto)
         if user:
             # get billing policy
             user['is_auto'] = is_auto
@@ -264,7 +264,7 @@ class RADIUSAccounting(RADIUS):
             req_user = utility.format_mac(req_user) 
             is_auto = 1
 
-        user = account.get_bd_user(req_user)
+        user = account.get_bd_user(req_user, ismac=is_auto)
 
         if user:
             user['is_auto'] = is_auto

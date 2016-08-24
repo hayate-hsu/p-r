@@ -525,7 +525,6 @@ class PageHandler(BaseHandler):
         if (not kwargs['ap_mac']) and kwargs['ssid'] != self.profile['ssid']:
             kwargs['ssid'] = self.profile['ssid']
 
-
         # process weixin argument
         self.prepare_wx_wifi(**kwargs)
 
@@ -538,7 +537,7 @@ class PageHandler(BaseHandler):
             else:
                 _user, self.task_resp = self.task_resp.result, None
                 if _user:
-                    self._add_online_by_bas(kwargs['ac_ip'], kwargs['user_mac'])
+                    self._add_online_by_bas(kwargs['ac_ip'], kwargs['ap_mac'], kwargs['user_mac'])
                     if accept.startswith('application/json'):
                         token = utility.token(self.user['user'])
                         self.render_json_response(User=self.user['user'], Token=token, Mask=self.user['mask'], 
@@ -625,6 +624,7 @@ class PageHandler(BaseHandler):
             # sangfor device
             kwargs['vlan'] = self.get_argument('vlan', 1)
             ssids = self.get_arguments('ssid')
+            access_log.info('ssids: {}'.format(ssids))
             ssid = ssids[-1] if kwargs['ac_ip'] == '172.29.1.246' else ssids[0]
             # ssid = self.get_argument('ssid')
             kwargs['ssid'] = ssid.strip('"')
@@ -710,7 +710,7 @@ class PageHandler(BaseHandler):
 
         if response.status in ('SUCCESS', ):
             access_log.info('{} auto login successfully, mac:{}'.format(_user['user'], kwargs['user_mac']))
-            self._add_online_by_bas(kwargs['ac_ip'], kwargs['user_mac'])
+            self._add_online_by_bas(kwargs['ac_ip'], kwargs['ap_mac'], kwargs['user_mac'])
         elif isinstance(response.result, HTTPError) and response.result.status_code in (435,):
             access_log.info('{} has been authed, mac:{}'.format(_user['user'], kwargs['user_mac']))
         else:
@@ -856,14 +856,15 @@ class PageHandler(BaseHandler):
                 access_log.info('{} has no left time'.format(self.user['user']))
                 raise HTTPError(403, reason=bd_errs[450])
 
-    def _add_online_by_bas(self, nas_addr, mac_addr):
+    def _add_online_by_bas(self, nas_addr, ap_mac, mac_addr):
         '''
             if bas's mask & 1, add online record
             sangfor doesn't support accounting package (Radius, AccountRequest)
         '''
-        if AC_CONFIGURE[nas_addr]['mask'] & 1:
+        if AC_CONFIGURE[nas_addr]['mask'] & 5:
             # bas is sangfor 
-            account.add_online2(nas_addr, mac_addr, self.profile['_location'], self.profile['ssid'])
+            account.add_online2(self.user['user'], nas_addr, ap_mac, mac_addr, 
+                                self.profile['_location'], self.profile['ssid'])
 
 class PortalHandler(BaseHandler):
     '''
@@ -927,7 +928,7 @@ class PortalHandler(BaseHandler):
 
         if response.successful() and self.profile:
             # login successfully 
-            self._add_online_by_bas(ac_ip, user_mac)
+            self._add_online_by_bas(ac_ip, ap_mac, user_mac)
             account.update_mac_record(self.user['user'], user_mac, 
                                       self.profile['duration'], self.agent_str)
         else:
@@ -1006,7 +1007,7 @@ class PortalHandler(BaseHandler):
 
         if response.status in ('SUCCESS', ) and self.profile:
             # login successfully 
-            self._add_online_by_bas(ac_ip, user_mac)
+            self._add_online_by_bas(ac_ip, ap_mac, user_mac)
             account.update_mac_record(self.user['user'], user_mac, self.profile['duration'], self.agent_str)
         else:
             if isinstance(response.result, HTTPError) and response.result.status_code in (435, ):
@@ -1025,14 +1026,17 @@ class PortalHandler(BaseHandler):
         self.render_json_response(User=self.user['user'], Token=token, Code=200, Msg='OK')
         access_log.info('%s login successfully, ip: %s', self.user['user'], self.request.remote_ip)
 
-    def _add_online_by_bas(self, nas_addr, mac_addr):
+    def _add_online_by_bas(self, nas_addr, ap_mac, mac_addr):
         '''
             if bas's mask & 1, add online record
+            if bas's mask & 4, close accounting package
             sangfor doesn't support accounting package (Radius, AccountRequest)
         '''
-        if AC_CONFIGURE[nas_addr]['mask'] & 1:
-            # bas is sangfor 
-            account.add_online2(nas_addr, mac_addr, self.profile['_location'], self.profile['ssid'])
+        if AC_CONFIGURE[nas_addr]['mask'] & 5:
+            # bas is gateway or close accounting package
+            # portal manage client online & offline
+            account.add_online2(self.user['user'], nas_addr, ap_mac, mac_addr, 
+                                self.profile['_location'], self.profile['ssid'])
 
 EXPIRE = 7200
 
@@ -1133,7 +1137,7 @@ def ac_data_handler(sock, data, addr):
                 mac.append('{:02X}'.format(ord(b)))
             mac = ':'.join(mac)
 
-            if addr[0] in AC_CONFIGURE and AC_CONFIGURE[addr[0]]['mask'] & 1:
+            if addr[0] in AC_CONFIGURE and AC_CONFIGURE[addr[0]]['mask'] & 5:
                 # receive logout request from 
                 account.del_online2(addr[0], mac)
 

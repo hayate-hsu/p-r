@@ -271,6 +271,10 @@ class RADIUSAccounting(RADIUS):
             self.user_trace.push(user['user'],req)        
             # get billing policy
             user['profile'] = account.get_billing_policy2(req)
+
+        if not user:
+            # can't found user
+            raise PacketError('Can\'t found: {}'.format(req_user))
           
         reply = req.CreateReply()
         reply.source = req.source

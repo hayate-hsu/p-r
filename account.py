@@ -162,14 +162,14 @@ def check_weixin_user(openid, appid='', tid='', mobile='', mac='', ends=2**5):
                 kwargs['appid'] = appid
             if kwargs:
                 store.update_account(_user['user'], **kwargs)
-            return _user
         else:
             # found previous account by mac, update account's weixin
             kwargs = {'weixin':openid, 'appid':appid}
             if tid:
                 kwargs['tid'] = tid
             store.update_account(_user['user'], **kwargs)
-            return _user
+
+        return _user
 
     _user = store.add_user(openid, utility.generate_password(), appid=appid, 
                            tid=tid, mobile=mobile, ends=ends)
@@ -208,8 +208,8 @@ def update_billing(billing):
 def add_online(online):
     store.add_online(online)
 
-def add_online2(nas_addr, mac, _location, ssid):
-    store.add_online2(nas_addr, mac, _location, ssid)
+def add_online2(user, nas_addr, ap_mac, mac, _location, ssid):
+    store.add_online2(user, nas_addr, ap_mac, mac, _location, ssid)
 
 def get_online(nas_addr, session_id):
     return store.get_online(nas_addr, session_id)

@@ -192,7 +192,7 @@ class Store():
             if ismac:
             # if user.count(':') == 5:
                 sql = '''select bd_account.*, mac_history.expired as auto_expired from bd_account 
-                right join mac_history on bd_account.user=mac_history.user 
+                left join mac_history on bd_account.user=mac_history.user 
                 where mac_history.mac="{}" order by mac_history.expired desc'''.format(user)
             else:
                 sql = 'select * from bd_account where user = "{}"'.format(user)
@@ -200,7 +200,7 @@ class Store():
                     sql = sql + ' and password = "{}"'.format(password)
             cur.execute(sql)
             user = cur.fetchone()
-            if user and user['mask']>>5 & 1:
+            if user and user['mask'] and user['mask']>>5 & 1:
                 # query weixin account binded renter
                 sql = 'select * from bind where weixin = "{}"'.format(user)
                 cur.execute(sql)
@@ -229,7 +229,7 @@ class Store():
             if ismac:
             # if user.count(':') == 5:
                 sql = '''select bd_account.*, mac_history.expired as auto_expired from bd_account 
-                right join mac_history on bd_account.user=mac_history.user 
+                left join mac_history on bd_account.user=mac_history.user 
                 where mac_history.mac="{}" order by mac_history.expired desc'''.format(user)
             else:
                 sql = 'select * from bd_account where user = "{}"'.format(user)
@@ -267,7 +267,7 @@ class Store():
 
                 # get account by mac address
                 sql = '''select bd_account.*, account.weixin, account.tid, account.appid from bd_account 
-                right join mac_history on bd_account.user=mac_history.user 
+                left join mac_history on bd_account.user=mac_history.user 
                 left join account on bd_account.user=cast(account.id as char) 
                 where mac_history.mac="{}" and account.weixin is null order by account.ctime'''.format(mac)
                 print(sql)
@@ -416,15 +416,15 @@ class Store():
             cur.execute(sql)
             conn.commit()
 
-    def add_online2(self, nas_addr, mac, _location, ssid):
+    def add_online2(self, user, nas_addr, ap_mac, mac, _location, ssid):
         with Connect(self.dbpool) as conn:
             cur = conn.cursor(MySQLdb.cursors.DictCursor)
 
             sql = 'delete from online where mac_addr = "{}"'.format(mac)
             cur.execute(sql)
 
-            sql = '''insert into online (nas_addr, mac_addr, _location, ssid) 
-            values("{}", "{}", "{}", "{}")'''.format(nas_addr, mac, _location, ssid)
+            sql = '''insert into online (user, nas_addr, ap_mac, mac_addr, _location, ssid) 
+            values("{}", "{}", "{}", "{}", "{}", "{}")'''.format(user, nas_addr, ap_mac, mac, _location, ssid)
             cur.execute(sql)
             conn.commit()
 
@@ -496,6 +496,18 @@ class Store():
     def del_online2(self, nas_addr, mac_addr):
         with Connect(self.dbpool) as conn:
             cur = conn.cursor(MySQLdb.cursors.DictCursor)
+            sql = 'select * from online where nas_addr="{}" and mac_addr="{}"'.format(nas_addr, mac_addr)
+            cur.execute(sql)
+            result = cur.fetchone()
+            if not result:
+                return
+
+            sql = '''insert into ticket (user, nas_addr, ap_mac, mac_addr, acct_start_time) 
+            values("{}", "{}", "{}", "{}", "{}")
+            '''.format(result['user'], result['nas_addr'], result['ap_mac'], result['mac_addr'], result['acct_start_time'])
+            cur.execute(sql)
+
+
             sql = 'delete from online where nas_addr = "{}" and mac_addr = "{}"'.format(nas_addr, mac_addr)
             cur.execute(sql)
             conn.commit()

@@ -173,7 +173,7 @@ class Store():
             cur.execute(sql)
 
             sql = '''select bd_account.* from bd_account 
-            right join account on bd_account.user=cast(account.id as char) 
+            left join account on bd_account.user=cast(account.id as char) 
             where {}'''.format(filters)
             cur.execute(sql)
             user = cur.fetchone()
@@ -248,7 +248,7 @@ class Store():
         with Cursor(self.dbpool) as cur:
             # get account by openid & appid
             sql = '''select bd_account.*, account.weixin, account.tid, account.appid from bd_account 
-            right join account on bd_account.user=cast(account.id as char)  
+            left join account on bd_account.user=cast(account.id as char)  
             where account.weixin="{}" and account.appid="{}"'''.format(openid, appid)
             cur.execute(sql)
             result = cur.fetchone()
@@ -258,7 +258,7 @@ class Store():
             if mac:
                 # get account by uuid (android)
                 sql = '''select bd_account.*, account.weixin, account.tid, account.appid from bd_account 
-                right join account on bd_account.user=cast(account.id as char) 
+                left join account on bd_account.user=cast(account.id as char) 
                 where account.uuid="{}" and account.mask>>6&1'''.format(mac)
                 cur.execute(sql)
                 result = cur.fetchone()

@@ -624,7 +624,6 @@ class PageHandler(BaseHandler):
             # sangfor device
             kwargs['vlan'] = self.get_argument('vlan', 1)
             ssids = self.get_arguments('ssid')
-            access_log.info('ssids: {}'.format(ssids))
             ssid = ssids[-1] if kwargs['ac_ip'] == '172.29.1.246' else ssids[0]
             # ssid = self.get_argument('ssid')
             kwargs['ssid'] = ssid.strip('"')

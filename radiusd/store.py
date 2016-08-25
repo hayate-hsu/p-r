@@ -193,7 +193,7 @@ class Store():
             # if user.count(':') == 5:
                 sql = '''select bd_account.*, mac_history.expired as auto_expired from bd_account 
                 left join mac_history on bd_account.user=mac_history.user 
-                where mac_history.mac="{}" order by mac_history.expired desc'''.format(user)
+                where mac_history.mac="{}" order by bd_account.expired desc, mac_history.expired desc'''.format(user)
             else:
                 sql = 'select * from bd_account where user = "{}"'.format(user)
                 if password:
@@ -230,7 +230,7 @@ class Store():
             # if user.count(':') == 5:
                 sql = '''select bd_account.*, mac_history.expired as auto_expired from bd_account 
                 left join mac_history on bd_account.user=mac_history.user 
-                where mac_history.mac="{}" order by mac_history.expired desc'''.format(user)
+                where mac_history.mac="{}" order by bd_account.expired desc, mac_history.expired desc'''.format(user)
             else:
                 sql = 'select * from bd_account where user = "{}"'.format(user)
                 if password:

@@ -7,6 +7,7 @@ from tornado.web import HTTPError
 import time
 
 import collections
+import functools
 
 from MySQLdb import (IntegrityError)
 
@@ -31,6 +32,8 @@ PORTAL_PORT = 50100
 
 PN_PROFILE = collections.defaultdict(dict)
 AP_MAPS = {}
+
+APP_PROFILE = collections.defaultdict(dict)
 
 EXPIRE = 7200
 
@@ -80,7 +83,7 @@ def get_billing_policy(ac_ip, ap_mac, ssid):
         if profile:
             return profile
             
-    raise HTTPError(400, 'Abnormal, query pn failed, {} {}'.format(ap_mac, ssid))
+    raise HTTPError(400, reason='Abnormal, query pn failed, {} {}'.format(ap_mac, ssid))
 
 def get_billing_policy2(req):
     ac_ip = req.get_nas_addr()
@@ -190,6 +193,22 @@ def update_mac_record(user, mac, duration, agent):
     except IntegrityError:
         # duplicate entry
         pass
+
+def get_appid(appid):
+    assert appid
+    now = datetime.datetime.now()
+    if appid in APP_PROFILE and now < APP_PROFILE[appid]['expired']:
+        return APP_PROFILE[appid]
+
+    record = store.get_appid(appid)
+    if not record:
+        raise HTTPError(404, reason='Can\'t found app({}) profile'.format(appid))
+
+    expired = now + datetime.timedelta(days=1)
+    record['expired'] = expired
+    APP_PROFILE[appid] = record
+    return APP_PROFILE[appid]
+
 
 #************************************************************
 

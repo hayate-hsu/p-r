@@ -110,6 +110,14 @@ class Store():
             bas = cur.fetchone()
             return bas
 
+    def get_appid(self, appid):
+        '''
+        '''
+        with Cursor(self.dbpool) as cur:
+            cur.execute('select * from app where appid = "{}"'.format(appid))
+            record = cur.fetchone()
+            return record
+        
     def add_user(self, user, password, appid='', tid='', mobile='', ends=2**5):
         '''
             user : uuid or weixin openid

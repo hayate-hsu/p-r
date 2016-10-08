@@ -28,10 +28,12 @@ define('total', default=1, help='portal server total number , used for serial nu
 # log configuration
 define('log_file_prefix', type=str, default='/var/log/radiusd/portal_8880.log')
 define('log_rotate_mode', type=str, default='time', help='time or size')
+define('log_file_num_backups', type=int, default=3, help='number of log files to keep')
 
 import errno
 import os
 import sys
+import re
 
 import time
 
@@ -54,6 +56,7 @@ import config
 import user_agents
 
 import account
+import template
 
 from task import portal 
 
@@ -453,30 +456,18 @@ class TestHandler(BaseHandler):
     #     self.render_json_response(Code=200, Msg='OK')
     @tornado.gen.coroutine
     def get(self):
-        response = yield tornado.gen.Task(portal.sleep.apply_async, args=[3,])
-        # response = portal.sleep.apply_async(args=[3,])
-        # self.response = None
-        # result = self.test()
-        # if result is not None:
-        #     result = yield result
+        print('in : {}'.format(self.request))
 
-        # response = self.response
+        try:
+            response = yield template.get_portal('10001', 'h5') 
+        except template.PortalConfig as config:
+            access_log.info('config: {}'.format(config.value), exc_info=True)
+            print(config.value)
+        except:
+            access_log.info('exception', exc_info=True)
 
-        self.write(str(response.result))
-        self.finish()
-        # print(dir(response))
-        # print(response.status)
-        # for item in dir(response):
-        #     if item.startswith('_'):
-        #         continue 
-        #     if item in ('forget', 'get', 'get_leaf'):
-        #         continue
-
-        #     value = getattr(response, item)
-        #     if callable(value):
-        #         print('key:{}, value1:{}'.format(item, value()))
-        #     else:
-        #         print('key:{}, value2:{}'.format(item, value))
+        
+        self.render_json_response(Code=200, Msg='OK')
 
     # @tornado.gen.coroutine
     # def test(self):
@@ -525,10 +516,21 @@ class PageHandler(BaseHandler):
         if (not kwargs['ap_mac']) and kwargs['ssid'] != self.profile['ssid']:
             kwargs['ssid'] = self.profile['ssid']
 
+        # get portal profile
+        try:
+            platform = 'h5' if self.is_mobile else 'pc'
+            response = yield template.get_portal(str(self.profile['pn']), platform) 
+        except template.PortalConfig as config:
+            config = config.value
+            if config['mask'] not in (1, 2):
+                self.profile['portal'] = config['config']
+        except:
+            pass
+
         # process weixin argument
         self.prepare_wx_wifi(**kwargs)
 
-        if not AC_CONFIGURE[kwargs['ac_ip']]['mask'] & 2: 
+        if self.profile['pn'] in (55532, ) or (not AC_CONFIGURE[kwargs['ac_ip']]['mask'] & 2): 
             # ac doesn't support mac auth, need portal do it 
             result = yield self.login_auto_by_mac(**kwargs)
 
@@ -583,34 +585,39 @@ class PageHandler(BaseHandler):
                     if self.profile:
                         account.update_mac_record(self.user['user'], kwargs['user_mac'], self.profile['duration'], self.agent_str)
 
+                    return
+
         # get policy
         kwargs['user'] = ''
         kwargs['password'] = ''
 
-        access_log.info('profile: {}'.format(self.profile))
-        
-        pn_ssid, pn_note, pn_logo = self.profile['ssid'], self.profile['note'], self.profile['logo']
+        # render portal page
+        self.render_portal(self.is_mobile, accept, self.profile, self.wx_wifi, **kwargs)
 
+
+    def render_portal(self, platform, accept, profile, wx_config, **kwargs):
         # render json response to app
         if accept.startswith('application/json'):
-            self.render_json_response(Code=200, Msg='OK', openid='', pn_ssid=pn_ssid, 
-                                      pn_note=pn_note, pn_logo=pn_logo,  
-                                      ispri=self.profile['policy'] & 2, pn=self.profile['pn'], 
-                                      note=self.profile['note'], image=self.profile['logo'], 
-                                      logo=self.profile['logo'],
-                                      **kwargs)
+            self.render_json_response(Code=200, Msg='OK', openid='', pn_ssid=profile['ssid'], 
+                                      pn_note=profile['note'], pn_logo=profile['logo'],  
+                                      ispri=profile['policy'] & 2, pn=profile['pn'], 
+                                      note=profile['note'], image=profile['logo'], 
+                                      logo=profile['logo'], **kwargs)
             return
-                    
 
         # now all page user login, later after update back to use self.profile['portal']  
-        page = self.profile['portal'] or 'login.html'
+        if isinstance(profile['portal'], dict):
+            page = 'tplh5.html' if platform else 'tplpc.html'
+            kwargs['config'] = profile['portal']
+        else:
+            page = profile['portal'] or 'login.html'
 
-        self.render(page, openid='', ispri=self.profile['policy'] & 2, 
-                    pn=self.profile['pn'], note=self.profile['note'], image=self.profile['logo'], 
-                    appid=self.profile['appid'], shopid=self.profile['shopid'], secret=self.profile['secret'], 
-                    logo=self.profile['logo'],
-                    extend=self.wx_wifi['extend'], timestamp=self.wx_wifi['timestamp'], 
-                    sign=self.wx_wifi['sign'], authUrl=self.wx_wifi['auth_url'], 
+        self.render(page, openid='', ispri=profile['policy'] & 2, 
+                    pn=profile['pn'], note=profile['note'], image=profile['logo'], 
+                    appid=profile['appid'], shopid=profile['shopid'], secret=profile['secret'], 
+                    logo=profile['logo'],
+                    extend=wx_config['extend'], timestamp=wx_config['timestamp'], 
+                    sign=wx_config['sign'], authUrl=wx_config['auth_url'], 
                     **kwargs)
 
 
@@ -814,6 +821,7 @@ class PageHandler(BaseHandler):
 
         self.wx_wifi = wx_wifi
 
+
     def parse_url_arguments(self, url):
         '''
         '''
@@ -870,8 +878,14 @@ class PortalHandler(BaseHandler):
         Handler portal auth request
     '''
     def prepare(self):
+        '''
+            is_weixin : weixin ends
+            is_third : third app 
+                third app: see ad page
+        '''
         super(PortalHandler, self).prepare()
         self.is_weixin = False
+        self.is_third = False
 
     def _check_account_privilege(self):
         # check private network
@@ -887,6 +901,25 @@ class PortalHandler(BaseHandler):
                 # raise HTTPError(403, reason='Account has no left time')
                 access_log.info('{} has no left time'.format(self.user['user']))
                 raise HTTPError(403, reason=bd_errs[450])
+
+    def _check_app_sign(self):
+        '''
+            check appid's sign if request arguments contains {appid:'', sign:''}
+        '''
+        appid = self.get_argument('appid', '')
+        kwargs = {key:value[0] for key,value in self.request.arguments.iteritems()}
+        sign = kwargs.pop('sign', '')
+        if appid and sign:
+            record = account.get_appid(appid)
+            # kwargs['appkey'] = record['appkey']
+            data = u'&'.join([u'{}={}'.format(key, kwargs[key]) for key in sorted(kwargs.keys())])
+            data = data + u'&appkey={}'.format(record['appkey'])
+            access_log.info('data: {}'.format(data))
+
+            md5 = utility.md5(data.encode('utf-8')).hexdigest()
+            if sign != md5:
+                raise HTTPError(403, reason='app sign check failed')
+
 
     # @_trace_wrapper
     @_parse_body
@@ -951,8 +984,9 @@ class PortalHandler(BaseHandler):
     @_parse_body
     @tornado.gen.coroutine
     def post(self):
-        # parse request data
-        # logger.info(self.request.arguments)
+        # first check app sign
+        self._check_app_sign()
+
         user = self.get_argument('user', '')
         password = self.get_argument('password', '')
         _user = None

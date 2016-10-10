@@ -102,7 +102,10 @@ def get_gw_pn_policy(gw_ip):
     return store.get_gw_pn_policy(gw_ip)
 
 def check_pn_privilege(pn, user):            
-    record = store.check_pn_privilege(pn, user)
+    try:
+        record = store.check_pn_privilege(pn, user)
+    except:
+        record = None
     if not record:
         return False, HTTPError(427, reason='{} can\'t access private network : {}'.format(user, pn))
 

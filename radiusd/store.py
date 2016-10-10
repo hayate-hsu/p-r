@@ -319,10 +319,10 @@ class Store():
         '''
         # with Cursor(self.dbpool) as cur:
         with Connect(self.dbpool) as conn:
-            conn.commit()
             cur = conn.cursor(MySQLdb.cursors.DictCursor)
-            sql = 'select pn_{pn}.mask from pn_bind, pn_{pn} where pn_bind.user="{user}" and \
-                    pn_bind.holder={pn} and pn_{pn}.mobile=pn_bind.mobile'.format(pn=pn, user=user)
+            sql = '''select pn_{pn}.mask from pn_{pn} 
+            left join bd_account on pn_{pn}.mobile=bd_account.mobile 
+            where bd_account.user="{user}"'''.format(pn=pn, user=user)
             cur.execute(sql)
             return cur.fetchone()
 

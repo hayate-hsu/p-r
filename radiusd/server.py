@@ -193,20 +193,24 @@ class RADIUSAccess(RADIUS):
             # get billing policy
             user['is_auto'] = is_auto
             user['profile'] = account.get_billing_policy2(req)
-            if (user['profile']['policy'] & 2) and not account.check_pn_privilege(user['profile']['pn'], user['user']):
+            try:
+                account.check_account_privilege(user, user['profile'])
+            except:
                 user = None
+            # if (user['profile']['policy'] & 2) and not account.check_pn_privilege(user['profile']['pn'], user['user']):
+            #     user = None
 
             # user auth by mac address, check auto expired
-            if account.check_auto_login_expired(user):
+            if user and account.check_auto_login_expired(user):
                 user = None
 
-            if user and not user['profile']:
-                if user['mask']>>30 & 1:
-                    user = None
-                if user:
-                    expired = account.check_account_balance(user)
-                    if expired:
-                        user = None
+            # if user and not user['profile']:
+            #     if user['mask']>>30 & 1:
+            #         user = None
+            #     if user:
+            #         expired = account.check_account_balance(user)
+            #         if expired:
+            #             user = None
         if user:
             self.user_trace.push(user['user'],req)
 

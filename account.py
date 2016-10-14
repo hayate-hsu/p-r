@@ -92,6 +92,28 @@ def get_billing_policy2(req):
 
     return get_billing_policy(ac_ip, ap_mac, ssid)
 
+def check_account_privilege(user, profile):
+    # check private network
+    if user['mask']>>30 & 1:
+        return HTTPError(433, reason=bd_errs[433])
+
+    if profile['policy'] & 2:
+        ret, err = check_pn_privilege(profile['pn'], user['user'])
+        if not ret:
+            raise err
+
+    if profile['pn'] in (15914,):
+        # if account is nvxiao teacher, allow his access 15914
+        ret, err = check_pn_privilege(59484, user['user'])
+        if ret:
+            user['is_teacher'] = 1 
+            return
+
+    # check account has billing? 
+    if not (profile['policy'] & 1):
+        if check_account_balance(user['user']):
+            raise HTTPError(403, reason=bd_errs[450])
+
 def notify_offline(bas_config):
     if bas_config['mask'] == 1:
         pass
@@ -113,7 +135,7 @@ def check_pn_privilege(pn, user):
     if mask>>30 & 1:
         return False, HTTPError(433, reason=bd_errs[433])
 
-    return True, None
+    return True, record 
 
 def _check_expire_date(_user): 
     '''

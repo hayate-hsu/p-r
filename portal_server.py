@@ -686,23 +686,27 @@ class PageHandler(BaseHandler):
                 return
 
             self.user = _user
+            try:
+                account.check_account_privilege(_user, self.profile)
+            except:
+                return
 
-            # check private network
-            if self.profile['policy'] & 2:
-                # current network is private, check user privilege
-                ret, err = account.check_pn_privilege(self.profile['pn'], _user['user'])
-                if not ret:
-                    return
+            # # check private network
+            # if self.profile['policy'] & 2:
+            #     # current network is private, check user privilege
+            #     ret, err = account.check_pn_privilege(self.profile['pn'], _user['user'])
+            #     if not ret:
+            #         return
 
-            if not (self.profile['policy'] & 1):
-                if _user['mask']>>30 & 1:
-                    # raise HTTPError(403, reason='Account has been frozened')
-                    return
-                # ipolicy =0, check billing
-                self.expired = account.check_account_balance(_user)
-                if self.expired:
-                    # raise HTTPError(403, reason='Account has no left time')
-                    return
+            # if not (self.profile['policy'] & 1):
+            #     if _user['mask']>>30 & 1:
+            #         # raise HTTPError(403, reason='Account has been frozened')
+            #         return
+            #     # ipolicy =0, check billing
+            #     self.expired = account.check_account_balance(_user)
+            #     if self.expired:
+            #         # raise HTTPError(403, reason='Account has no left time')
+            #         return
             
             onlines = account.get_onlines(_user['user'])
             if kwargs['user_mac'] not in onlines and len(onlines) >= _user['ends']:
@@ -765,7 +769,7 @@ class PageHandler(BaseHandler):
             access_log.error('not avaiable ac & ap')
             raise HTTPError(400, reason='Unknown AC,ip : {}'.format(kwargs['ac_ip']))
 
-        self._check_account_privilege()
+        account.check_account_privilege(self.user, self.profile)
 
         response = yield tornado.gen.Task(portal.login.apply_async, 
                                           args=[self.user, kwargs['ac_ip'], 
@@ -954,7 +958,7 @@ class PortalHandler(BaseHandler):
         self.profile = account.get_billing_policy(ac_ip, ap_mac, ssid)
 
         # check account privilege
-        self._check_account_privilege()
+        account.check_account_privilege(self.user, self.profile)
         
         response = yield tornado.gen.Task(portal.login.apply_async, args=[self.user,  ac_ip, user_ip, user_mac])
 
@@ -1034,7 +1038,7 @@ class PortalHandler(BaseHandler):
             raise HTTPError(403, reason=bd_errs[451])
 
         # check account privilege
-        self._check_account_privilege()
+        account.check_account_privilege(self.user, self.profile)
 
         response = yield tornado.gen.Task(portal.login.apply_async, args=[self.user,  ac_ip, user_ip, user_mac])
 

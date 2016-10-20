@@ -111,7 +111,7 @@ def check_account_privilege(user, profile):
 
     # check account has billing? 
     if not (profile['policy'] & 1):
-        if check_account_balance(user['user']):
+        if check_account_balance(user):
             raise HTTPError(403, reason=bd_errs[450])
 
 def notify_offline(bas_config):

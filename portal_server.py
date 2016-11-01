@@ -612,6 +612,10 @@ class PageHandler(BaseHandler):
         else:
             page = profile['portal'] or 'login.html'
 
+        self.set_header('CacheControl', 'no-cache')
+        self.set_header('Pragma', 'no-cache')
+        self.set_header('Expires', '-1')
+
         self.render(page, openid='', ispri=profile['policy'] & 2, 
                     pn=profile['pn'], note=profile['note'], image=profile['logo'], 
                     appid=profile['appid'], shopid=profile['shopid'], secret=profile['secret'], 
@@ -714,9 +718,11 @@ class PageHandler(BaseHandler):
                 return
                 # raise HTTPError(403, reason='Over the limit ends')
 
+        task_id = _user['user'] + '-' + kwargs['user_mac']
+
         response = yield tornado.gen.Task(portal.login.apply_async, 
-                                          args=[_user, kwargs['ac_ip'], 
-                                          kwargs['user_ip'], kwargs['user_mac']])
+                                          args=[_user, kwargs['ac_ip'], kwargs['user_ip'], kwargs['user_mac']], 
+                                          task_id=task_id)
 
         if response.status in ('SUCCESS', ):
             access_log.info('{} auto login successfully, mac:{}'.format(_user['user'], kwargs['user_mac']))
@@ -771,9 +777,11 @@ class PageHandler(BaseHandler):
 
         account.check_account_privilege(self.user, self.profile)
 
+        task_id = self.user['user'] + '-' + kwargs['user_mac']
         response = yield tornado.gen.Task(portal.login.apply_async, 
                                           args=[self.user, kwargs['ac_ip'], 
-                                                kwargs['user_ip'], kwargs['user_mac']])
+                                                kwargs['user_ip'], kwargs['user_mac']], 
+                                          task_id=task_id)
 
         if response.status in ('SUCCESS', ):
             access_log.info('{} weixin login successfully, mac:{}'.format(self.user['user'], kwargs['user_mac']))
@@ -959,8 +967,12 @@ class PortalHandler(BaseHandler):
 
         # check account privilege
         account.check_account_privilege(self.user, self.profile)
+
+        task_id = self.user['user'] + '-' + user_mac
         
-        response = yield tornado.gen.Task(portal.login.apply_async, args=[self.user,  ac_ip, user_ip, user_mac])
+        response = yield tornado.gen.Task(portal.login.apply_async, 
+                                          args=[self.user,  ac_ip, user_ip, user_mac], 
+                                          task_id=task_id)
 
         if response.successful() and self.profile:
             # login successfully 
@@ -1040,7 +1052,11 @@ class PortalHandler(BaseHandler):
         # check account privilege
         account.check_account_privilege(self.user, self.profile)
 
-        response = yield tornado.gen.Task(portal.login.apply_async, args=[self.user,  ac_ip, user_ip, user_mac])
+        task_id = self.user['user'] + '-' + user_mac
+
+        response = yield tornado.gen.Task(portal.login.apply_async, 
+                                          args=[self.user,  ac_ip, user_ip, user_mac], 
+                                          task_id=task_id)
 
         if response.status in ('SUCCESS', ) and self.profile:
             # login successfully 
@@ -1223,7 +1239,7 @@ def main():
     get_bas()
 
     app = Application()
-    app.listen(options.port, xheaders=app.settings.get('xheaders', False))
+    app.listen(options.port, xheaders=app.settings.get('xheaders', False), decompress_request=True)
     io_loop = tornado.ioloop.IOLoop.instance()
 
     udp_sockets = bind_udp_socket(PORTAL_PORT)

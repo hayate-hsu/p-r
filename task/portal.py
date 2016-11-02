@@ -96,7 +96,7 @@ def login(_user, ac_ip, user_ip, user_mac):
     # header.serial = PortalHandler._SERIAL_NO_.pop()
     # chap_password = utility.md5(data[8], password, attrs.challenge).digest()
     # attrs = Attributes(user=user, chap_password=chap_password)
-    # logger.info('user {}, challenge:{}'.format(user, attrs.challenge))
+    logger.info('user {} challenge successfully'.format(user))
     attrs = Attributes(user=user, password=password, challenge=attrs.challenge, mac=user_mac, chap_id=data[8])
     packet = Packet(header, attrs)
     sock.settimeout(None)

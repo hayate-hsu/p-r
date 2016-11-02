@@ -617,10 +617,10 @@ class PageHandler(BaseHandler):
         self.set_header('Expires', '-1')
 
         groups = profile['_location']
-        if groups.startswith('59918'):
+        if '77201' in groups:
             groups = 10003
 
-        self.render(page, openid='', ispri=profile['policy'] & 2, groups=profile['_location'], 
+        self.render(page, openid='', ispri=profile['policy'] & 2, groups=groups, 
                     pn=profile['pn'], note=profile['note'], image=profile['logo'], 
                     appid=profile['appid'], shopid=profile['shopid'], secret=profile['secret'], 
                     logo=profile['logo'],

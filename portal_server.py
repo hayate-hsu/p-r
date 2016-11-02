@@ -616,7 +616,11 @@ class PageHandler(BaseHandler):
         self.set_header('Pragma', 'no-cache')
         self.set_header('Expires', '-1')
 
-        self.render(page, openid='', ispri=profile['policy'] & 2, 
+        groups = profile['_location']
+        if groups.startswith('59918'):
+            groups = 10003
+
+        self.render(page, openid='', ispri=profile['policy'] & 2, groups=profile['_location'], 
                     pn=profile['pn'], note=profile['note'], image=profile['logo'], 
                     appid=profile['appid'], shopid=profile['shopid'], secret=profile['secret'], 
                     logo=profile['logo'],
@@ -721,8 +725,8 @@ class PageHandler(BaseHandler):
         task_id = _user['user'] + '-' + kwargs['user_mac']
 
         response = yield tornado.gen.Task(portal.login.apply_async, 
-                                          args=[_user, kwargs['ac_ip'], kwargs['user_ip'], kwargs['user_mac']], 
-                                          task_id=task_id)
+                                          args=[_user, kwargs['ac_ip'], kwargs['user_ip'], kwargs['user_mac']]) 
+                                          # task_id=task_id)
 
         if response.status in ('SUCCESS', ):
             access_log.info('{} auto login successfully, mac:{}'.format(_user['user'], kwargs['user_mac']))
@@ -780,8 +784,8 @@ class PageHandler(BaseHandler):
         task_id = self.user['user'] + '-' + kwargs['user_mac']
         response = yield tornado.gen.Task(portal.login.apply_async, 
                                           args=[self.user, kwargs['ac_ip'], 
-                                                kwargs['user_ip'], kwargs['user_mac']], 
-                                          task_id=task_id)
+                                                kwargs['user_ip'], kwargs['user_mac']]) 
+                                          # task_id=task_id)
 
         if response.status in ('SUCCESS', ):
             access_log.info('{} weixin login successfully, mac:{}'.format(self.user['user'], kwargs['user_mac']))
@@ -971,8 +975,8 @@ class PortalHandler(BaseHandler):
         task_id = self.user['user'] + '-' + user_mac
         
         response = yield tornado.gen.Task(portal.login.apply_async, 
-                                          args=[self.user,  ac_ip, user_ip, user_mac], 
-                                          task_id=task_id)
+                                          args=[self.user,  ac_ip, user_ip, user_mac]) 
+                                          # task_id=task_id)
 
         if response.successful() and self.profile:
             # login successfully 
@@ -1055,8 +1059,8 @@ class PortalHandler(BaseHandler):
         task_id = self.user['user'] + '-' + user_mac
 
         response = yield tornado.gen.Task(portal.login.apply_async, 
-                                          args=[self.user,  ac_ip, user_ip, user_mac], 
-                                          task_id=task_id)
+                                          args=[self.user,  ac_ip, user_ip, user_mac]) 
+                                          # task_id=task_id)
 
         if response.status in ('SUCCESS', ) and self.profile:
             # login successfully 

@@ -886,8 +886,11 @@ class PageHandler(BaseHandler):
         '''
         if AC_CONFIGURE[nas_addr]['mask'] & 5:
             # bas is sangfor 
-            account.add_online2(self.user['user'], nas_addr, ap_mac, mac_addr, 
-                                self.profile['_location'], self.profile['ssid'])
+            try:
+                account.add_online2(self.user['user'], nas_addr, ap_mac, mac_addr, 
+                                    self.profile['_location'], self.profile['ssid'])
+            except:
+                access_log.error('add {} online failed, mac: {}'.format(self.user['user'], mac_addr), exc_info=True)
 
 class PortalHandler(BaseHandler):
     '''
@@ -1095,8 +1098,11 @@ class PortalHandler(BaseHandler):
         if AC_CONFIGURE[nas_addr]['mask'] & 5:
             # bas is gateway or close accounting package
             # portal manage client online & offline
-            account.add_online2(self.user['user'], nas_addr, ap_mac, mac_addr, 
-                                self.profile['_location'], self.profile['ssid'])
+            try:
+                account.add_online2(self.user['user'], nas_addr, ap_mac, mac_addr, 
+                                    self.profile['_location'], self.profile['ssid'])
+            except:
+                access_log.error('add {} online failed, mac: {}'.format(self.user['user'], mac_addr), exc_info=True)
 
 EXPIRE = 7200
 

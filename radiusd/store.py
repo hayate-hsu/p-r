@@ -317,9 +317,7 @@ class Store():
     def check_pn_privilege(self, pn, user):
         '''
         '''
-        # with Cursor(self.dbpool) as cur:
-        with Connect(self.dbpool) as conn:
-            cur = conn.cursor(MySQLdb.cursors.DictCursor)
+        with Cursor(self.dbpool) as cur:
             sql = '''select pn_{pn}.mask, pn_{pn}.name, pn_{pn}.mobile from pn_{pn} 
             left join bd_account on pn_{pn}.mobile=bd_account.mobile 
             where bd_account.user="{user}"'''.format(pn=pn, user=user)

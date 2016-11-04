@@ -698,7 +698,7 @@ class PageHandler(BaseHandler):
                 results = account.check_account_privilege(_user, self.profile)
                 if results:
                     name = results['name'] if results['name'] else results['mobile']
-                    self.user['name'] = name.encode('utf-8')
+                    self.user['name'] = name
             except:
                 return
 
@@ -785,7 +785,7 @@ class PageHandler(BaseHandler):
         results = account.check_account_privilege(self.user, self.profile)
         if results:
             name = results['name'] if results['name'] else results['mobile']
-            self.user['name'] = name.encode('utf-8')
+            self.user['name'] = name
 
         task_id = self.user['user'] + '-' + kwargs['user_mac']
         response = yield tornado.gen.Task(portal.login.apply_async, 
@@ -982,7 +982,7 @@ class PortalHandler(BaseHandler):
         results = account.check_account_privilege(self.user, self.profile)
         if results:
             name = results['name'] if results['name'] else results['mobile']
-            self.user['name'] = name.encode('utf-8')
+            self.user['name'] = name
 
         task_id = self.user['user'] + '-' + user_mac
         
@@ -1070,7 +1070,7 @@ class PortalHandler(BaseHandler):
 
         if results:
             name = results['name'] if results['name'] else results['mobile']
-            self.user['name'] = name.encode('utf-8')
+            self.user['name'] = name
 
         task_id = self.user['user'] + '-' + user_mac
 

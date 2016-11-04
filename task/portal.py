@@ -45,8 +45,8 @@ def login(_user, ac_ip, user_ip, user_mac):
         user_ip: 32bit 
     '''
     user = _user['user']
-    name = _user.get('name', '')
-    user = '{} ({})'.format(user, name)
+    name = _user.get('name', u'')
+    user = u'{} ({})'.format(user, name)
     password = _user['password']
     user_ip = socket.inet_aton(user_ip)
     # logger.info('progress %s login, ip: %s', user, self.request.remote_ip)

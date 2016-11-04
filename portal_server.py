@@ -695,7 +695,9 @@ class PageHandler(BaseHandler):
 
             self.user = _user
             try:
-                account.check_account_privilege(_user, self.profile)
+                results = account.check_account_privilege(_user, self.profile)
+                if results:
+                    self.user['name'] = results['name'] if results['name'] else results['mobile']
             except:
                 return
 
@@ -779,7 +781,9 @@ class PageHandler(BaseHandler):
             access_log.error('not avaiable ac & ap')
             raise HTTPError(400, reason='Unknown AC,ip : {}'.format(kwargs['ac_ip']))
 
-        account.check_account_privilege(self.user, self.profile)
+        results = account.check_account_privilege(self.user, self.profile)
+        if results:
+            self.user['name'] = results['name'] if results['name'] else results['mobile']
 
         task_id = self.user['user'] + '-' + kwargs['user_mac']
         response = yield tornado.gen.Task(portal.login.apply_async, 
@@ -973,7 +977,9 @@ class PortalHandler(BaseHandler):
         self.profile = account.get_billing_policy(ac_ip, ap_mac, ssid)
 
         # check account privilege
-        account.check_account_privilege(self.user, self.profile)
+        results = account.check_account_privilege(self.user, self.profile)
+        if results:
+            self.user['name'] = results['name'] if results['name'] else results['mobile']
 
         task_id = self.user['user'] + '-' + user_mac
         

@@ -95,12 +95,7 @@ def get_billing_policy2(req):
 def check_account_privilege(user, profile):
     # check private network
     if user['mask']>>30 & 1:
-        return HTTPError(433, reason=bd_errs[433])
-
-    if profile['policy'] & 2:
-        ret, err = check_pn_privilege(profile['pn'], user['user'])
-        if not ret:
-            raise err
+        raise HTTPError(433, reason=bd_errs[433])
 
     if profile['pn'] in (15914,):
         # if account is nvxiao teacher, allow his access 15914
@@ -108,6 +103,11 @@ def check_account_privilege(user, profile):
         if ret:
             user['is_teacher'] = 1 
             return err
+
+    if profile['policy'] & 2:
+        ret, err = check_pn_privilege(profile['pn'], user['user'])
+        if not ret:
+            raise err
 
     # check account has billing? 
     if not (profile['policy'] & 1):

@@ -178,8 +178,6 @@ class RADIUSAccess(RADIUS):
         reply = req.CreateReply()
         reply.source = req.source
         req_user = req.get_user_name()
-        # split req_user user '=&'
-        req_user = req_user.split(' (')[0]
 
         calling_stationid = req.get_calling_stationid()
 
@@ -254,8 +252,6 @@ class RADIUSAccounting(RADIUS):
             self.midware.process(plugin,req=req)
                  
         req_user = req.get_user_name()
-        # split req_user user '=&'
-        req_user = req_user.split(' (')[0]
 
         calling_stationid = req.get_calling_stationid()
         is_auto = 0

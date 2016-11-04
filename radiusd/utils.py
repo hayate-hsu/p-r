@@ -320,6 +320,8 @@ class AuthPacket2(AuthPacket):
             user_name = tools.DecodeString(self.get(1)[0])
             if "@" in user_name:
                 user_name = user_name[:user_name.index("@")]
+            if " (" in user_name:
+                user_name = user_name.split(' (')[0]
             return user_name
         except:
             return None
@@ -407,8 +409,9 @@ class AcctPacket2(AcctPacket):
             user_name = tools.DecodeString(self.get(1)[0])
             if "@" in user_name:
                 return user_name[:user_name.index("@")]
-            else:
-                return user_name
+            if " (" in user_name:
+                user_name = user_name.split(' (')[0]
+            return user_name
         except:
             return None
  

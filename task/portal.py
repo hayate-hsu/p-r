@@ -46,7 +46,8 @@ def login(_user, ac_ip, user_ip, user_mac):
     '''
     user = _user['user']
     name = _user.get('name', u'')
-    user = u'{} ({})'.format(user, name)
+    #  
+    __user__ = u'{} ({})'.format(user, name)
     password = _user['password']
     user_ip = socket.inet_aton(user_ip)
     # logger.info('progress %s login, ip: %s', user, self.request.remote_ip)
@@ -99,7 +100,7 @@ def login(_user, ac_ip, user_ip, user_mac):
     # chap_password = utility.md5(data[8], password, attrs.challenge).digest()
     # attrs = Attributes(user=user, chap_password=chap_password)
     logger.info('user {} challenge successfully'.format(user))
-    attrs = Attributes(user=user, password=password, challenge=attrs.challenge, mac=user_mac, chap_id=data[8])
+    attrs = Attributes(user=__user__, password=password, challenge=attrs.challenge, mac=user_mac, chap_id=data[8])
     packet = Packet(header, attrs)
     sock.settimeout(None)
     sock.sendto(packet.pack(), (ac_ip, BAS_PORT))

@@ -1053,8 +1053,11 @@ class PortalHandler(BaseHandler):
             access_log.error('{} exceed edns: {}'.format(self.user['user'], self.user['ends']))
             raise HTTPError(403, reason=bd_errs[451])
 
-        # check account privilege
-        account.check_account_privilege(self.user, self.profile)
+        # check account privilege, results: {mask, mobile, name}
+        results = account.check_account_privilege(self.user, self.profile)
+
+        if results:
+            self.user['name'] = results['name'] if results['name'] else results['mobile']
 
         task_id = self.user['user'] + '-' + user_mac
 
@@ -1199,17 +1202,27 @@ def ac_data_handler(sock, data, addr):
                 account.del_online2(addr[0], mac)
 
             access_log.info('User quit, mac: {}'.format(mac))
+    elif header.type & 0x30:
+        #
+        start = 32 if header.ver == 0x02 else 16
+        attrs = portal.Attributes.unpack(header.num, data[start:])
+        mac = attrs.extend.get('mac', '')
+        ac_ip = attrs.extend.get('ac_ip', '')
+        existed = False
+        if mac and ac_ip:
+            mac = utility.format_mac(mac)
+            ac_ip = '{}.{}.{}.{}'.format(int('0X'+ac_ip[:2], 16), 
+                                         int('0X'+ac_ip[2:4], 16),
+                                         int('0X'+ac_ip[4:6], 16), 
+                                         int('0X'+ac_ip[6:8], 16))
 
-# def init_log(log_folder, log_config, port):
-#     global logger
-#     import logging
-#     import logging.config
-#     log_config['handlers']['file']['filename'] = os.path.join(log_folder, 
-#                                                               '{}_{}.log'.format(log_config['handlers']['file']['filename'], port))
-#     logging.config.dictConfig(log_config)
-#     logger = logging.getLogger()
-#     logger.propagate = False
+            user = account.get_bd_user(mac, True)
+            if user:
+                existed = True
 
+            portal.mac_exists(ac_ip, header.ip, mac, header.serial, existed)
+        
+        
 def get_bas():
     global AC_CONFIGURE
     results = account.list_bas()

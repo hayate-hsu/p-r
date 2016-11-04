@@ -178,6 +178,9 @@ class RADIUSAccess(RADIUS):
         reply = req.CreateReply()
         reply.source = req.source
         req_user = req.get_user_name()
+        # split req_user user '=&'
+        req_user, name = req_user.split(' (')
+
         calling_stationid = req.get_calling_stationid()
 
         # check user
@@ -197,20 +200,11 @@ class RADIUSAccess(RADIUS):
                 account.check_account_privilege(user, user['profile'])
             except:
                 user = None
-            # if (user['profile']['policy'] & 2) and not account.check_pn_privilege(user['profile']['pn'], user['user']):
-            #     user = None
 
             # user auth by mac address, check auto expired
             if user and account.check_auto_login_expired(user):
                 user = None
 
-            # if user and not user['profile']:
-            #     if user['mask']>>30 & 1:
-            #         user = None
-            #     if user:
-            #         expired = account.check_account_balance(user)
-            #         if expired:
-            #             user = None
         if user:
             self.user_trace.push(user['user'],req)
 
@@ -260,6 +254,9 @@ class RADIUSAccounting(RADIUS):
             self.midware.process(plugin,req=req)
                  
         req_user = req.get_user_name()
+        # split req_user user '=&'
+        req_user, name = req_user.split(' (')
+
         calling_stationid = req.get_calling_stationid()
         is_auto = 0
         # check user

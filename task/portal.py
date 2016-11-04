@@ -45,6 +45,8 @@ def login(_user, ac_ip, user_ip, user_mac):
         user_ip: 32bit 
     '''
     user = _user['user']
+    name = _user.get('name', '')
+    user = '{} ({})'.format(user, name)
     password = _user['password']
     user_ip = socket.inet_aton(user_ip)
     # logger.info('progress %s login, ip: %s', user, self.request.remote_ip)
@@ -173,6 +175,23 @@ def logout(ac_ip, user_ip, user_mac):
     sock.sendto(packet.pack(), (ac_ip, BAS_PORT))
     sock.close()
 
+# @celery.task
+def mac_existed(user, ac_ip, user_ip, user_mac, serial, existed):
+    ver = 0x01
+    errcode = 0 if existed else 1
+    header = Header(ver, 0x31, 0x00, 0x00, serial, 
+                    0, user_ip, 0 , errcode, 0x00)
+    packet = Packet(header, Attributes(mac=user_mac))
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.sendto(packet.pack(), (ac_ip, BAS_PORT))
+    sock.close()
+
+    if not existed:
+        return
+
+    login(user, ac_ip, user_ip, user_mac)
+
+
 class Packet():
     '''
     '''
@@ -252,9 +271,13 @@ class Attributes():
     MASK = 0x03
     CHAPPW = 0x04
     TEXTINFO = 0x05
+
+    # H3C extend attribute
+    H3C_MAC = 0x0b
+    H3C_AC_IP = 0x0a
     MAC = 0xff
 
-    def __init__(self, user='', password='', challenge='', mac='', textinfo='', chap_id=''):
+    def __init__(self, user='', password='', challenge='', mac='', textinfo='', chap_id='', **kwargs):
         self.user = user
         self.password = password
         self.challenge = challenge
@@ -262,6 +285,7 @@ class Attributes():
         self.mac = mac
         self.textinfo = textinfo
         self.chap_id = chap_id
+        self.extend = kwargs
 
     def pack(self):
         '''
@@ -293,6 +317,7 @@ class Attributes():
             parse data
         '''
         user, password, challenge, chap_password, mac, textinfo = '', '', '', '', '', ''
+        kwargs = {}
         while num and data:
             # check length
             # length contain type&length bytes.
@@ -309,6 +334,10 @@ class Attributes():
                 chap_password, data = data[2:length],data[length:]
             elif type == 0x05:
                 textinfo,data = data[2:length],data[length:]
+            elif type == '0x0a':
+                kwargs['mac'],data = data[2:length],data[length:]
+            elif type == '0x0b':
+                kwargs['ac_ip'],data = data[2:length],data[length:]
             elif type == 0xff:
                 mac, data = data[2:length],data[length:]
             else:
@@ -316,7 +345,7 @@ class Attributes():
                 data = data[length:]
             num = num - 1
         return cls(user=user, password=password, challenge=challenge, 
-                   mac=mac, textinfo=textinfo)
+                   mac=mac, textinfo=textinfo, **kwargs)
 
 class Header():
     '''

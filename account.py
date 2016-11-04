@@ -107,12 +107,14 @@ def check_account_privilege(user, profile):
         ret, err = check_pn_privilege(59484, user['user'])
         if ret:
             user['is_teacher'] = 1 
-            return
+            return err
 
     # check account has billing? 
     if not (profile['policy'] & 1):
         if check_account_balance(user):
             raise HTTPError(403, reason=bd_errs[450])
+
+    return err
 
 def notify_offline(bas_config):
     if bas_config['mask'] == 1:

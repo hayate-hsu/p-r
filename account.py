@@ -94,6 +94,7 @@ def get_billing_policy2(req):
 
 def check_account_privilege(user, profile):
     # check private network
+    err = None
     if user['mask']>>30 & 1:
         raise HTTPError(433, reason=bd_errs[433])
 

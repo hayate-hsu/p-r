@@ -384,12 +384,9 @@ class Store():
         '''
         '''
         with Cursor(self.dbpool) as cur:
-            sql = 'select mac_addr from online where user = "{}"'.format(account)
+            sql = 'select nas_id, acct_session_id, mac_addr, ap_mac, ssid from online where user = "{}"'.format(account)
             cur.execute(sql)
-            results = cur.fetchall()
-            if results:
-                results = set([item['mac_addr'] for item in results])
-            return results if results else set()
+            return cur.fetchall()
 
     def get_online(self, nas_addr, acct_session_id):
         with Cursor(self.dbpool) as cur:

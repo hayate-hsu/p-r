@@ -206,8 +206,12 @@ def check_weixin_user(openid, appid='', tid='', mobile='', mac='', ends=2**5):
                            tid=tid, mobile=mobile, ends=ends)
     return _user
 
-def get_onlines(user):
-    return store.get_onlines(user)
+def get_onlines(user, onlymac=True):
+    results = store.get_onlines(user)
+    if onlymac:
+        return set([item['mac_addr'] for item in results]) if results else set()
+
+    return results
 
 def update_mac_record(user, mac, duration, agent):
     is_update = False

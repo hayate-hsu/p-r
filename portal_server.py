@@ -24,6 +24,7 @@ from tornado.options import define, options
 define('port', default=8880, help='running on the given port', type=int)
 define('index', default=0, help='portal start index, used for serial number range', type=int)
 define('total', default=1, help='portal server total number , used for serial number range', type=int)
+define('udp_listen', default=0, help='portal server listen on 50100? 1 : 0', type=int)
 
 # log configuration
 define('log_file_prefix', type=str, default='/var/log/radiusd/portal_8880.log')
@@ -698,7 +699,7 @@ class PageHandler(BaseHandler):
                 results = account.check_account_privilege(_user, self.profile)
                 if results:
                     name = results['name'] if results['name'] else results['mobile']
-                    self.user['name'] = name
+                    self.user['name'] = name if name else u''
             except:
                 return
 
@@ -785,7 +786,7 @@ class PageHandler(BaseHandler):
         results = account.check_account_privilege(self.user, self.profile)
         if results:
             name = results['name'] if results['name'] else results['mobile']
-            self.user['name'] = name
+            self.user['name'] = name if name else u''
 
         task_id = self.user['user'] + '-' + kwargs['user_mac']
         response = yield tornado.gen.Task(portal.login.apply_async, 
@@ -982,7 +983,7 @@ class PortalHandler(BaseHandler):
         results = account.check_account_privilege(self.user, self.profile)
         if results:
             name = results['name'] if results['name'] else results['mobile']
-            self.user['name'] = name
+            self.user['name'] = name if name else u''
 
         task_id = self.user['user'] + '-' + user_mac
         
@@ -1070,7 +1071,7 @@ class PortalHandler(BaseHandler):
 
         if results:
             name = results['name'] if results['name'] else results['mobile']
-            self.user['name'] = name
+            self.user['name'] = name if name else u''
 
         task_id = self.user['user'] + '-' + user_mac
 
@@ -1098,6 +1099,33 @@ class PortalHandler(BaseHandler):
         token = utility.token(self.user['user'])
         self.render_json_response(User=self.user['user'], Token=token, Code=200, Msg='OK')
         access_log.info('%s login successfully, ip: %s', self.user['user'], self.request.remote_ip)
+
+    def delete(self, user):
+        '''
+            user logout, portal server send REQ_LOGOUT request to AC, AC return ACK_LOGOUT
+            admin revoke user privilege: {manager:'',token:'',user:''}
+            user send logout request: {'user':'', token:''}
+
+        '''
+        # first should check privilege
+        # 
+        manager = self.get_argument('manager', '')
+        user = self.get_argument('user', '')
+        if manager:
+            pass
+        else:
+            pass
+
+        # get user's online session
+        onlines = account.get_onlines(user, onlymac=False)
+
+        for record in onlines:
+            portal.logout(record['nas_addr'], record['framed_ipaddr'], record['mac_addr'])
+
+
+
+
+
 
     def _add_online_by_bas(self, nas_addr, ap_mac, mac_addr):
         '''
@@ -1197,7 +1225,7 @@ def ac_data_handler(sock, data, addr):
     # send 
     print('Receive data from {}: message type {:02X}'.format(addr, ord(data[2])))
     header = portal.Header.unpack(data)
-    if header.type & 0x08:
+    if header.type == 0x08:
         # ac notify portal, user logout
         data = '\x01\x07' + data[2:]
 
@@ -1218,27 +1246,44 @@ def ac_data_handler(sock, data, addr):
                 account.del_online2(addr[0], mac)
 
             access_log.info('User quit, mac: {}'.format(mac))
-    elif header.type & 0x30:
+    elif header.type == 0x30:
         #
         start = 32 if header.ver == 0x02 else 16
         attrs = portal.Attributes.unpack(header.num, data[start:])
-        mac = attrs.extend.get('mac', '')
+        user_mac = attrs.extend.get('mac', '')
         ac_ip = attrs.extend.get('ac_ip', '')
         existed = False
-        if mac and ac_ip:
-            mac = utility.format_mac(mac)
-            ac_ip = '{}.{}.{}.{}'.format(int('0X'+ac_ip[:2], 16), 
-                                         int('0X'+ac_ip[2:4], 16),
-                                         int('0X'+ac_ip[4:6], 16), 
-                                         int('0X'+ac_ip[6:8], 16))
+        if user_mac and ac_ip:
+            mac = []
+            for b in user_mac:
+                mac.append('{:02X}'.format(ord(b)))
+            mac = ':'.join(mac)
 
-            user = account.get_bd_user(mac, True)
-            if user:
-                existed = True
+            ac_ip = '{}.{}.{}.{}'.format(ord(ac_ip[0]), ord(ac_ip[1]), ord(ac_ip[2]), ord(ac_ip[3])) 
 
-            portal.mac_exists(ac_ip, header.ip, mac, header.serial, existed)
-        
-        
+            # if ac_ip in ('172.16.0.252',):
+            try:
+                # if ac_ip in h3c_ac, deal with 0x30
+                user = account.get_bd_user(mac, True)
+                if user:
+                    profile = {'pn':15914, 'policy':3}
+                    results = account.check_account_privilege(user, profile)
+                    name = results['name'] if results['name'] else results['mobile']
+                    user['name'] = name if name else u''
+
+                    existed = True
+                    access_log.info('h3c auto login: ac_ip:{}, mac:{}, existed:{}'.format(ac_ip, mac, existed))
+                    response = portal.mac_existed.delay(user, ac_ip, header.ip, mac, header.serial, existed)
+                    if response.status in ('SUCCESS', ):
+                        access_log.info('h3c {} auto login successfully, mac:{}'.format(user['user'], mac))
+                    elif isinstance(response.result, HTTPError) and response.result.status_code in (435,):
+                        access_log.info('{} has been authed, mac:{}'.format(user['user'], mac))
+                    else:
+                        access_log.info('{} auto login failed, {}'.format(user['user'], response.result))
+                    return
+            except:
+                access_log.error('h3c auto login failed!', exc_info=True)
+
 def get_bas():
     global AC_CONFIGURE
     results = account.list_bas()
@@ -1275,9 +1320,10 @@ def main():
     app.listen(options.port, xheaders=app.settings.get('xheaders', False), decompress_request=True)
     io_loop = tornado.ioloop.IOLoop.instance()
 
-    udp_sockets = bind_udp_socket(PORTAL_PORT)
-    for udp_sock in udp_sockets:
-        add_udp_handler(udp_sock, '', io_loop)
+    if options.udp_listen:
+        udp_sockets = bind_udp_socket(PORTAL_PORT)
+        for udp_sock in udp_sockets:
+            add_udp_handler(udp_sock, '', io_loop)
 
     app_log.info('Portal Server Listening:{} Started'.format(options.port))
     io_loop.start()

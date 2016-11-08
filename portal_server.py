@@ -655,7 +655,7 @@ class PageHandler(BaseHandler):
 
             # ap mac address
             # 00:00:00:00:00:00 - can't get ap mac address
-            ap_mac = self.get_argument('apmac', '') or self.get_argument('wlanapmac', '00:00:00:00:00:01')
+            ap_mac = self.get_argument('apmac', '') or self.get_argument('ap_mac', '') or self.get_argument('wlanapmac', '00:00:00:00:00:01')
             kwargs['ap_mac'] = utility.format_mac(ap_mac)
 
             try:

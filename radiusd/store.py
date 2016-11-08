@@ -427,7 +427,7 @@ class Store():
             cur.execute(sql)
 
             sql = '''insert into online (user, nas_addr, ap_mac, mac_addr, framed_ipaddr, _location, ssid) 
-            values("{}", "{}", "{}", "{}", "{}", "{}")'''.format(user, nas_addr, ap_mac, mac, user_ip, _location, ssid)
+            values("{}", "{}", "{}", "{}", "{}", "{}", "{}")'''.format(user, nas_addr, ap_mac, mac, user_ip, _location, ssid)
             cur.execute(sql)
             conn.commit()
 

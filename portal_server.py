@@ -1224,7 +1224,7 @@ def ac_data_handler(sock, data, addr):
     # query online db by mac_addr
 
     # send 
-    print('Receive data from {}: message type {:02X}'.format(addr, ord(data[2])))
+    access_log.info('Receive data from {}: message type {:02X}'.format(addr, ord(data[1])))
     header = portal.Header.unpack(data)
     if header.type == 0x08:
         # ac notify portal, user logout

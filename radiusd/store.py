@@ -419,15 +419,15 @@ class Store():
             cur.execute(sql)
             conn.commit()
 
-    def add_online2(self, user, nas_addr, ap_mac, mac, _location, ssid):
+    def add_online2(self, user, nas_addr, ap_mac, mac, user_ip, _location, ssid):
         with Connect(self.dbpool) as conn:
             cur = conn.cursor(MySQLdb.cursors.DictCursor)
 
             sql = 'delete from online where mac_addr = "{}"'.format(mac)
             cur.execute(sql)
 
-            sql = '''insert into online (user, nas_addr, ap_mac, mac_addr, _location, ssid) 
-            values("{}", "{}", "{}", "{}", "{}", "{}")'''.format(user, nas_addr, ap_mac, mac, _location, ssid)
+            sql = '''insert into online (user, nas_addr, ap_mac, mac_addr, framed_ipaddr, _location, ssid) 
+            values("{}", "{}", "{}", "{}", "{}", "{}")'''.format(user, nas_addr, ap_mac, mac, user_ip, _location, ssid)
             cur.execute(sql)
             conn.commit()
 

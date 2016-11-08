@@ -259,8 +259,8 @@ def update_billing(billing):
 def add_online(online):
     store.add_online(online)
 
-def add_online2(user, nas_addr, ap_mac, mac, _location, ssid):
-    store.add_online2(user, nas_addr, ap_mac, mac, _location, ssid)
+def add_online2(user, nas_addr, ap_mac, mac, user_ip, _location, ssid):
+    store.add_online2(user, nas_addr, ap_mac, mac, user_ip, _location, ssid)
 
 def get_online(nas_addr, session_id):
     return store.get_online(nas_addr, session_id)

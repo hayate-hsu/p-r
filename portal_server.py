@@ -540,7 +540,8 @@ class PageHandler(BaseHandler):
             else:
                 _user, self.task_resp = self.task_resp.result, None
                 if _user:
-                    self._add_online_by_bas(kwargs['ac_ip'], kwargs['ap_mac'], kwargs['user_mac'])
+                    self._add_online_by_bas(kwargs['ac_ip'], kwargs['ap_mac'], 
+                                            kwargs['user_mac'], kwargs['user_ip'])
                     if accept.startswith('application/json'):
                         token = utility.token(self.user['user'])
                         self.render_json_response(User=self.user['user'], Token=token, Mask=self.user['mask'], 
@@ -734,7 +735,7 @@ class PageHandler(BaseHandler):
 
         if response.status in ('SUCCESS', ):
             access_log.info('{} auto login successfully, mac:{}'.format(_user['user'], kwargs['user_mac']))
-            self._add_online_by_bas(kwargs['ac_ip'], kwargs['ap_mac'], kwargs['user_mac'])
+            self._add_online_by_bas(kwargs['ac_ip'], kwargs['ap_mac'], kwargs['user_mac'], kwargs['user_ip'])
         elif isinstance(response.result, HTTPError) and response.result.status_code in (435,):
             access_log.info('{} has been authed, mac:{}'.format(_user['user'], kwargs['user_mac']))
         else:
@@ -886,15 +887,15 @@ class PageHandler(BaseHandler):
                 access_log.info('{} has no left time'.format(self.user['user']))
                 raise HTTPError(403, reason=bd_errs[450])
 
-    def _add_online_by_bas(self, nas_addr, ap_mac, mac_addr):
+    def _add_online_by_bas(self, nas_addr, ap_mac, mac_addr, user_ip):
         '''
             if bas's mask & 1, add online record
             sangfor doesn't support accounting package (Radius, AccountRequest)
         '''
-        if AC_CONFIGURE[nas_addr]['mask'] & 5:
+        if AC_CONFIGURE[nas_addr]['mask'] & 4:
             # bas is sangfor 
             try:
-                account.add_online2(self.user['user'], nas_addr, ap_mac, mac_addr, 
+                account.add_online2(self.user['user'], nas_addr, ap_mac, mac_addr, user_ip,  
                                     self.profile['_location'], self.profile['ssid'])
             except:
                 access_log.error('add {} online failed, mac: {}'.format(self.user['user'], mac_addr), exc_info=True)
@@ -993,7 +994,7 @@ class PortalHandler(BaseHandler):
 
         if response.successful() and self.profile:
             # login successfully 
-            self._add_online_by_bas(ac_ip, ap_mac, user_mac)
+            self._add_online_by_bas(ac_ip, ap_mac, user_mac, user_ip)
             account.update_mac_record(self.user['user'], user_mac, 
                                       self.profile['duration'], self.agent_str)
         else:
@@ -1081,7 +1082,7 @@ class PortalHandler(BaseHandler):
 
         if response.status in ('SUCCESS', ) and self.profile:
             # login successfully 
-            self._add_online_by_bas(ac_ip, ap_mac, user_mac)
+            self._add_online_by_bas(ac_ip, ap_mac, user_mac, user_ip)
             account.update_mac_record(self.user['user'], user_mac, self.profile['duration'], self.agent_str)
         else:
             if isinstance(response.result, HTTPError) and response.result.status_code in (435, ):
@@ -1127,17 +1128,17 @@ class PortalHandler(BaseHandler):
 
 
 
-    def _add_online_by_bas(self, nas_addr, ap_mac, mac_addr):
+    def _add_online_by_bas(self, nas_addr, ap_mac, mac_addr, user_ip):
         '''
             if bas's mask & 1, add online record
             if bas's mask & 4, close accounting package
             sangfor doesn't support accounting package (Radius, AccountRequest)
         '''
-        if AC_CONFIGURE[nas_addr]['mask'] & 5:
+        if AC_CONFIGURE[nas_addr]['mask'] & 4:
             # bas is gateway or close accounting package
             # portal manage client online & offline
             try:
-                account.add_online2(self.user['user'], nas_addr, ap_mac, mac_addr, 
+                account.add_online2(self.user['user'], nas_addr, ap_mac, mac_addr, user_ip,  
                                     self.profile['_location'], self.profile['ssid'])
             except:
                 access_log.error('add {} online failed, mac: {}'.format(self.user['user'], mac_addr), exc_info=True)
@@ -1227,13 +1228,16 @@ def ac_data_handler(sock, data, addr):
     header = portal.Header.unpack(data)
     if header.type == 0x08:
         # ac notify portal, user logout
-        data = '\x01\x07' + data[2:]
+        # data = '\x01\x07' + data[2:]
 
         if True:
             start = 32 if header.ver == 0x02 else 16
             attrs = portal.Attributes.unpack(header.num, data[start:])
             if not attrs.mac:
-                access_log.info('User quit, ip: {}'.format(socket.inet_ntoa(header.ip)))
+                user_ip = socket.inet_ntoa(header.ip)
+                access_log.info('User quit, nas_addr: {}, ip: {}'.format(addr[0], user_ip))
+                if addr[0] in ('172.201.2.252', ):
+                    account.del_online3(addr[0], user_ip)
                 return
             #
             mac = []
@@ -1241,17 +1245,18 @@ def ac_data_handler(sock, data, addr):
                 mac.append('{:02X}'.format(ord(b)))
             mac = ':'.join(mac)
 
-            if addr[0] in AC_CONFIGURE and AC_CONFIGURE[addr[0]]['mask'] & 5:
+            if addr[0] in AC_CONFIGURE and AC_CONFIGURE[addr[0]]['mask'] & 4:
                 # receive logout request from 
+                access_log.info('Portal delete user, nas_addr: {}, mac: {}'.format(addr[0], mac))
                 account.del_online2(addr[0], mac)
 
-            access_log.info('User quit, mac: {}'.format(mac))
     elif header.type == 0x30:
         #
         start = 32 if header.ver == 0x02 else 16
         attrs = portal.Attributes.unpack(header.num, data[start:])
         user_mac = attrs.extend.get('mac', '')
         ac_ip = attrs.extend.get('ac_ip', '')
+        ssid = attrs.extend.get('ssid', 'GDFS')
         existed = False
         if user_mac and ac_ip:
             mac = []
@@ -1259,23 +1264,29 @@ def ac_data_handler(sock, data, addr):
                 mac.append('{:02X}'.format(ord(b)))
             mac = ':'.join(mac)
 
-            ac_ip = '{}.{}.{}.{}'.format(ord(ac_ip[0]), ord(ac_ip[1]), ord(ac_ip[2]), ord(ac_ip[3])) 
+            ac_ip = socket.inet_ntoa(ac_ip)
+            user_ip = socket.inet_ntoa(header.ip)
 
             # if ac_ip in ('172.16.0.252',):
             try:
                 # if ac_ip in h3c_ac, deal with 0x30
                 user = account.get_bd_user(mac, True)
                 if user:
-                    profile = {'pn':15914, 'policy':3}
+                    profile = {'pn':15914, 'policy':2, '_location':'50001,59920,15914', 'ssid':ssid}
                     results = account.check_account_privilege(user, profile)
                     name = results['name'] if results['name'] else results['mobile']
                     user['name'] = name if name else u''
+
+                    # check auto_login expired
+                    pass
 
                     existed = True
                     access_log.info('h3c auto login: ac_ip:{}, mac:{}, existed:{}'.format(ac_ip, mac, existed))
                     response = portal.mac_existed.delay(user, ac_ip, header.ip, mac, header.serial, existed)
                     if response.status in ('SUCCESS', ):
                         access_log.info('h3c {} auto login successfully, mac:{}'.format(user['user'], mac))
+                        # add online records
+                        # account.add_online2(user['user'], ac_ip, ap_mac, mac, user_ip)
                     elif isinstance(response.result, HTTPError) and response.result.status_code in (435,):
                         access_log.info('{} has been authed, mac:{}'.format(user['user'], mac))
                     else:

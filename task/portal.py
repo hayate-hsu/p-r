@@ -289,6 +289,7 @@ class Attributes():
     # H3C extend attribute
     H3C_MAC = 0x0b
     H3C_AC_IP = 0x0a
+    H3C_SSID = 0x3b
     MAC = 0xff
 
     def __init__(self, user='', password='', challenge='', mac='', textinfo='', chap_id='', **kwargs):
@@ -352,6 +353,8 @@ class Attributes():
                 kwargs['ac_ip'],data = data[2:length],data[length:]
             elif type == 0x0b:
                 kwargs['mac'],data = data[2:length],data[length:]
+            elif type == 0x3b:
+                kwargs['ssid'],data = data[2:length],data[length:]
             elif type == 0xff:
                 mac, data = data[2:length],data[length:]
             else:

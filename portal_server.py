@@ -622,7 +622,7 @@ class PageHandler(BaseHandler):
         if '77201' in groups:
             groups = 10003
 
-        print('test_1, {} {}'.format(profile, ap_groups))
+        # access_log.info('test_1, {} {}'.format(profile, ap_groups))
 
         # ap_groups = ','.join(ap_groups)
 

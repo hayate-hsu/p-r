@@ -70,12 +70,11 @@ def get_billing_policy(ac_ip, ap_mac, ssid):
 
         if result and result['_location']:
             pn = result['_location'].split(',')[-1]
-            ap_groups = result.get('ap_groups', [])
-            ap_groups = ','.join(ap_groups)
+            ap_groups = result.get('ap_groups', '')
             # get pn policy by ap mac & ssid
             profile = store.query_pn_policy(pn=pn, ssid=ssid)
             # profile = store.query_ap_policy(ap_mac, ssid)
-            logger.info('mac:{} ssid:{} ---- {}'.format(ap_mac, ssid, profile))
+            logger.info('mac:{} ssid:{} ---- {}, {}'.format(ap_mac, ssid, profile, ap_groups))
 
             if profile:
                 profile['expired'] = int(time.time()) + EXPIRE

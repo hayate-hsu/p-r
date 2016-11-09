@@ -512,7 +512,7 @@ class PageHandler(BaseHandler):
 
         url = kwargs['firsturl']
         
-        self.profile = account.get_billing_policy(kwargs['ac_ip'], kwargs['ap_mac'], kwargs['ssid'])
+        self.profile, self.ap_groups = account.get_billing_policy(kwargs['ac_ip'], kwargs['ap_mac'], kwargs['ssid'])
 
         if (not kwargs['ap_mac']) and kwargs['ssid'] != self.profile['ssid']:
             kwargs['ssid'] = self.profile['ssid']
@@ -594,10 +594,10 @@ class PageHandler(BaseHandler):
         kwargs['password'] = ''
 
         # render portal page
-        self.render_portal(self.is_mobile, accept, self.profile, self.wx_wifi, **kwargs)
+        self.render_portal(self.is_mobile, accept, self.profile, self.ap_groups, self.wx_wifi, **kwargs)
 
 
-    def render_portal(self, platform, accept, profile, wx_config, **kwargs):
+    def render_portal(self, platform, accept, profile, ap_groups, wx_config, **kwargs):
         # render json response to app
         if accept.startswith('application/json'):
             self.render_json_response(Code=200, Msg='OK', openid='', pn_ssid=profile['ssid'], 
@@ -622,7 +622,11 @@ class PageHandler(BaseHandler):
         if '77201' in groups:
             groups = 10003
 
-        self.render(page, openid='', ispri=profile['policy'] & 2, groups=groups, 
+        print('test_1, {} {}'.format(profile, ap_groups))
+
+        # ap_groups = ','.join(ap_groups)
+
+        self.render(page, openid='', ispri=profile['policy'] & 2, groups=groups, ap_groups=ap_groups,  
                     pn=profile['pn'], note=profile['note'], image=profile['logo'], 
                     appid=profile['appid'], shopid=profile['shopid'], secret=profile['secret'], 
                     logo=profile['logo'],
@@ -978,7 +982,7 @@ class PortalHandler(BaseHandler):
 
         # vlanId = self.get_argument('vlan')
         ssid = kwargs['ssid']
-        self.profile = account.get_billing_policy(ac_ip, ap_mac, ssid)
+        self.profile, self.ap_groups = account.get_billing_policy(ac_ip, ap_mac, ssid)
 
         # check account privilege
         results = account.check_account_privilege(self.user, self.profile)
@@ -1038,7 +1042,7 @@ class PortalHandler(BaseHandler):
         # vlanId = self.get_argument('vlan')
         ssid = self.get_argument('ssid')
 
-        self.profile = account.get_billing_policy(ac_ip, ap_mac, ssid)
+        self.profile, self.ap_groups = account.get_billing_policy(ac_ip, ap_mac, ssid)
 
         _user = account.get_bd_user(user)
 
@@ -1110,12 +1114,13 @@ class PortalHandler(BaseHandler):
         '''
         # first should check privilege
         # 
-        manager = self.get_argument('manager', '')
-        user = self.get_argument('user', '')
+        manager = self.get_argument('manager', '') 
         if manager:
-            pass
-        else:
-            pass
+            token = self.get_argument('token')
+            account.check_token(manager, token)
+
+        user = self.get_argument('user')
+        mac = self.get_argument('mac')
 
         # get user's online session
         onlines = account.get_onlines(user, onlymac=False)

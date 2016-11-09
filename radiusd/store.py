@@ -515,6 +515,24 @@ class Store():
             cur.execute(sql)
             conn.commit()
 
+    def del_online3(self, nas_addr, user_ip):
+        with Connect(self.dbpool) as conn:
+            cur = conn.cursor(MySQLdb.cursors.DictCursor)
+            # sql = 'select * from online where nas_addr="{}" and framed_ipaddr="{}"'.format(nas_addr, user_ip)
+            # cur.execute(sql)
+            # result = cur.fetchone()
+            # if not result:
+            #     return
+
+            # sql = '''insert into ticket (user, nas_addr, ap_mac, mac_addr, acct_start_time) 
+            # values("{}", "{}", "{}", "{}", "{}")
+            # '''.format(result['user'], result['nas_addr'], result['ap_mac'], result['mac_addr'], result['acct_start_time'])
+            # cur.execute(sql)
+
+            sql = 'delete from online where nas_addr = "{}" and framed_ipaddr = "{}"'.format(nas_addr, user_ip)
+            cur.execute(sql)
+            conn.commit()
+
 
     def add_ticket(self, ticket):
         _ticket = ticket.copy()

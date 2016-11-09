@@ -47,7 +47,7 @@ json_decoder = json.JSONDecoder().decode
 # json_decoder = json.JSONDecoder().decode
 
 # _PASSWORD_ = '23456789abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNOPQRSTUVWXYZ~!@#$^&*<>=+-_'
-_PASSWORD_ = '23456789abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNOPQRSTUVWXYZ'
+_PASSWORD_ = '23456789abcdefghjkmnpqrstuvwxyz'
 _VERIFY_CODE_ = '1234567890'
 
 def check_codes(method):

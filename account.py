@@ -3,6 +3,7 @@
 from __future__ import absolute_import, division, print_function, with_statement
 
 from tornado.web import HTTPError
+import tornado.httpclient
 
 import time
 
@@ -30,8 +31,10 @@ _BUFSIZE=1024
 
 PORTAL_PORT = 50100
 
+# {pn:{ssid:policy}}
 PN_PROFILE = collections.defaultdict(dict)
-AP_MAPS = {}
+# {ap_mac:{'pn':pn, 'ap_groups':ap_groups}}
+AP_MAPS = collections.defaultdict(dict)
 
 APP_PROFILE = collections.defaultdict(dict)
 
@@ -48,16 +51,27 @@ def get_billing_policy(ac_ip, ap_mac, ssid):
     '''
     # check ap prifile in cache?
     if ap_mac and ap_mac in AP_MAPS:
-        profile = PN_PROFILE[AP_MAPS[ap_mac]].get(ssid, None)
+        pn = AP_MAPS[ap_mac]['pn']
+        ap_groups = AP_MAPS[ap_mac]['ap_groups']
+        profile = PN_PROFILE[pn].get(ssid, None)
         if profile and int(time.time()) < profile['expired']:
-            return profile
+            return profile, ap_groups
 
     if ap_mac:
         # get pn by ap mac
-        result = mongo.find_one('aps_bind', {'mac':ap_mac})
+        result = {}
+        client = tornado.httpclient.HTTPClient()
+        try:
+            response = client.fetch('http://mp.bidongwifi.com/ap/{}'.format(ap_mac))
+            result = utility.json_decoder(response.buffer.read())
+        except:
+            pass
+        ap_groups = []
 
         if result and result['_location']:
             pn = result['_location'].split(',')[-1]
+            ap_groups = result.get('ap_groups', [])
+            ap_groups = ','.join(ap_groups)
             # get pn policy by ap mac & ssid
             profile = store.query_pn_policy(pn=pn, ssid=ssid)
             # profile = store.query_ap_policy(ap_mac, ssid)
@@ -65,23 +79,23 @@ def get_billing_policy(ac_ip, ap_mac, ssid):
 
             if profile:
                 profile['expired'] = int(time.time()) + EXPIRE
-                AP_MAPS[ap_mac] = profile['pn']
+                AP_MAPS[ap_mac] = {'pn':profile['pn'], 'ap_groups':ap_groups}
                 PN_PROFILE[profile['pn']][profile['ssid']] = profile
 
-                return profile
+                return profile, ap_groups
 
         # get pn policy by ssid
         profile = store.query_pn_policy(ssid=ssid)
 
         if profile:
-            return profile
+            return profile, ap_groups
     else:
         # ap_mac is False, query by nas_addr
         profile = store.get_gw_pn_policy(ac_ip)
         logger.info('nas_addr: {} ---- {}'.format(ac_ip, profile))
 
         if profile:
-            return profile
+            return profile, []
             
     raise HTTPError(400, reason='Abnormal, query pn failed, {} {}'.format(ap_mac, ssid))
 
@@ -271,6 +285,9 @@ def del_online(nas_addr, session_id):
 def del_online2(nas_addr, mac):
     store.del_online2(nas_addr, mac)
 
+def del_online3(nas_addr, user_ip):
+    store.del_online3(nas_addr, user_ip)
+
 def add_ticket(ticket):
     store.add_ticket(ticket)
     
@@ -279,3 +296,10 @@ def parse_called_stationid(req):
     ap_mac, ssid = data.split(':')
     ap_mac = utility.format_mac(ap_mac) 
     return ap_mac, ssid
+
+def check_token(user, token):
+    token,expired = token.split('|')
+    token2 = utility.token2(user, expired)
+
+    if token != token2:
+        raise HTTPError(400, reason='Abnormal token')

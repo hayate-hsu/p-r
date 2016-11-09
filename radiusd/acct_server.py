@@ -193,7 +193,7 @@ class RADIUSAccess(RADIUS):
         if user:
             # get billing policy
             user['is_auto'] = is_auto
-            user['profile'] = account.get_billing_policy2(req)
+            user['profile'], ap_groups = account.get_billing_policy2(req)
             try:
                 account.check_account_privilege(user, user['profile'])
             except:
@@ -267,7 +267,7 @@ class RADIUSAccounting(RADIUS):
             user['is_auto'] = is_auto
             self.user_trace.push(user['user'],req)        
             # get billing policy
-            user['profile'] = account.get_billing_policy2(req)
+            user['profile'], ap_groups = account.get_billing_policy2(req)
 
         if not user:
             # can't found user

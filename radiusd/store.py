@@ -384,9 +384,9 @@ class Store():
         '''
         '''
         with Cursor(self.dbpool) as cur:
-            sql = 'select nas_addr, acct_session_id, mac_addr, ap_mac, ssid from online where user = "{}"'.format(user)
+            sql = 'select nas_addr, acct_session_id, mac_addr, ap_mac, ssid, framed_ipaddr from online where user = "{}"'.format(user)
             if mac:
-                sql = sql + ' and mac = "{}"'.format(mac)
+                sql = sql + ' and mac_addr = "{}"'.format(mac)
             cur.execute(sql)
             return cur.fetchall()
 

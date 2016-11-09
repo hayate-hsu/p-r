@@ -1106,25 +1106,28 @@ class PortalHandler(BaseHandler):
         access_log.info('%s login successfully, ip: %s', self.user['user'], self.request.remote_ip)
 
     @_parse_body
-    def delete(self, user):
+    def delete(self):
         '''
             user logout, portal server send REQ_LOGOUT request to AC, AC return ACK_LOGOUT
             admin revoke user privilege: {manager:'',token:'',user:''}
             user send logout request: {'user':'', token:''}
 
         '''
-        if self.request.remote_ip not in ('14.23.62.180',):
-            raise HTTPError(400, reason='abnormal remote ip:{}'.format(self.request.remote_ip))
+        # if self.request.remote_ip not in ('14.23.62.180',):
+        #     raise HTTPError(400, reason='abnormal remote ip:{}'.format(self.request.remote_ip))
     
-        # first should check privilege
-        # 
+        # # first should check privilege
+        # # 
 
         user = self.get_argument('user')
         mac = self.get_argument('mac')
-        user_ip = self.get_argument('user_ip')
-        ac_ip = self.get_argument('ac_ip')
+        # user_ip = self.get_argument('user_ip')
+        # ac_ip = self.get_argument('ac_ip')
 
-        portal.logout(ac_ip, user_ip, mac)
+        onlines = account.get_onlines(user, mac)
+        for online in onlines:
+            if online['nas_addr'] and online['framed_ipaddr']:
+                portal.logout(online['nas_addr'], online['framed_ipaddr'], mac)
 
         self.render_json_response(Code=200, Msg='OK')
 

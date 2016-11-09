@@ -1105,6 +1105,7 @@ class PortalHandler(BaseHandler):
         self.render_json_response(User=self.user['user'], Token=token, Code=200, Msg='OK')
         access_log.info('%s login successfully, ip: %s', self.user['user'], self.request.remote_ip)
 
+    @_parse_body
     def delete(self, user):
         '''
             user logout, portal server send REQ_LOGOUT request to AC, AC return ACK_LOGOUT
@@ -1112,25 +1113,20 @@ class PortalHandler(BaseHandler):
             user send logout request: {'user':'', token:''}
 
         '''
+        if self.request.remote_ip not in ('14.23.62.180',):
+            raise HTTPError(400, reason='abnormal remote ip:{}'.format(self.request.remote_ip))
+    
         # first should check privilege
         # 
-        manager = self.get_argument('manager', '') 
-        if manager:
-            token = self.get_argument('token')
-            account.check_token(manager, token)
 
         user = self.get_argument('user')
         mac = self.get_argument('mac')
+        user_ip = self.get_argument('user_ip')
+        ac_ip = self.get_argument('ac_ip')
 
-        # get user's online session
-        onlines = account.get_onlines(user, onlymac=False)
+        portal.logout(ac_ip, user_ip, mac)
 
-        for record in onlines:
-            portal.logout(record['nas_addr'], record['framed_ipaddr'], record['mac_addr'])
-
-
-
-
+        self.render_json_response(Code=200, Msg='OK')
 
 
     def _add_online_by_bas(self, nas_addr, ap_mac, mac_addr, user_ip):

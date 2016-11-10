@@ -1242,6 +1242,7 @@ def ac_data_handler(sock, data, addr):
                 access_log.info('User quit, nas_addr: {}, ip: {}'.format(addr[0], user_ip))
                 if addr[0] in ('172.201.2.252', ):
                     account.del_online3(addr[0], user_ip)
+                    portal.ack_ntf_logout(addr[0], user_ip, '', header.serial)
                 return
             #
             mac = []

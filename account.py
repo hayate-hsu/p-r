@@ -66,7 +66,7 @@ def get_billing_policy(ac_ip, ap_mac, ssid):
             result = utility.json_decoder(response.buffer.read())
         except:
             pass
-        ap_groups = []
+        ap_groups = ''
 
         if result and result['_location']:
             pn = result['_location'].split(',')[-1]
@@ -94,7 +94,7 @@ def get_billing_policy(ac_ip, ap_mac, ssid):
         logger.info('nas_addr: {} ---- {}'.format(ac_ip, profile))
 
         if profile:
-            return profile, []
+            return profile, ''
             
     raise HTTPError(400, reason='Abnormal, query pn failed, {} {}'.format(ap_mac, ssid))
 

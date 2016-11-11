@@ -68,7 +68,7 @@ def get_billing_policy(ac_ip, ap_mac, ssid):
             pass
         ap_groups = ''
 
-        if result and result['_location']:
+        if result and '_location' in result and result['_location']:
             pn = result['_location'].split(',')[-1]
             ap_groups = result.get('ap_groups', '')
             # get pn policy by ap mac & ssid

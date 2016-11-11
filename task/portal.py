@@ -310,7 +310,7 @@ class Attributes():
     H3C_SSID = 0x3b
     MAC = 0xff
 
-    def __init__(self, user='', password='', challenge='', mac='', textinfo='', chap_id='', **kwargs):
+    def __init__(self, user='', password='', challenge='', mac='', textinfo='', chap_id='', extend={}):
         self.user = user
         self.password = password
         self.challenge = challenge
@@ -318,7 +318,7 @@ class Attributes():
         self.mac = mac
         self.textinfo = textinfo
         self.chap_id = chap_id
-        self.extend = kwargs
+        self.extend = extend
 
     def pack(self):
         '''

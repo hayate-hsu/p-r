@@ -217,10 +217,11 @@ def mac_existed(user, ac_ip, user_ip, user_mac, serial, existed):
 
     if not existed:
         return
+
     user_ip = socket.inet_ntoa(user_ip)
     response = login.delay(user, ac_ip, user_ip, user_mac)
     if response.successful():
-        pass
+        return response.result
     else:
         raise response.result
 

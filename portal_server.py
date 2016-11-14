@@ -1283,22 +1283,45 @@ def ac_data_handler(sock, data, addr):
                     user['name'] = name if name else u''
 
                     # check auto_login expired
+                    # check account privilege
                     pass
 
                     existed = True
                     access_log.info('h3c auto login: ac_ip:{}, mac:{}, existed:{}'.format(ac_ip, mac, existed))
                     response = portal.mac_existed.delay(user, ac_ip, header.ip, mac, header.serial, existed)
-                    if response.status in ('SUCCESS', ):
-                        access_log.info('h3c {} auto login successfully, mac:{}'.format(user['user'], mac))
-                        # add online records
-                        # account.add_online2(user['user'], ac_ip, ap_mac, mac, user_ip)
-                    elif isinstance(response.result, HTTPError) and response.result.status_code in (435,):
-                        access_log.info('{} has been authed, mac:{}'.format(user['user'], mac))
-                    else:
-                        access_log.info('{} auto login failed, {}'.format(user['user'], response.result))
+                    if existed:
+                        if response.status in ('SUCCESS', ):
+                            access_log.info('h3c {} auto login successfully, mac:{}, {}'.format(user['user'], mac, user_ip))
+                            # add online records
+                            # account.add_online2(user['user'], ac_ip, ap_mac, mac, user_ip)
+                        elif isinstance(response.result, HTTPError) and response.result.status_code in (435,):
+                            access_log.info('{} has been authed, mac:{}'.format(user['user'], mac))
+                        else:
+                            access_log.info('{} auto login failed, {}'.format(user['user'], response.result))
                     return
             except:
                 access_log.error('h3c auto login failed!', exc_info=True)
+    elif header.type == 0x32:
+        start = 32 if header.ver == 0x02 else 16
+        attrs = portal.Attributes.unpack(header.num, data[start:])
+        user_mac = attrs.extend.get('mac', '')
+        ac_ip = attrs.extend.get('ac_ip', '')
+        ssid = attrs.extend.get('ssid', 'GDFS')
+        existed = False
+        if ac_ip:
+            ac_ip = socket.inet_ntoa(ac_ip)
+        if ac_ip in ('172.16.0.252',):
+            # user auto login successfully
+            name = attrs.user 
+            name = name.split(' (')[0]
+            mac = []
+            for b in user_mac:
+                mac.append('{:02X}'.format(ord(b)))
+            mac = ':'.join(mac)
+            user_ip = socket.inet_ntoa(header.ip)
+
+            access_log.info('h3c {} auto login notify, mac:{}, {}'.format(name, mac, user_ip))
+            account.add_online2(name, ac_ip, '', mac, user_ip)
 
 def get_bas():
     global AC_CONFIGURE

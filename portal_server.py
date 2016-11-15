@@ -1289,16 +1289,16 @@ def ac_data_handler(sock, data, addr):
                     existed = True
                     access_log.info('h3c auto login: ac_ip:{}, mac:{}, existed:{}'.format(ac_ip, mac, existed))
                     response = portal.mac_existed.delay(user, ac_ip, header.ip, mac, header.serial, existed)
-                    if existed:
-                        if response.status in ('SUCCESS', ):
-                            access_log.info('h3c {} auto login successfully, mac:{}, {}'.format(user['user'], mac, user_ip))
-                            # add online records
-                            # account.add_online2(user['user'], ac_ip, ap_mac, mac, user_ip)
-                        elif isinstance(response.result, HTTPError) and response.result.status_code in (435,):
-                            access_log.info('{} has been authed, mac:{}'.format(user['user'], mac))
-                        else:
-                            access_log.info('{} auto login failed, {}'.format(user['user'], response.result))
-                    return
+                    # if existed:
+                    #     if response.status in ('SUCCESS', ):
+                    #         access_log.info('h3c {} auto login successfully, mac:{}, {}'.format(user['user'], mac, user_ip))
+                    #         # add online records
+                    #         # account.add_online2(user['user'], ac_ip, ap_mac, mac, user_ip)
+                    #     elif isinstance(response.result, HTTPError) and response.result.status_code in (435,):
+                    #         access_log.info('{} has been authed, mac:{}'.format(user['user'], mac))
+                    #     else:
+                    #         access_log.info('{} auto login failed, {}'.format(user['user'], response.result))
+                    # return
             except:
                 access_log.error('h3c auto login failed!', exc_info=True)
     elif header.type == 0x32:
@@ -1322,6 +1322,23 @@ def ac_data_handler(sock, data, addr):
 
             access_log.info('h3c {} auto login notify, mac:{}, {}'.format(name, mac, user_ip))
             account.add_online2(name, ac_ip, '', mac, user_ip)
+    elif header.type == 0x34:
+        start = 32 if header.ver == 0x02 else 16
+        attrs = portal.Attributes.unpack(header.num, data[start:])
+        user_mac = attrs.extend.get('mac', '')
+        ac_ip = attrs.extend.get('ac_ip', '')
+        ssid = attrs.extend.get('ssid', 'GDFS')
+        if user_mac and ac_ip:
+            mac = []
+            for b in user_mac:
+                mac.append('{:02X}'.format(ord(b)))
+            mac = ':'.join(mac)
+
+            ac_ip = socket.inet_ntoa(ac_ip)
+            user_ip = socket.inet_ntoa(header.ip)
+
+            access_log.info('Portal delete user, nas_addr: {}, mac: {}'.format(ac_ip, mac))
+            account.del_online2(ac_ip, mac)
 
 def get_bas():
     global AC_CONFIGURE

@@ -165,6 +165,18 @@ def sleep(seconds):
     time.sleep(int(seconds))
     return seconds
 
+@celery.task
+def add(x,y):
+    ret = sleep.delay(20)
+    logger.info('ret: {}'.format(ret.result))
+
+    response = ret.wait()
+    logger.info('response: {}'.format(dir(response)))
+
+    # logger.info('ret1: {}'.format(response.result))
+    
+    return x+y
+
 # @celery.task
 def logout(ac_ip, user_ip, user_mac):
     '''
@@ -220,10 +232,10 @@ def mac_existed(user, ac_ip, user_ip, user_mac, serial, existed):
 
     user_ip = socket.inet_ntoa(user_ip)
     response = login.delay(user, ac_ip, user_ip, user_mac)
-    if response.successful():
-        return response.result
-    else:
-        raise response.result
+    # if response.successful():
+    #     return response.result
+    # else:
+    #     raise response.result
 
 class Packet():
     '''

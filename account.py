@@ -107,7 +107,7 @@ def get_billing_policy2(req):
 
 def check_account_privilege(user, profile):
     # check private network
-    err = None
+    err = {}
     if user['mask']>>30 & 1:
         raise HTTPError(433, reason=bd_errs[433])
 
@@ -116,6 +116,11 @@ def check_account_privilege(user, profile):
         ret, err = check_pn_privilege(59484, user['user'])
         if ret:
             user['is_teacher'] = 1 
+            return err
+
+        holder = user.get('holder', '')
+        if holder in (59484, ):
+            user['is_teacher'] = 1
             return err
 
     if profile['policy'] & 2:

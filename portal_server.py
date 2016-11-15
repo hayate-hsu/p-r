@@ -1308,20 +1308,18 @@ def ac_data_handler(sock, data, addr):
         ac_ip = attrs.extend.get('ac_ip', '')
         ssid = attrs.extend.get('ssid', 'GDFS')
         existed = False
-        if ac_ip:
-            ac_ip = socket.inet_ntoa(ac_ip)
-        if ac_ip in ('172.16.0.252',):
-            # user auto login successfully
-            name = attrs.user 
-            name = name.split(' (')[0]
-            mac = []
-            for b in user_mac:
-                mac.append('{:02X}'.format(ord(b)))
-            mac = ':'.join(mac)
-            user_ip = socket.inet_ntoa(header.ip)
+        ac_ip = socket.inet_ntoa(ac_ip)
+        # user auto login successfully
+        name = attrs.user 
+        name = name.split(' (')[0]
+        mac = []
+        for b in user_mac:
+            mac.append('{:02X}'.format(ord(b)))
+        mac = ':'.join(mac)
+        user_ip = socket.inet_ntoa(header.ip)
 
-            access_log.info('h3c {} auto login notify, mac:{}, {}'.format(name, mac, user_ip))
-            account.add_online2(name, ac_ip, '', mac, user_ip)
+        access_log.info('h3c {} auto login notify, mac:{}, {}'.format(name, mac, user_ip))
+        account.add_online2(name, ac_ip, '', mac, user_ip)
     elif header.type == 0x34:
         start = 32 if header.ver == 0x02 else 16
         attrs = portal.Attributes.unpack(header.num, data[start:])
@@ -1334,10 +1332,13 @@ def ac_data_handler(sock, data, addr):
                 mac.append('{:02X}'.format(ord(b)))
             mac = ':'.join(mac)
 
+            name = attrs.user 
+            name = name.split(' (')[0]
+
             ac_ip = socket.inet_ntoa(ac_ip)
             user_ip = socket.inet_ntoa(header.ip)
 
-            access_log.info('Portal delete user, nas_addr: {}, mac: {}'.format(ac_ip, mac))
+            access_log.info('Portal delete user: {}, nas_addr: {}, mac: {}, {}'.format(name, ac_ip, mac, user_ip))
             account.del_online2(ac_ip, mac)
 
 def get_bas():

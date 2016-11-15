@@ -1321,7 +1321,7 @@ def ac_data_handler(sock, data, addr):
         user_ip = socket.inet_ntoa(header.ip)
 
         access_log.info('h3c {} auto login notify, mac:{}, {}'.format(name, mac, user_ip))
-        account.add_online2(name, ac_ip, '', mac, user_ip, '15914', ssid)
+        account.add_online2(name, ac_ip, '', mac, user_ip, '50001,59920,15914', ssid)
     elif header.type == 0x34:
         start = 32 if header.ver == 0x02 else 16
         attrs = portal.Attributes.unpack(header.num, data[start:])

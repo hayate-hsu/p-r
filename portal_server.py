@@ -1279,12 +1279,14 @@ def ac_data_handler(sock, data, addr):
                 if user:
                     profile = {'pn':15914, 'policy':2, '_location':'50001,59920,15914', 'ssid':ssid}
                     results = account.check_account_privilege(user, profile)
-                    name = results['name'] if results['name'] else results['mobile']
-                    user['name'] = name if name else u''
+                    if results:
+                        name = results['name'] if results['name'] else results['mobile']
+                        user['name'] = name if name else u''
 
                     # check auto_login expired
                     # check account privilege
-                    pass
+                    if account.check_auto_login_expired(user):
+                        access_log.info('{} auto login expired'.format(user['user']))
 
                     existed = True
                     access_log.info('h3c auto login: ac_ip:{}, mac:{}, existed:{}'.format(ac_ip, mac, existed))

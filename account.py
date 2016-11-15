@@ -119,7 +119,7 @@ def check_account_privilege(user, profile):
             return err
 
         holder = user.get('holder', '')
-        if holder in (59484, ):
+        if holder in (59484, 15914):
             user['is_teacher'] = 1
             return err
 

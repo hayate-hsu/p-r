@@ -1262,7 +1262,6 @@ def ac_data_handler(sock, data, addr):
         user_mac = attrs.extend.get('mac', '')
         ac_ip = attrs.extend.get('ac_ip', '')
         ssid = attrs.extend.get('ssid', 'GDFS')
-        existed = False
         if user_mac and ac_ip:
             mac = []
             for b in user_mac:
@@ -1278,17 +1277,23 @@ def ac_data_handler(sock, data, addr):
                 user = account.get_bd_user(mac, True)
                 if user:
                     profile = {'pn':15914, 'policy':2, '_location':'50001,59920,15914', 'ssid':ssid}
-                    results = account.check_account_privilege(user, profile)
+                    existed = True
+
+                    try:
+                        results = account.check_account_privilege(user, profile)
+                    except:
+                        existed = False
+
                     if results:
                         name = results['name'] if results['name'] else results['mobile']
                         user['name'] = name if name else u''
 
                     # check auto_login expired
                     # check account privilege
-                    if account.check_auto_login_expired(user):
+                    if existed and account.check_auto_login_expired(user):
                         access_log.info('{} auto login expired'.format(user['user']))
+                        existed = False
 
-                    existed = True
                     access_log.info('h3c auto login: ac_ip:{}, mac:{}, existed:{}'.format(ac_ip, mac, existed))
                     response = portal.mac_existed.delay(user, ac_ip, header.ip, mac, header.serial, existed)
                     # if existed:

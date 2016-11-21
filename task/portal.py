@@ -177,15 +177,16 @@ def add(x,y):
     
     return x+y
 
-# @celery.task
+@celery.task
 def logout(ac_ip, user_ip, user_mac):
     '''
     '''
     ver = 0x01
     user_ip = socket.inet_aton(user_ip)
     # logger.info('progress %s login, ip: %s', user, self.request.remote_ip)
-    _mac = user_mac.split(':')
-    user_mac = ''.join([chr(int(item, base=16)) for item in _mac])
+    if user_mac:
+        _mac = user_mac.split(':')
+        user_mac = ''.join([chr(int(item, base=16)) for item in _mac])
 
     header = Header(ver, 0x05, 0x00, 0x00, next(_SERIAL_NO_), 
                     0, user_ip, 0 , 0x00, 0x00)
@@ -196,16 +197,18 @@ def logout(ac_ip, user_ip, user_mac):
     # deesn't wait response, directo return
     sock.close()
 
-def ack_ntf_logout(ac_ip, user_ip, user_mac, serial):
+@celery.task
+def ack_logout(ac_ip, user_ip, user_mac, serial):
     '''
     '''
     ver = 0x01
     user_ip = socket.inet_aton(user_ip)
     # logger.info('progress %s login, ip: %s', user, self.request.remote_ip)
-    _mac = user_mac.split(':')
-    user_mac = ''.join([chr(int(item, base=16)) for item in _mac])
+    if user_mac:
+        _mac = user_mac.split(':')
+        user_mac = ''.join([chr(int(item, base=16)) for item in _mac])
 
-    header = Header(ver, 0x0e, 0x00, 0x00, serial, 
+    header = Header(ver, 0x06, 0x00, 0x00, serial, 
                     0, user_ip, 0 , 0x00, 0x00)
     packet = Packet(header)
 

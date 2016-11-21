@@ -25,6 +25,7 @@ define('port', default=8880, help='running on the given port', type=int)
 define('index', default=0, help='portal start index, used for serial number range', type=int)
 define('total', default=1, help='portal server total number , used for serial number range', type=int)
 define('udp_listen', default=0, help='portal server listen on 50100? 1 : 0', type=int)
+define('portal_listen', default=50100, help='portal server listening port', type=int)
 
 # log configuration
 define('log_file_prefix', type=str, default='/var/log/radiusd/portal_8880.log')
@@ -497,7 +498,6 @@ class PageHandler(BaseHandler):
         if page not in ('login.html'):
             self.redirect_to_bidong()
             return
-            # return self.redirect('http://58.241.41.148/index.html')
 
         kwargs = {}
         accept = self.request.headers.get('Accept', 'text/html')
@@ -517,19 +517,20 @@ class PageHandler(BaseHandler):
         if (not kwargs['ap_mac']) and kwargs['ssid'] != self.profile['ssid']:
             kwargs['ssid'] = self.profile['ssid']
 
-        # get portal profile
-        try:
-            platform = 'h5' if self.is_mobile else 'pc'
-            response = yield template.get_portal(str(self.profile['pn']), platform) 
-        except template.PortalConfig as config:
-            config = config.value
-            if config['mask'] not in (1, 2):
-                self.profile['portal'] = config['config']
-        except:
-            pass
-
         # process weixin argument
         self.prepare_wx_wifi(**kwargs)
+
+        # get portal profile
+        if kwargs['ac_ip'] not in ('172.201.2.252', '172.201.2.251'):
+            try:
+                platform = 'h5' if self.is_mobile else 'pc'
+                response = yield template.get_portal(str(self.profile['pn']), platform) 
+            except template.PortalConfig as config:
+                config = config.value
+                if config['mask'] not in (1, 2):
+                    self.profile['portal'] = config['config']
+            except:
+                pass
 
         if self.profile['pn'] in (55532, ) or (not AC_CONFIGURE[kwargs['ac_ip']]['mask'] & 2): 
             # ac doesn't support mac auth, need portal do it 
@@ -835,9 +836,7 @@ class PageHandler(BaseHandler):
         wx_wifi = {}
         wx_wifi['extend'] = self.b64encode(appid=self.profile['appid'], shopid=self.profile['shopid'], **kwargs)
         wx_wifi['timestamp'] = str(int(time.time()*1000))
-        # portal_server = '{}://{}:{}/wx_auth'.format(self.request.protocol, 
-        #                                             self.request.headers.get('Host'), 
-        #                                             self.request.headers.get('Port'))
+
         portal_server = 'http://{}:9898/wx_auth'.format(self.request.headers.get('Host'))
         
         # wx_wifi['auth_url'] = tornado.escape.url_escape(portal_server)
@@ -876,21 +875,6 @@ class PageHandler(BaseHandler):
 
         return result['openid']
 
-    def _check_account_privilege(self):
-        # check private network
-        if self.profile['policy'] & 2:
-            ret, err = account.check_pn_privilege(self.profile['pn'], self.user['user'])
-            if not ret:
-                raise err
-
-        # check account has billing? 
-        if not (self.profile['policy'] & 1):
-            self.expired = account.check_account_balance(self.user)
-            if self.expired:
-                # raise HTTPError(403, reason='Account has no left time')
-                access_log.info('{} has no left time'.format(self.user['user']))
-                raise HTTPError(403, reason=bd_errs[450])
-
     def _add_online_by_bas(self, nas_addr, ap_mac, mac_addr, user_ip):
         '''
             if bas's mask & 1, add online record
@@ -917,21 +901,6 @@ class PortalHandler(BaseHandler):
         super(PortalHandler, self).prepare()
         self.is_weixin = False
         self.is_third = False
-
-    def _check_account_privilege(self):
-        # check private network
-        if self.profile['policy'] & 2:
-            ret, err = account.check_pn_privilege(self.profile['pn'], self.user['user'])
-            if not ret:
-                raise err
-
-        # check account has billing? 
-        if not (self.profile['policy'] & 1):
-            self.expired = account.check_account_balance(self.user)
-            if self.expired:
-                # raise HTTPError(403, reason='Account has no left time')
-                access_log.info('{} has no left time'.format(self.user['user']))
-                raise HTTPError(403, reason=bd_errs[450])
 
     def _check_app_sign(self):
         '''
@@ -1039,6 +1008,11 @@ class PortalHandler(BaseHandler):
         user_mac = self.get_argument('user_mac')
         user_ip = self.get_argument('user_ip')
 
+        if ac_ip in ('172.201.2.251', '172.201.2.252'):
+            if user_ip != self.request.remote_ip:
+                access_log.warning('user ip conflict: user_ip: {}, remote_ip: {}'.format(user_ip, self.request.remote_ip))
+                user_ip = self.request.remote_ip
+
         # vlanId = self.get_argument('vlan')
         ssid = self.get_argument('ssid')
 
@@ -1058,10 +1032,17 @@ class PortalHandler(BaseHandler):
             raise HTTPError(401, reason=bd_errs[431])
 
         # check account status & account ends number on networt
-        if _user['mask']>>30 & 1:
-            # raise HTTPError(403, reason='Account has been frozened')
-            access_log.error('{} has been frozened, mask: {}'.format(_user['user'], _user['mask']))
-            raise HTTPError(403, reason=bd_errs[434])
+        # if _user['mask']>>30 & 1:
+        #     # raise HTTPError(403, reason='Account has been frozened')
+        #     access_log.error('{} has been frozened, mask: {}'.format(_user['user'], _user['mask']))
+        #     raise HTTPError(403, reason=bd_errs[434])
+
+        # check account privilege, results: {mask, mobile, name}
+        results = account.check_account_privilege(self.user, self.profile)
+
+        if results:
+            name = results['name'] if results['name'] else results['mobile']
+            self.user['name'] = name if name else u''
 
         self.user = _user
 
@@ -1070,13 +1051,6 @@ class PortalHandler(BaseHandler):
             # allow user login ends 
             access_log.error('{} exceed edns: {}'.format(self.user['user'], self.user['ends']))
             raise HTTPError(403, reason=bd_errs[451])
-
-        # check account privilege, results: {mask, mobile, name}
-        results = account.check_account_privilege(self.user, self.profile)
-
-        if results:
-            name = results['name'] if results['name'] else results['mobile']
-            self.user['name'] = name if name else u''
 
         task_id = self.user['user'] + '-' + user_mac
 
@@ -1127,7 +1101,7 @@ class PortalHandler(BaseHandler):
         onlines = account.get_onlines(user, mac)
         for online in onlines:
             if online['nas_addr'] and online['framed_ipaddr']:
-                portal.logout(online['nas_addr'], online['framed_ipaddr'], mac)
+                portal.logout.delay(online['nas_addr'], online['framed_ipaddr'], mac)
 
         self.render_json_response(Code=200, Msg='OK')
 
@@ -1240,9 +1214,10 @@ def ac_data_handler(sock, data, addr):
             if not attrs.mac:
                 user_ip = socket.inet_ntoa(header.ip)
                 access_log.info('User quit, nas_addr: {}, ip: {}'.format(addr[0], user_ip))
-                if addr[0] in ('172.201.2.252', ):
+                if addr[0] in ('172.201.2.252', '172.201.2.251'):
                     account.del_online3(addr[0], user_ip)
-                    portal.ack_ntf_logout(addr[0], user_ip, '', header.serial)
+                    portal.ack_logout.delay(addr[0], user_ip, '00:11:22:33:44:55:66')
+                    # portal.ack_ntf_logout(addr[0], user_ip, '', header.serial)
                 return
             #
             mac = []
@@ -1278,6 +1253,7 @@ def ac_data_handler(sock, data, addr):
                 if user:
                     profile = {'pn':15914, 'policy':2, '_location':'50001,59920,15914', 'ssid':ssid}
                     existed = True
+                    results = {}
 
                     try:
                         results = account.check_account_privilege(user, profile)
@@ -1295,7 +1271,7 @@ def ac_data_handler(sock, data, addr):
                         existed = False
 
                     access_log.info('h3c auto login: ac_ip:{}, mac:{}, existed:{}'.format(ac_ip, mac, existed))
-                    response = portal.mac_existed.delay(user, ac_ip, header.ip, mac, header.serial, existed)
+                    portal.mac_existed.delay(user, ac_ip, header.ip, mac, header.serial, existed)
                     # if existed:
                     #     if response.status in ('SUCCESS', ):
                     #         access_log.info('h3c {} auto login successfully, mac:{}, {}'.format(user['user'], mac, user_ip))
@@ -1385,7 +1361,7 @@ def main():
     io_loop = tornado.ioloop.IOLoop.instance()
 
     if options.udp_listen:
-        udp_sockets = bind_udp_socket(PORTAL_PORT)
+        udp_sockets = bind_udp_socket(options.portal_listen)
         for udp_sock in udp_sockets:
             add_udp_handler(udp_sock, '', io_loop)
 

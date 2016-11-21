@@ -57,6 +57,21 @@ def get_billing_policy(ac_ip, ap_mac, ssid):
         if profile and int(time.time()) < profile['expired']:
             return profile, ap_groups
 
+    if ac_ip in ('172.201.2.251', '172.201.2.252'):
+        if ssid and ssid in PN_PROFILE:
+            profile = PN_PROFILE[ssid]
+            if profile and int(time.time()) < profile['expired']:
+                return profile, ''
+
+        # get & update pn profile
+        profile = store.query_pn_policy(ssid=ssid)
+
+        if profile:
+            profile['expired'] = int(time.time()) + EXPIRE
+            PN_PROFILE[ssid] = profile
+            return profile, ''
+
+
     if ap_mac:
         # get pn by ap mac
         result = {}
@@ -192,7 +207,8 @@ def get_bd_user(user, ismac=False):
     '''
         get bd_account user record
     '''
-    return store.get_bd_user(user, ismac=ismac) or store.get_bd_user2(user, ismac=ismac)
+    return store.get_bd_user(user, ismac=ismac)
+    # return store.get_bd_user(user, ismac=ismac) or store.get_bd_user2(user, ismac=ismac)
 
 def check_weixin_user(openid, appid='', tid='', mobile='', mac='', ends=2**5):
     '''

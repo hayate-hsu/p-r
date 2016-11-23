@@ -122,7 +122,7 @@ def get_billing_policy2(req):
 
 def check_account_privilege(user, profile):
     # check private network
-    err = {}
+    err = None
     if user['mask']>>30 & 1:
         raise HTTPError(433, reason=bd_errs[433])
 
@@ -137,6 +137,9 @@ def check_account_privilege(user, profile):
         if holder in (59484, 15914):
             user['is_teacher'] = 1
             return err
+
+        err = None
+
 
     if profile['policy'] & 2:
         ret, err = check_pn_privilege(profile['pn'], user['user'])
@@ -247,9 +250,12 @@ def get_onlines(user, mac='', onlymac=True):
 
     return results
 
-def update_mac_record(user, mac, duration, agent):
+def update_mac_record(user, mac, duration, agent, pn):
     is_update = False
-    expired = utility.now('%Y-%m-%d', duration) + ' 23:59:59'
+    if pn==29946:
+        expired = utility.now('%Y-%m-%d', hours=duration) + ' 23:59:59'
+    else:
+        expired = utility.now('%Y-%m-%d', days=duration) + ' 23:59:59'
 
     record = store.get_user_mac_record(user, mac)
     if record:

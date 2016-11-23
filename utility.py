@@ -61,10 +61,10 @@ def check_codes(method):
         return method(*args)
     return wrapper
 
-def now(fmt=DATE_FORMAT, days=0):
+def now(fmt=DATE_FORMAT, days=0, hours=0):
     _now = datetime.datetime.now()
     if days:
-        _now = _now + datetime.timedelta(days=days)
+        _now = _now + datetime.timedelta(days=days, hours=hours)
     return _now.strftime(fmt)
 
 def cala_delta(start):

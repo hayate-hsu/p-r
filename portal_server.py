@@ -586,7 +586,8 @@ class PageHandler(BaseHandler):
                     self.redirect(config['bidong'] + 'account/{}?token={}'.format(self.user['user'], token))
                     
                     if self.profile:
-                        account.update_mac_record(self.user['user'], kwargs['user_mac'], self.profile['duration'], self.agent_str)
+                        account.update_mac_record(self.user['user'], kwargs['user_mac'], 
+                                                  self.profile['duration'], self.agent_str, self.profile['pn'])
 
                     return
 
@@ -969,7 +970,7 @@ class PortalHandler(BaseHandler):
             # login successfully 
             self._add_online_by_bas(ac_ip, ap_mac, user_mac, user_ip)
             account.update_mac_record(self.user['user'], user_mac, 
-                                      self.profile['duration'], self.agent_str)
+                                      self.profile['duration'], self.agent_str, self.profile['pn'])
         else:
             if isinstance(response.result, HTTPError) and response.result.status_code in (435, ):
                 # has been authed
@@ -1025,6 +1026,8 @@ class PortalHandler(BaseHandler):
                                                                             ''.join([utility.generate_password(3), password])))
             raise HTTPError(401, reason=bd_errs[431])
 
+        self.user = _user
+
         if password not in (_user['password'], utility.md5(_user['password']).hexdigest()):
             # password or user account error
             access_log.error('{} password error, pwd_{}'.format(_user['user'], 
@@ -1044,8 +1047,6 @@ class PortalHandler(BaseHandler):
             name = results['name'] if results['name'] else results['mobile']
             self.user['name'] = name if name else u''
 
-        self.user = _user
-
         onlines = account.get_onlines(self.user['user'])
         if user_mac not in onlines and len(onlines) >= self.user['ends']:
             # allow user login ends 
@@ -1061,7 +1062,8 @@ class PortalHandler(BaseHandler):
         if response.status in ('SUCCESS', ) and self.profile:
             # login successfully 
             self._add_online_by_bas(ac_ip, ap_mac, user_mac, user_ip)
-            account.update_mac_record(self.user['user'], user_mac, self.profile['duration'], self.agent_str)
+            account.update_mac_record(self.user['user'], user_mac, 
+                                      self.profile['duration'], self.agent_str, self.profile['pn'])
         else:
             if isinstance(response.result, HTTPError) and response.result.status_code in (435, ):
                 access_log.info('user:{} has been authed'.format(self.user['user']))

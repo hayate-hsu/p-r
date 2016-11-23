@@ -72,7 +72,7 @@ def login(_user, ac_ip, user_ip, user_mac):
 
     header = Header.unpack(data)
     if header.type != 0x02 or header.err:
-        logger.info('0x{:x} error, errno: 0x{:x}'.format(header.type, header.err))
+        logger.info('0x{:x} error, errno: 0x{:x}, user: {}, ip: {}'.format(header.type, header.err, user, socket.inet_ntoa(user_ip)))
         sock.close()
         if header.err == 0x02:
             # linked has been established, has been authed 

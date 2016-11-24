@@ -12,6 +12,8 @@ import functools
 
 from MySQLdb import (IntegrityError)
 
+from tornado.log import access_log, gen_log, app_log
+
 import logging
 logger = logging.getLogger()
 
@@ -106,7 +108,6 @@ def get_billing_policy(ac_ip, ap_mac, ssid):
     else:
         # ap_mac is False, query by nas_addr
         profile = store.get_gw_pn_policy(ac_ip)
-        logger.info('nas_addr: {} ---- {}'.format(ac_ip, profile))
 
         if profile:
             return profile, ''
@@ -134,7 +135,7 @@ def check_account_privilege(user, profile):
             return err
 
         holder = user.get('holder', '')
-        if holder in (59484, 15914):
+        if holder in (59484,):
             user['is_teacher'] = 1
             return err
 
@@ -243,8 +244,8 @@ def check_weixin_user(openid, appid='', tid='', mobile='', mac='', ends=2**5):
                            tid=tid, mobile=mobile, ends=ends)
     return _user
 
-def get_onlines(user, mac='', onlymac=True):
-    results = store.get_onlines(user, mac)
+def get_onlines(user, macs='', onlymac=True):
+    results = store.get_onlines(user, macs)
     if onlymac:
         return set([item['mac_addr'] for item in results]) if results else set()
 

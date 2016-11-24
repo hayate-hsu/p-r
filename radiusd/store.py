@@ -380,13 +380,15 @@ class Store():
             result = cur.fetchone()
             return result['start'] if result else ''
 
-    def get_onlines(self, user, mac):
+    def get_onlines(self, user, macs):
         '''
         '''
         with Cursor(self.dbpool) as cur:
-            sql = 'select nas_addr, acct_session_id, mac_addr, ap_mac, ssid, framed_ipaddr from online where user = "{}"'.format(user)
-            if mac:
-                sql = sql + ' and mac_addr = "{}"'.format(mac)
+            sql = '''select nas_addr, acct_session_id, acct_start_time, mac_addr, ap_mac, 
+            ssid, framed_ipaddr from online where user = "{}"'''.format(user)
+            if macs:
+                macs = ','.join(['"{}"'.format(mac) for mac in macs])
+                sql = sql + ' and mac_addr in ({})'.format(macs)
             cur.execute(sql)
             return cur.fetchall()
 

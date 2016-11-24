@@ -230,8 +230,10 @@ class BaseHandler(tornado.web.RequestHandler):
             # self.render('error.html', Code=status_code, Msg=self._reason)
             if status_code in (427,):
                 self.render_json_response(Code=status_code, Msg=self._reason, pn=self.profile['pn'])
+            elif status_code in (428, ):
+                self.render_json_response(Code=status_code, Msg=self._reason, macs=self.response_kwargs['macs'])
             else:
-                self.render_json_response(Code=status_code, Msg=self._reason)
+                self.render_json_response(Code=status_code, Msg=self._reason, **kwargs)
 
     def _handle_request_exception(self, e):
         if isinstance(e, tornado.web.Finish):
@@ -610,6 +612,7 @@ class PageHandler(BaseHandler):
             return
 
         # now all page user login, later after update back to use self.profile['portal']  
+        access_log.info('portal: {}'.format(profile))
         if isinstance(profile['portal'], dict):
             page = 'tplh5.html' if platform else 'tplpc.html'
             kwargs['config'] = profile['portal']
@@ -902,6 +905,7 @@ class PortalHandler(BaseHandler):
         super(PortalHandler, self).prepare()
         self.is_weixin = False
         self.is_third = False
+        self.response_kwargs = {}
 
     def _check_app_sign(self):
         '''
@@ -1049,9 +1053,12 @@ class PortalHandler(BaseHandler):
 
         onlines = account.get_onlines(self.user['user'])
         if user_mac not in onlines and len(onlines) >= self.user['ends']:
+        # if self.user['user'] == '10001':
             # allow user login ends 
-            access_log.error('{} exceed edns: {}'.format(self.user['user'], self.user['ends']))
-            raise HTTPError(403, reason=bd_errs[451])
+            access_log.error('{} exceed ends: {}'.format(self.user['user'], self.user['ends']))
+            macs = ','.join(onlines)
+            self.response_kwargs['macs'] = macs.encode('utf-8')
+            raise HTTPError(428, reason=bd_errs[451])
 
         task_id = self.user['user'] + '-' + user_mac
 
@@ -1096,14 +1103,20 @@ class PortalHandler(BaseHandler):
         # # 
 
         user = self.get_argument('user')
-        mac = self.get_argument('mac')
-        # user_ip = self.get_argument('user_ip')
-        # ac_ip = self.get_argument('ac_ip')
+        mac = self.get_argument('mac', '')
+        macs = self.get_argument('macs', '')
 
-        onlines = account.get_onlines(user, mac)
+        macs = macs if macs else mac
+        if not macs:
+            self.render_json_response(Code=200, Msg='OK')
+        macs = macs.split(',')
+
+        onlines = account.get_onlines(user, macs, onlymac=False)
+        access_log.info('user:{} online devices: {}, onlines:{}'.format(user, macs, onlines))
         for online in onlines:
             if online['nas_addr'] and online['framed_ipaddr']:
                 portal.logout.delay(online['nas_addr'], online['framed_ipaddr'], mac)
+                # account.del_online2(online['nas_addr'], online['mac_addr'])
 
         self.render_json_response(Code=200, Msg='OK')
 
@@ -1260,6 +1273,10 @@ def ac_data_handler(sock, data, addr):
                     try:
                         results = account.check_account_privilege(user, profile)
                     except:
+                        existed = False
+
+                    onlines = account.get_onlines(user['user'])
+                    if user_mac not in onlines and len(onlines) >= user['ends']:
                         existed = False
 
                     if results:

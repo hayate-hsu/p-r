@@ -20,6 +20,8 @@ def process(req=None,user=None,runstat=None,**kwargs):
     online = account.get_online(req.get_nas_addr(),req.get_acct_sessionid())  
 
     if not online:         
+        log.msg('%s Accounting update request, update online, but can\'t found online record'%req.get_user_name(),level=logging.INFO)
+        return
         ap_mac,ssid = '',''
         called_stationid = req.get_called_stationid()
         ap_mac,ssid = called_stationid.split(':')

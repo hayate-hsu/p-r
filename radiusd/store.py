@@ -320,7 +320,7 @@ class Store():
         with Cursor(self.dbpool) as cur:
             sql = '''select pn_{pn}.mask, pn_{pn}.name, pn_{pn}.mobile from pn_{pn} 
             left join bd_account on pn_{pn}.mobile=bd_account.mobile 
-            where bd_account.user="{user}"'''.format(pn=pn, user=user)
+            where bd_account.user="{user}" and bd_account.mobile'''.format(pn=pn, user=user)
             cur.execute(sql)
             return cur.fetchone()
 

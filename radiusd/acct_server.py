@@ -180,6 +180,7 @@ class RADIUSAccess(RADIUS):
         req_user = req.get_user_name()
 
         calling_stationid = req.get_calling_stationid()
+        calling_stationid = calling_stationid.replace('-', '')
 
         # check user
         is_auto = 0

@@ -231,9 +231,13 @@ class BaseHandler(tornado.web.RequestHandler):
             if status_code in (427,):
                 self.render_json_response(Code=status_code, Msg=self._reason, pn=self.profile['pn'])
             elif status_code in (428, ):
-                self.render_json_response(Code=status_code, Msg=self._reason, macs=self.response_kwargs['macs'])
+                downmacs = 0 
+                if self.profile['pn'] in ('15914', ):
+                    downmacs = 1
+                self.render_json_response(Code=status_code, Msg=self._reason, 
+                                          downMacs=downmacs, macs=self.response_kwargs['macs'])
             else:
-                self.render_json_response(Code=status_code, Msg=self._reason, **kwargs)
+                self.render_json_response(Code=status_code, Msg=self._reason)
 
     def _handle_request_exception(self, e):
         if isinstance(e, tornado.web.Finish):
@@ -612,7 +616,6 @@ class PageHandler(BaseHandler):
             return
 
         # now all page user login, later after update back to use self.profile['portal']  
-        access_log.info('portal: {}'.format(profile))
         if isinstance(profile['portal'], dict):
             page = 'tplh5.html' if platform else 'tplpc.html'
             kwargs['config'] = profile['portal']

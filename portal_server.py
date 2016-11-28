@@ -1232,10 +1232,9 @@ def ac_data_handler(sock, data, addr):
             if not attrs.mac:
                 user_ip = socket.inet_ntoa(header.ip)
                 access_log.info('User quit, nas_addr: {}, ip: {}'.format(addr[0], user_ip))
-                if addr[0] in ('172.201.2.252', '172.201.2.251'):
-                    account.del_online3(addr[0], user_ip)
-                    portal.ack_logout.delay(addr[0], user_ip, '00:11:22:33:44:55:66')
-                    # portal.ack_ntf_logout(addr[0], user_ip, '', header.serial)
+                # if addr[0] in ('172.201.2.252', '172.201.2.251'):
+                account.del_online3(addr[0], user_ip)
+                portal.ack_logout.delay(addr[0], user_ip, '00:11:22:33:44:55:66', header.serial)
                 return
             #
             mac = []

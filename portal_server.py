@@ -232,7 +232,7 @@ class BaseHandler(tornado.web.RequestHandler):
                 self.render_json_response(Code=status_code, Msg=self._reason, pn=self.profile['pn'])
             elif status_code in (428, ):
                 downmacs = 0 
-                if self.profile['pn'] in ('15914', ):
+                if self.profile['pn'] in (15914, ):
                     downmacs = 1
                 self.render_json_response(Code=status_code, Msg=self._reason, 
                                           downMacs=downmacs, macs=self.response_kwargs['macs'])
@@ -468,9 +468,9 @@ class TestHandler(BaseHandler):
 
         try:
             response = yield template.get_portal('10001', 'h5') 
-        except template.PortalConfig as config:
-            access_log.info('config: {}'.format(config.value), exc_info=True)
-            print(config.value)
+        except template.PortalConfig as portal_config:
+            access_log.info('portal_config: {}'.format(portal_config.value), exc_info=True)
+            print(portal_config.value)
         except:
             access_log.info('exception', exc_info=True)
 
@@ -531,10 +531,10 @@ class PageHandler(BaseHandler):
             try:
                 platform = 'h5' if self.is_mobile else 'pc'
                 response = yield template.get_portal(str(self.profile['pn']), platform) 
-            except template.PortalConfig as config:
-                config = config.value
-                if config['mask'] not in (1, 2):
-                    self.profile['portal'] = config['config']
+            except template.PortalConfig as portal_config:
+                portal_config = portal_config.value
+                if portal_config['mask'] not in (1, 2):
+                    self.profile['portal'] = portal_config['config']
             except:
                 pass
 
@@ -716,23 +716,6 @@ class PageHandler(BaseHandler):
             except:
                 return
 
-            # # check private network
-            # if self.profile['policy'] & 2:
-            #     # current network is private, check user privilege
-            #     ret, err = account.check_pn_privilege(self.profile['pn'], _user['user'])
-            #     if not ret:
-            #         return
-
-            # if not (self.profile['policy'] & 1):
-            #     if _user['mask']>>30 & 1:
-            #         # raise HTTPError(403, reason='Account has been frozened')
-            #         return
-            #     # ipolicy =0, check billing
-            #     self.expired = account.check_account_balance(_user)
-            #     if self.expired:
-            #         # raise HTTPError(403, reason='Account has no left time')
-            #         return
-            
             onlines = account.get_onlines(_user['user'])
             if kwargs['user_mac'] not in onlines and len(onlines) >= _user['ends']:
                 # allow user logout ends 

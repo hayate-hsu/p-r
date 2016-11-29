@@ -83,7 +83,7 @@ def get_billing_policy(ac_ip, ap_mac, ssid):
             result = utility.json_decoder(response.buffer.read())
         except:
             pass
-        ap_groups = ''
+        profile, ap_groups = '',''
 
         if result and '_location' in result and result['_location']:
             pn = result['_location'].split(',')[-1]

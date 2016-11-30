@@ -232,7 +232,7 @@ class BaseHandler(tornado.web.RequestHandler):
                 self.render_json_response(Code=status_code, Msg=self._reason, pn=self.profile['pn'])
             elif status_code in (428, ):
                 downmacs = 0 
-                if self.profile['pn'] in (15914, ):
+                if self.profile['pn'] in (15914, 59484):
                     downmacs = 1
                 self.render_json_response(Code=status_code, Msg=self._reason, 
                                           downMacs=downmacs, macs=self.response_kwargs['macs'])
@@ -630,10 +630,6 @@ class PageHandler(BaseHandler):
         if '77201' in groups:
             groups = 10003
 
-        # access_log.info('test_1, {} {}'.format(profile, ap_groups))
-
-        # ap_groups = ','.join(ap_groups)
-
         self.render(page, openid='', ispri=profile['policy'] & 2, groups=groups, ap_groups=ap_groups,  
                     pn=profile['pn'], note=profile['note'], image=profile['logo'], 
                     appid=profile['appid'], shopid=profile['shopid'], secret=profile['secret'], 
@@ -725,7 +721,8 @@ class PageHandler(BaseHandler):
         task_id = _user['user'] + '-' + kwargs['user_mac']
 
         response = yield tornado.gen.Task(portal.login.apply_async, 
-                                          args=[_user, kwargs['ac_ip'], kwargs['user_ip'], kwargs['user_mac']]) 
+                                          args=[_user, kwargs['ac_ip'], kwargs['user_ip'], kwargs['user_mac']], 
+                                          expires=30) 
                                           # task_id=task_id)
 
         if response.status in ('SUCCESS', ):
@@ -787,7 +784,8 @@ class PageHandler(BaseHandler):
         task_id = self.user['user'] + '-' + kwargs['user_mac']
         response = yield tornado.gen.Task(portal.login.apply_async, 
                                           args=[self.user, kwargs['ac_ip'], 
-                                                kwargs['user_ip'], kwargs['user_mac']]) 
+                                                kwargs['user_ip'], kwargs['user_mac']], 
+                                          expires=30) 
                                           # task_id=task_id)
 
         if response.status in ('SUCCESS', ):
@@ -953,7 +951,8 @@ class PortalHandler(BaseHandler):
         task_id = self.user['user'] + '-' + user_mac
         
         response = yield tornado.gen.Task(portal.login.apply_async, 
-                                          args=[self.user,  ac_ip, user_ip, user_mac]) 
+                                          args=[self.user,  ac_ip, user_ip, user_mac], 
+                                          expires=30) 
                                           # task_id=task_id)
 
         if response.successful() and self.profile:
@@ -1049,7 +1048,8 @@ class PortalHandler(BaseHandler):
         task_id = self.user['user'] + '-' + user_mac
 
         response = yield tornado.gen.Task(portal.login.apply_async, 
-                                          args=[self.user,  ac_ip, user_ip, user_mac]) 
+                                          args=[self.user,  ac_ip, user_ip, user_mac], 
+                                          expires=30) 
                                           # task_id=task_id)
 
         if response.status in ('SUCCESS', ) and self.profile:
@@ -1101,7 +1101,8 @@ class PortalHandler(BaseHandler):
         access_log.info('user:{} online devices: {}, onlines:{}'.format(user, macs, onlines))
         for online in onlines:
             if online['nas_addr'] and online['framed_ipaddr']:
-                portal.logout.delay(online['nas_addr'], online['framed_ipaddr'], mac)
+                # portal.logout.delay(online['nas_addr'], online['framed_ipaddr'], mac)
+                portal.logout.apply_async((online['nas_addr'], online['framed_ipaddr'], mac), expires=5)
                 # account.del_online2(online['nas_addr'], online['mac_addr'])
 
         self.render_json_response(Code=200, Msg='OK')
@@ -1217,7 +1218,8 @@ def ac_data_handler(sock, data, addr):
                 access_log.info('User quit, nas_addr: {}, ip: {}'.format(addr[0], user_ip))
                 # if addr[0] in ('172.201.2.252', '172.201.2.251'):
                 account.del_online3(addr[0], user_ip)
-                portal.ack_logout.delay(addr[0], user_ip, '00:11:22:33:44:55:66', header.serial)
+                # portal.ack_logout.delay(addr[0], user_ip, '00:11:22:33:44:55:66', header.serial)
+                portal.ack_logout.apply_async((addr[0], user_ip, '00:11:22:33:44:55:66', header.serial), expires=5)
                 return
             #
             mac = []
@@ -1275,7 +1277,9 @@ def ac_data_handler(sock, data, addr):
                         existed = False
 
                     access_log.info('h3c auto login: ac_ip:{}, mac:{}, existed:{}'.format(ac_ip, mac, existed))
-                    portal.mac_existed.delay(user, ac_ip, header.ip, mac, header.serial, existed)
+                    # portal.mac_existed.delay(user, ac_ip, header.ip, mac, header.serial, existed)
+                    portal.mac_existed.apply_async((user, ac_ip, header.ip, mac, header.serial, existed), expires=30)
+
                     # if existed:
                     #     if response.status in ('SUCCESS', ):
                     #         access_log.info('h3c {} auto login successfully, mac:{}, {}'.format(user['user'], mac, user_ip))

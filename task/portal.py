@@ -167,17 +167,13 @@ def sleep(seconds):
 
 @celery.task
 def add(x,y):
-    ret = sleep.delay(20)
-    logger.info('ret: {}'.format(ret.result))
-
-    response = ret.wait()
-    logger.info('response: {}'.format(dir(response)))
-
-    # logger.info('ret1: {}'.format(response.result))
-    
     return x+y
 
-@celery.task
+@celery.task(ignore_result=True)
+def log_result(result):
+    logger.info('log_result got: {}'.format(result))
+
+@celery.task(ignore_result=True)
 def logout(ac_ip, user_ip, user_mac):
     '''
     '''
@@ -197,7 +193,7 @@ def logout(ac_ip, user_ip, user_mac):
     # deesn't wait response, directo return
     sock.close()
 
-@celery.task
+@celery.task(ignore_result=True)
 def ack_logout(ac_ip, user_ip, user_mac, serial):
     '''
     '''
@@ -217,7 +213,7 @@ def ack_logout(ac_ip, user_ip, user_mac, serial):
     # deesn't wait response, directo return
     sock.close()
 
-@celery.task
+@celery.task(ignore_result=True)
 def mac_existed(user, ac_ip, user_ip, user_mac, serial, existed):
     ver = 0x01
     errcode = 0 if existed else 1
@@ -230,15 +226,10 @@ def mac_existed(user, ac_ip, user_ip, user_mac, serial, existed):
     sock.sendto(packet.pack(), (ac_ip, BAS_PORT))
     sock.close()
 
-    if not existed:
-        return
+    if existed:
+        user_ip = socket.inet_ntoa(user_ip)
+        login(user, ac_ip, user_ip, user_mac)
 
-    user_ip = socket.inet_ntoa(user_ip)
-    response = login.delay(user, ac_ip, user_ip, user_mac)
-    # if response.successful():
-    #     return response.result
-    # else:
-    #     raise response.result
 
 class Packet():
     '''

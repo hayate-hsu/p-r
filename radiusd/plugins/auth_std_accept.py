@@ -24,8 +24,11 @@ def process(req=None, resp=None, user=None, **kwargs):
 
     profile = user['profile']
     is_teacher = user.get('is_teacher', 0)
-    # policy: 
-    if profile['policy'] == 0 and is_teacher== 0:
+
+    if profile['policy'] & 1 or is_teacher:
+        # free network or teacher
+        pass
+    else:
         # normal billing pocily
         # user is not nansha wireless city account
         _now = datetime.datetime.now()

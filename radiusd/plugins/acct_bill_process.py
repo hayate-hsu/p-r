@@ -42,20 +42,13 @@ def process(req=None, user=None, runstat=None, coa_clients=None, **kwargs):
         return
 
     log.msg('{} > Prepaid long time billing '.format(req.get_user_name()),level=logging.INFO)
-    profile = user['profile']
-    policy = profile.get('policy', 0)
-    if (not user) or policy:
-        # policy 1, free ap, doesn't charge
-        return
 
     # check user pay type, only pay by times account record billing 
-    #    2**8 : day
-    #    2**9 : times
-    now = datetime.datetime.now()
-    if user['expired'] < now:
-        # account has been expired, 
-        send_dm(coa_clients,online)
-        return
+    # now = datetime.datetime.now()
+    # if user['expired'] < now:
+    #     # account has been expired, 
+    #     send_dm(coa_clients,online)
+    #     return
     # account has expired, send offline notify   
     return
     coin = int(user['coin'])

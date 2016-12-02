@@ -630,8 +630,8 @@ class PageHandler(BaseHandler):
         if '77201' in groups:
             groups = 10003
 
-        self.render(page, openid='', ispri=profile['policy'] & 2, groups=groups, ap_groups=ap_groups,  
-                    pn=profile['pn'], note=profile['note'], image=profile['logo'], 
+        self.render(page, openid='', policy=profile['policy'], groups=groups, ap_groups=ap_groups,  
+                    pn=profile['pn'], note=profile['note'], image=profile['logo'],  
                     appid=profile['appid'], shopid=profile['shopid'], secret=profile['secret'], 
                     logo=profile['logo'],
                     extend=wx_config['extend'], timestamp=wx_config['timestamp'], 

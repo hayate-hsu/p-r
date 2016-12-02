@@ -11,7 +11,9 @@ def process(req=None,resp=None,user=None,**kwargs):
 
     #
     profile = user['profile']
-    if profile['policy']:
+
+    # policy & 1 = 1 , free for use
+    if profile['policy'] & 1:
         return resp
 
     expired = account.check_account_balance(user)

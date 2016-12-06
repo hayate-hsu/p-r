@@ -537,6 +537,21 @@ class Store():
             cur.execute(sql)
             conn.commit()
 
+    def clear_user_records(self, user, macs):
+        '''
+            macs: "mac1","macs2"
+        '''
+        with Connect(self.dbpool) as conn:
+            cur = conn.cursor(MySQLdb.cursors.DictCursor)
+            # clear online records
+            sql = 'delete from online where user="{}" and mac_addr in ({})'.format(user, macs)
+            cur.execute(sql)
+
+            sql = 'delete from mac_history where user="{}" and mac in ({})'.format(user, macs)
+            cur.execute(sql)
+
+            conn.commit()
+
 
     def add_ticket(self, ticket):
         _ticket = ticket.copy()

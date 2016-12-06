@@ -180,11 +180,10 @@ class RADIUSAccess(RADIUS):
         req_user = req.get_user_name()
 
         calling_stationid = req.get_calling_stationid()
-        calling_stationid = calling_stationid.replace('-', '')
-
+        calling_stationid = utility.strip_mac(calling_stationid)
         # check user
         is_auto = 0
-        if req_user == calling_stationid:
+        if utility.strip_mac(req_user) == calling_stationid:
             # user account is mac address
             req_user = utility.format_mac(req_user) 
             is_auto = 1
@@ -255,11 +254,11 @@ class RADIUSAccounting(RADIUS):
         req_user = req.get_user_name()
 
         calling_stationid = req.get_calling_stationid()
-        calling_stationid = calling_stationid.replace('-', '')
+        calling_stationid = utility.strip_mac(calling_stationid)
 
         is_auto = 0
         # check user
-        if req_user == calling_stationid:
+        if utility.strip_mac(req_user) == calling_stationid:
             # user account is mac address
             req_user = utility.format_mac(req_user) 
             is_auto = 1

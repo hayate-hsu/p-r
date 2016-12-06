@@ -59,7 +59,7 @@ def get_billing_policy(ac_ip, ap_mac, ssid):
         if profile and int(time.time()) < profile['expired']:
             return profile, ap_groups
 
-    if ac_ip in ('172.201.2.251', '172.201.2.252'):
+    if ac_ip in ('172.201.2.251', '172.201.2.252') or ssid.startswith('BD_TEST'):
         if ssid and ssid in PN_PROFILE:
             profile = PN_PROFILE[ssid]
             if profile and int(time.time()) < profile['expired']:
@@ -131,6 +131,8 @@ def check_account_privilege(user, profile):
     if user['mask']>>30 & 1:
         raise HTTPError(433, reason=bd_errs[433])
 
+    holder = user.get('holder', '')
+
     if profile['pn'] in (15914,):
         # if account is nvxiao teacher, allow his access 15914
         ret, err = check_pn_privilege(59484, user['user'])
@@ -138,12 +140,11 @@ def check_account_privilege(user, profile):
             user['is_teacher'] = 1 
             return err
 
-        holder = user.get('holder', '')
+        err = None
+
         if holder in (59484,):
             user['is_teacher'] = 1
             return err
-
-        err = None
 
 
     if profile['policy'] & 2:
@@ -288,6 +289,12 @@ def get_appid(appid):
 
 
 #************************************************************
+def clear_user_records(user, macs):
+    '''
+    '''
+    if macs:
+        macs = ','.join(['"{}"'.format(item) for item in macs])
+        store.clear_user_records(user, macs)
 
 def get_bas(ip):
     return store.get_bas(ip)

@@ -311,6 +311,11 @@ class BaseHandler(tornado.web.RequestHandler):
                 # assume user platfrom is mobile
                 self.is_mobile = True
 
+            if not self.is_mobile:
+                if self.agent_str.find('Android') or self.agent_str.find('IOS'):
+                    self.is_mobile = True
+
+
     def check_app(self):
         '''
         '''
@@ -1001,7 +1006,7 @@ class PortalHandler(BaseHandler):
         if ac_ip in ('172.201.2.251', '172.201.2.252'):
             if user_ip != self.request.remote_ip:
                 access_log.warning('user ip conflict: user_ip: {}, remote_ip: {}'.format(user_ip, self.request.remote_ip))
-                user_ip = self.request.remote_ip
+                # user_ip = self.request.remote_ip
 
         # vlanId = self.get_argument('vlan')
         ssid = self.get_argument('ssid')
@@ -1095,6 +1100,7 @@ class PortalHandler(BaseHandler):
         macs = macs if macs else mac
         if not macs:
             self.render_json_response(Code=200, Msg='OK')
+
         macs = macs.split(',')
 
         onlines = account.get_onlines(user, macs, onlymac=False)
@@ -1104,6 +1110,8 @@ class PortalHandler(BaseHandler):
                 # portal.logout.delay(online['nas_addr'], online['framed_ipaddr'], mac)
                 portal.logout.apply_async((online['nas_addr'], online['framed_ipaddr'], mac), expires=5)
                 # account.del_online2(online['nas_addr'], online['mac_addr'])
+        if onlines:
+            account.clear_user_records(user, macs)
 
         self.render_json_response(Code=200, Msg='OK')
 

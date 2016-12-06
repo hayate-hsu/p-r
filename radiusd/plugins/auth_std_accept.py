@@ -20,10 +20,11 @@ def process(req=None, resp=None, user=None, **kwargs):
         current doesn't implement check
         only return accept
     '''
-    session_timeout = CONFIG['SESSION_TIMEOUT']
-
     profile = user['profile']
     is_teacher = user.get('is_teacher', 0)
+
+    hours = profile.get('session_timeout', 24)
+    session_timeout = CONFIG['SESSION_TIMEOUT'] if hours==24 else hours*3600
 
     if profile['policy'] & 1 or is_teacher:
         # free network or teacher

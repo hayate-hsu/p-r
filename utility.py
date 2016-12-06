@@ -50,6 +50,8 @@ json_decoder = json.JSONDecoder().decode
 _PASSWORD_ = '23456789abcdefghjkmnpqrstuvwxyz'
 _VERIFY_CODE_ = '1234567890'
 
+MAC_PATTERN = re.compile(r'[-:_]')
+
 def check_codes(method):
     '''
         Decorator to check parameters.
@@ -63,7 +65,7 @@ def check_codes(method):
 
 def now(fmt=DATE_FORMAT, days=0, hours=0):
     _now = datetime.datetime.now()
-    if days:
+    if days or hours:
         _now = _now + datetime.timedelta(days=days, hours=hours)
     return _now.strftime(fmt)
 
@@ -127,6 +129,11 @@ def format_mac(mac):
         mac = ':'.join([mac[:2],mac[2:4],mac[5:7],mac[7:9],mac[10:12],mac[12:14]])
     return mac
 
+def strip_mac(mac):
+    if mac:
+        return re.sub(MAC_PATTERN, '', mac.upper())
+    else:
+        return ''
 
 def _fix_key(key):
     '''

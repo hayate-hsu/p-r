@@ -229,12 +229,12 @@ class BaseHandler(tornado.web.RequestHandler):
         else:
             # self.render('error.html', Code=status_code, Msg=self._reason)
             if status_code in (427,):
-                self.render_json_response(Code=status_code, Msg=self._reason, pn=self.profile['pn'])
+                self.render_json_response(Code=status_code, Msg=bd_errs[status_code], pn=self.profile['pn'])
             elif status_code in (428, ):
                 downmacs = 0 
                 if self.profile['pn'] in (15914, 59484):
                     downmacs = 1
-                self.render_json_response(Code=status_code, Msg=self._reason, 
+                self.render_json_response(Code=status_code, Msg=bd_errs[status_code], 
                                           downMacs=downmacs, macs=self.response_kwargs['macs'])
             else:
                 self.render_json_response(Code=status_code, Msg=self._reason)

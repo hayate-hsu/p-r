@@ -146,7 +146,6 @@ def check_account_privilege(user, profile):
             user['is_teacher'] = 1
             return err
 
-
     if profile['policy'] & 2:
         ret, err = check_pn_privilege(profile['pn'], user['user'])
         if not ret:
@@ -256,9 +255,9 @@ def get_onlines(user, macs='', onlymac=True):
 
     return results
 
-def update_mac_record(user, mac, duration, agent, pn):
+def update_mac_record(user, mac, duration, agent, profile):
     is_update = False
-    if pn==29946:
+    if profile['pn']==29946:
         expired = utility.now('%Y-%m-%d', hours=duration) + ' 23:59:59'
     else:
         expired = utility.now('%Y-%m-%d', days=duration) + ' 23:59:59'
@@ -267,7 +266,7 @@ def update_mac_record(user, mac, duration, agent, pn):
     if record:
         is_update = True
     try:
-        store.update_mac_record(user, mac, expired, agent, is_update)
+        store.update_mac_record(user, mac, expired, agent, profile['ssid'], is_update)
     except IntegrityError:
         # duplicate entry
         pass

@@ -194,8 +194,16 @@ class RADIUSAccess(RADIUS):
             # get billing policy
             user['is_auto'] = is_auto
             user['profile'], ap_groups = account.get_billing_policy2(req)
+
+            if is_auto and user['profile']['pn'] in (29946, ):
+                # for yangwang, check ssid
+                ssid = user.get('ssid', '')
+                if ssid and ssid != user['profile']['ssid']:
+                    user = None
+
             try:
-                account.check_account_privilege(user, user['profile'])
+                if user:
+                    account.check_account_privilege(user, user['profile'])
             except:
                 user = None
 

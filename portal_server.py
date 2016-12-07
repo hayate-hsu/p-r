@@ -598,7 +598,7 @@ class PageHandler(BaseHandler):
                     
                     if self.profile:
                         account.update_mac_record(self.user['user'], kwargs['user_mac'], 
-                                                  self.profile['duration'], self.agent_str, self.profile['pn'])
+                                                  self.profile['duration'], self.agent_str, self.profile)
 
                     return
 
@@ -964,7 +964,7 @@ class PortalHandler(BaseHandler):
             # login successfully 
             self._add_online_by_bas(ac_ip, ap_mac, user_mac, user_ip)
             account.update_mac_record(self.user['user'], user_mac, 
-                                      self.profile['duration'], self.agent_str, self.profile['pn'])
+                                      self.profile['duration'], self.agent_str, self.profile)
         else:
             if isinstance(response.result, HTTPError) and response.result.status_code in (435, ):
                 # has been authed
@@ -1061,7 +1061,7 @@ class PortalHandler(BaseHandler):
             # login successfully 
             self._add_online_by_bas(ac_ip, ap_mac, user_mac, user_ip)
             account.update_mac_record(self.user['user'], user_mac, 
-                                      self.profile['duration'], self.agent_str, self.profile['pn'])
+                                      self.profile['duration'], self.agent_str, self.profile)
         else:
             if isinstance(response.result, HTTPError) and response.result.status_code in (435, ):
                 access_log.info('user:{} has been authed'.format(self.user['user']))

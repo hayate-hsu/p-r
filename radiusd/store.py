@@ -199,7 +199,7 @@ class Store():
             sql = ''
             if ismac:
             # if user.count(':') == 5:
-                sql = '''select bd_account.*, mac_history.expired as auto_expired from bd_account 
+                sql = '''select bd_account.*, mac_history.ssid, mac_history.expired as auto_expired from bd_account 
                 left join mac_history on bd_account.user=mac_history.user 
                 where mac_history.mac="{}" order by bd_account.expired desc, mac_history.expired desc'''.format(user)
             else:
@@ -324,17 +324,17 @@ class Store():
             cur.execute(sql)
             return cur.fetchone()
 
-    def update_mac_record(self, user, mac, expired, agent, isupdate=True):
+    def update_mac_record(self, user, mac, expired, agent, ssid, isupdate=True):
         with Connect(self.dbpool) as conn:
             cur = conn.cursor()
             # now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             sql = ''
             if isupdate:
-                sql = '''update mac_history set expired="{}", platform = "{}" 
-                where user = "{}" and mac = "{}"'''.format(expired, agent, user, mac)
+                sql = '''update mac_history set expired="{}", platform = "{}", ssid="{}",  
+                where user = "{}" and mac = "{}"'''.format(expired, agent, ssid, user, mac)
             else:
-                sql = '''insert into mac_history (user, mac, expired, platform) 
-                values("{}", "{}", "{}", "{}")'''.format(user, mac, expired, agent)
+                sql = '''insert into mac_history (user, mac, expired, platform, ssid) 
+                values("{}", "{}", "{}", "{}", "{}")'''.format(user, mac, expired, agent, ssid)
             cur.execute(sql)
             conn.commit()
 

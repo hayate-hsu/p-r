@@ -624,20 +624,23 @@ class PageHandler(BaseHandler):
                                       logo=profile['logo'], **kwargs)
             return
 
-        if not profile['portal'].endswith('.html'):
+        if isinstance(profile['portal'], str) and not profile['portal'].endswith('.html'):
             # query portal template profile
             results = account.get_portal_tmp(profile['portal'])
             if results:
                 portal_tmp = results[0]
-                pic = portal_tmp['h5_pic'] if platform else portal_tmp['pc_pic']
-                profile['portal'] = {'title':portal_tmp['title'], 'pic':pic}
+                profile['portal'] = portal_tmp
+                # pic = portal_tmp['h5_pic'] if platform else portal_tmp['pc_pic']
+                # profile['portal'] = {'title':portal_tmp['title'], 'pic':pic}
             else:
                 profile['portal'] = 'login.html'
 
         # now all page user login, later after update back to use self.profile['portal']  
         if isinstance(profile['portal'], dict):
             page = 'tplh5.html' if platform else 'tplpc.html'
-            kwargs['config'] = profile['portal']
+            portal_tmp = profile['portal']
+            pic = portal_tmp['h5_pic'] if platform else portal_tmp['pc_pic']
+            kwargs['config'] = {'title':portal_tmp['title'], 'pic':pic}
         else:
             page = profile['portal'] or 'login.html'
 

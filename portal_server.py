@@ -316,7 +316,7 @@ class BaseHandler(tornado.web.RequestHandler):
                     self.is_mobile = True
 
             if self.is_mobile:
-                if 'Windows NT' in self.agent_str.find('Windows NT'):
+                if 'Windows NT' in self.agent_str:
                     self.is_mobile = False
 
 

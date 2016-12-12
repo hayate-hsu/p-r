@@ -247,6 +247,19 @@ class Store():
             user = cur.fetchone()
             return user
 
+    def update_bd_user(self, user, **kwargs):
+        with Connect(self.dbpool) as conn:
+            cur = conn.cursor(MySQLdb.cursors.DictCursor)
+            update_str = ', '.join(['{}="{}"'.format(key, value) for key,value in kwargs.iteritems()])
+            sql = 'update bd_account set {} where user="{}"'.format(update_str, user)
+            cur.execute(sql)
+
+            if 'mobile' in kwargs:
+                sql = 'update account set mobile="{}" where id={}'.format(kwargs['mobile'], user)
+                cur.execute(sql)
+
+            conn.commit()
+
     def get_weixin_user(self, openid, appid, mac):
         '''
             1. get weixin account by openid & appid
@@ -330,7 +343,7 @@ class Store():
             # now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             sql = ''
             if isupdate:
-                sql = '''update mac_history set expired="{}", platform = "{}", ssid="{}",  
+                sql = '''update mac_history set expired="{}", platform = "{}", ssid="{}"  
                 where user = "{}" and mac = "{}"'''.format(expired, agent, ssid, user, mac)
             else:
                 sql = '''insert into mac_history (user, mac, expired, platform, ssid) 
@@ -543,14 +556,101 @@ class Store():
         '''
         with Connect(self.dbpool) as conn:
             cur = conn.cursor(MySQLdb.cursors.DictCursor)
-            # clear online records
-            sql = 'delete from online where user="{}" and mac_addr in ({})'.format(user, macs)
-            cur.execute(sql)
 
-            sql = 'delete from mac_history where user="{}" and mac in ({})'.format(user, macs)
+            # remove mac_history records
+            sql = 'delete from mac_history where user="{}"'.format(user)
+            if macs:
+                sql += ' and mac in ({})'.format(macs)
+            cur.execute(sql)
+            # clear online records
+            sql = 'delete from online where user="{}"'.format(user)
+            if macs:
+                sql += ' and mac_addr in ({})'.format(macs)
             cur.execute(sql)
 
             conn.commit()
+
+    def add_online_record(self, user, mac, ap_mac, ssid):
+        '''
+            id : auto_increment
+        '''
+        with Connect(self.dbpool) as conn:
+            cur = conn.cursor(MySQLdb.cursors.DictCursor)
+            
+            sql = '''insert into online_records (user, mac, ap_mac, ssid) 
+            values("{}", "{}", "{}", "{}")'''.format(user, mac, ap_mac, ssid)
+            cur.execute(sql)
+
+            sql = 'select id from online_records where user="{}" and mac="{}" order by start desc'.format(user, mac)
+            cur.execute(sql)
+
+            _id = cur.fetchone()['id']
+            conn.commit()
+
+            return _id
+
+
+    def update_online_record(self, _id, stop, user, mac, ap_mac, ssid, pre_ap_mac):
+        '''
+        '''
+        with Connect(self.dbpool) as conn:
+            cur = conn.cursor(MySQLdb.cursors.DictCursor)
+            _id = _id
+
+            sql = 'update online_records set stop="{}" where id={}'.format(stop, _id)
+            cur.execute(sql)
+            if ap_mac != pre_ap_mac:
+                # ap changed
+                sql = '''insert into online_records (user, mac, ap_mac, ssid) 
+                values("{}", "{}", "{}", "{}")'''.format(user, mac, ap_mac, ssid)
+                cur.execute(sql)
+                sql = 'select id from online_records where user="{}" and mac="{}" order by start desc'.format(user, mac)
+                cur.execute(sql)
+
+                _id = cur.fetchone()['id']
+
+            conn.commit()
+            return _id
+
+    def create_portal_tmp(self, name, title, h5_pic, pc_pic, mask):
+        '''
+        '''
+        with Connect(self.dbpool) as conn:
+            cur = conn.cursor(MySQLdb.cursors.DictCursor)
+            sql = 'insert into portal_tmp (name, title, h5_pic, pc_pic, mask) values("{}", "{}", "{}", "{}", {})'.format(name, title, h5_pic, pc_pic, mask)
+            cur.execute(sql)
+
+            conn.commit()
+
+    def update_portal_tmp(self, name, **kwargs):
+        with Connect(self.dbpool) as conn:
+            cur = conn.cursor(MySQLdb.cursors.DictCursor)
+            update_str = ', '.join(['{}="{}"'.format(key, value) for key,value in kwargs.iteritems()])
+            sql = 'update portal_tmp set {} where name="{}"'.format(update_str, name)
+            cur.execute(sql)
+
+            conn.commit()
+
+    def delete_portal_tmp(self, name):
+        with Connect(self.dbpool) as conn:
+            cur = conn.cursor(MySQLdb.cursors.DictCursor)
+            sql = 'delete from portal_tmp where name="{}"'.format(name) 
+            cur.execute(sql)
+
+            conn.commit()
+
+    def get_portal_tmp(self, name):
+        with Cursor(self.dbpool) as cur:
+            sql = 'select * from portal_tmp'
+            if name:
+                sql += ' where name="{}"'.format(name)
+            cur.execute(sql)
+            results = cur.fetchall()
+            return results if results else []
+
+
+
+
 
 
     def add_ticket(self, ticket):

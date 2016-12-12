@@ -58,9 +58,12 @@ def check_codes(method):
         Encode unicode to utf-8 codes
     '''
     functools.wraps(method)
-    def wrapper(*args):
+    def wrapper(*args, **kwargs):
         args = [arg.encode('utf-8', 'replace') if isinstance(arg, unicode) else arg for arg in args]
-        return method(*args)
+        for key,value in kwargs.iteritems():
+            if isinstance(value, unicode):
+                kwargs[key] = value.encode('utf-8', 'replace')
+        return method(*args, **kwargs)
     return wrapper
 
 def now(fmt=DATE_FORMAT, days=0, hours=0):
@@ -98,6 +101,12 @@ def generate_password(len=6):
         Generate password randomly
     '''
     return ''.join(random.sample(_PASSWORD_, len))
+
+def generate_verify_code(_len=6):
+    '''
+        generate verify code
+    '''
+    return ''.join(random.sample(_VERIFY_CODE_, _len))
 
 @check_codes
 def token(user):
@@ -204,3 +213,25 @@ class PKCS7Encoder():
     def decode(self, text):
         pad = int(hexlify(text[-1]))
         return text[:-pad]
+
+def format_left_time(expired, coin):
+    '''
+    expired : datetime %Y-%m-%d %H:%M:%S
+    '''
+    days, hours = 0,'00:00'
+    # check current data
+    if expired:
+        delta = expired - datetime.datetime.now()
+        days = delta.days
+        if days < 0:
+            days = 0
+        else:
+            days = days + 1
+
+    if coin>0:
+        # one coin = 3 minutes
+        times = coin*3*60
+        hours = '{:02d}:{:02d}'.format(int(times/3600), int(times%3600/60))
+
+    return days, hours
+

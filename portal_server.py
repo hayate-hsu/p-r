@@ -312,8 +312,12 @@ class BaseHandler(tornado.web.RequestHandler):
                 self.is_mobile = True
 
             if not self.is_mobile:
-                if self.agent_str.find('Android') or self.agent_str.find('IOS'):
+                if ('Android' in self.agent_str) or ('IOS' in self.agent_str):
                     self.is_mobile = True
+
+            if self.is_mobile:
+                if 'Windows NT' in self.agent_str.find('Windows NT'):
+                    self.is_mobile = False
 
 
     def check_app(self):
@@ -530,18 +534,18 @@ class PageHandler(BaseHandler):
 
         # process weixin argument
         self.prepare_wx_wifi(**kwargs)
-
+        
         # get portal profile
-        if kwargs['ac_ip'] not in ('172.201.2.252', '172.201.2.251'):
-            try:
-                platform = 'h5' if self.is_mobile else 'pc'
-                response = yield template.get_portal(str(self.profile['pn']), platform) 
-            except template.PortalConfig as portal_config:
-                portal_config = portal_config.value
-                if portal_config['mask'] not in (1, 2):
-                    self.profile['portal'] = portal_config['config']
-            except:
-                pass
+        # if kwargs['ac_ip'] not in ('172.201.2.252', '172.201.2.251'):
+        #     try:
+        #         platform = 'h5' if self.is_mobile else 'pc'
+        #         response = yield template.get_portal(str(self.profile['pn']), platform) 
+        #     except template.PortalConfig as portal_config:
+        #         portal_config = portal_config.value
+        #         if portal_config['mask'] not in (1, 2):
+        #             self.profile['portal'] = portal_config['config']
+        #     except:
+        #         pass
 
         if self.profile['pn'] in (55532, ) or (not AC_CONFIGURE[kwargs['ac_ip']]['mask'] & 2): 
             # ac doesn't support mac auth, need portal do it 
@@ -620,6 +624,16 @@ class PageHandler(BaseHandler):
                                       logo=profile['logo'], **kwargs)
             return
 
+        if not profile['portal'].endswith('.html'):
+            # query portal template profile
+            results = account.get_portal_tmp(profile['portal'])
+            if results:
+                portal_tmp = results[0]
+                pic = portal_tmp['h5_pic'] if platform else portal_tmp['pc_pic']
+                profile['portal'] = {'title':portal_tmp['title'], 'pic':pic}
+            else:
+                profile['portal'] = 'login.html'
+
         # now all page user login, later after update back to use self.profile['portal']  
         if isinstance(profile['portal'], dict):
             page = 'tplh5.html' if platform else 'tplpc.html'
@@ -654,6 +668,8 @@ class PageHandler(BaseHandler):
             # sangfor device
             kwargs['vlan'] = self.get_argument('vlan', 1)
             ssids = self.get_arguments('ssid')
+            if not ssids:
+                raise HTTPError(400)
             ssid = ssids[-1] if kwargs['ac_ip'] == '172.29.1.246' else ssids[0]
             # ssid = self.get_argument('ssid')
             kwargs['ssid'] = ssid.strip('"')

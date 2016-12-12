@@ -32,6 +32,10 @@ def process(req=None,user=None,runstat=None,**kwargs):
         account.add_ticket(ticket)
     else:
         account.del_online(ticket.nas_addr, ticket.acct_session_id)
+        _location=user['profile'].get('_location', ''),
+        if _location.startswith('29946'):
+            account.update_online_record(online['user'], online['mac_addr'], 
+                                         online['ap_mac'], online['ssid'], status='stop')
         ticket.acct_start_time = online['acct_start_time']
         # ticket.acct_stop_time= _datetime.strftime( "%Y-%m-%d %H:%M:%S")
         ticket.start_source = online['start_source']

@@ -48,6 +48,14 @@ def process(req=None,user=None,runstat=None,**kwargs):
             start_source = STATUS_TYPE_UPDATE
         )
         account.add_online(online)   
+    else:
+        # update records 
+        # {user, ap_mac, ssid, _location, tiemstamp, }
+        _location=user['profile'].get('_location', ''),
+        if _location.startswith('29946'):
+            account.update_online_record(online['user'], online['mac_addr'], 
+                                         online['ap_mac'], online['ssid'])
+        pass
 
     log.msg('%s Accounting update request, update online'%req.get_user_name(),level=logging.INFO)
         

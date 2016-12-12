@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+#coding=utf-8
 '''
 '''
 from __future__ import absolute_import, division, print_function, with_statement
@@ -39,6 +41,8 @@ PN_PROFILE = collections.defaultdict(dict)
 AP_MAPS = collections.defaultdict(dict)
 
 APP_PROFILE = collections.defaultdict(dict)
+
+ONLINE_RECORDS = collections.defaultdict(list)
 
 EXPIRE = 7200
 
@@ -218,6 +222,10 @@ def get_bd_user(user, ismac=False):
     return store.get_bd_user(user, ismac=ismac)
     # return store.get_bd_user(user, ismac=ismac) or store.get_bd_user2(user, ismac=ismac)
 
+def update_bd_user(user, **kwargs):
+    if kwargs:
+        store.update_bd_user(user, **kwargs)
+
 def check_weixin_user(openid, appid='', tid='', mobile='', mac='', ends=2**5):
     '''
         check account existes?
@@ -287,13 +295,64 @@ def get_appid(appid):
     return APP_PROFILE[appid]
 
 
+@utility.check_codes
+def create_portal_tmp(name, title='羊城晚报社', h5_pic='/images/nsimgs/bg_tpl.jpg', 
+                      pc_pic='/images/nsimgs/banner_tpl.jpg', mask=1792):
+    assert name
+    store.create_portal_tmp(name, title, h5_pic, pc_pic, mask)
+
+@utility.check_codes
+def update_portal_tmp(name, **kwargs):
+    if kwargs:
+        assert name
+        store.update_portal_tmp(name, **kwargs)
+
+@utility.check_codes
+def delete_portal_tmp(name):
+    assert name
+    store.delete_portal_tmp(name)
+
+@utility.check_codes
+def get_portal_tmp(name):
+    return store.get_portal_tmp(name)
+
 #************************************************************
-def clear_user_records(user, macs):
+def clear_user_records(user, macs=[]):
     '''
     '''
-    if macs:
-        macs = ','.join(['"{}"'.format(item) for item in macs])
-        store.clear_user_records(user, macs)
+    macs = ','.join(['"{}"'.format(item) for item in macs])
+    store.clear_user_records(user, macs)
+
+def add_online_record(user, mac, ap_mac, ssid):
+    '''
+        1. add online
+    '''
+    _id = store.add_online_record(user, mac, ap_mac, ssid)
+    key = '{}_{}'.format(user, mac)
+    ONLINE_RECORDS[key] = (_id, ap_mac)
+
+def update_online_record(user, mac, ap_mac, ssid, status='alive'):
+    '''
+        1. update stop record
+        2. if ap change, create new records, change id
+        3. stop: remove record from ONLINE_RECORDS
+    '''
+    key = '{}_{}'.format(user, mac)
+    if key in ONLINE_RECORDS:
+        _id, pre_ap_mac = ONLINE_RECORDS[key]
+        stop = utility.now()
+        # update records
+        _id = store.update_online_record(_id, stop, user, mac, ap_mac, ssid, pre_ap_mac)
+        if ap_mac != pre_ap_mac:
+            # update new record
+            ONLINE_RECORDS[key] = (_id, ap_mac)
+    else:
+        # create new record
+        add_online_record(user, mac, ap_mac, ssid)
+
+    if status=='stop':
+        # clear cache
+        ONLINE_RECORDS.pop(key, '')
 
 def get_bas(ip):
     return store.get_bas(ip)

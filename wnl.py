@@ -42,8 +42,8 @@ import re
 import socket
 # import collections
 import functools
-import time
-import datetime
+# import time
+# import datetime
 
             
 import urllib
@@ -424,10 +424,6 @@ class PageHandler(BaseHandler):
             Render html page
         '''
         page = page.lower()
-        # if not page.endswith('.html'):
-        #     page = page + '.html'
-        # if page.startswith('manager.html'):
-        #     return self.render('login_admin.html')        
         return self.render(page)
 
 class AccountHandler(BaseHandler):
@@ -447,7 +443,6 @@ class AccountHandler(BaseHandler):
         self.check_token(user, token)
         _user, renters = None, None
         _user = account.get_bd_user(user)
-        # _user.pop('password', 0)
         if not _user:
             raise HTTPError(404, reason='account not existed')
 
@@ -546,27 +541,11 @@ class BindHandler(BaseHandler):
         else:
             self.bind_mobile(user)
 
-    # current desn't open unbind interface to client
-    # @_trace_wrapper
-    # @_parse_body
-    # def delete(self, user):
-    #     self.check_token(user)
-    #     flags = int(self.get_argument('flags', 0))
-    #     if not flags:
-    #         # unbind room
-    #         self.unbind_room(user)
-    #     else:
-    #         # unbind mobile number
-    #         self.unbind_mobile(user)
-
     def bind_mobile(self, user):
         mobile = self.get_argument('mobile')
         pn = self.get_argument('pn', '')
         
         account.update_account(user, mobile=mobile)
-
-        # if pn and account.get_pn_account(pn, mobile=mobile):
-        #     account.bind_pn_account(pn, user, mobile)
 
         self.render_json_response(**OK)
 
@@ -575,11 +554,6 @@ class BindHandler(BaseHandler):
         mobile = self.get_argument('mobile')
         pn = self.get_argument('pn', '')
         
-        # set '' to mobile field
-        # account.update_account(user, mobile='')
-        # if pn and account.get_pn_account(pn, mobile=mobile):
-        #     account.unbind_pn_account(pn, mobile)
-
         self.render_json_response(**OK)
 
     def bind_room(self, user):
@@ -901,17 +875,6 @@ class RegisterHandler(BaseHandler):
 class PNSHandler(BaseHandler):
     '''
     '''
-    # @_trace_wrapper
-    # @_parse_body
-    # @_check_token
-    # def get(self):
-    #     '''
-    #         query pns which user can access
-    #     '''
-    #     pns = account.get_pns()
-
-    #     self.render_json_response(pns=pns, **OK)
-
     @_trace_wrapper
     @_parse_body
     @_check_token
@@ -924,7 +887,6 @@ class PNSHandler(BaseHandler):
         # pns = self.get_arguments('pns')
 
         pns = account.query_avaiable_pns(user, mobile)
-
 
         if not pns:
             raise HTTPError(404, reason='{},{} doesn\'t belong to any pns'.format(user, mobile))

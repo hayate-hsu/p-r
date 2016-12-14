@@ -117,6 +117,31 @@ class Store():
             cur.execute('select * from app where appid = "{}"'.format(appid))
             record = cur.fetchone()
             return record
+
+    def get_account_by_mobile_or_mac(self, mobile, mac):
+        with Cursor(self.dbpool) as cur:
+            # search account by mobile
+            if mobile:
+                sql = '''select bd_account.*, account.mobile as amobile from bd_account 
+                left join account on bd_account.user=cast(account.id as char)  
+                where account.mobile="{}"'''.format(mobile)
+                cur.execute(sql)
+
+                result = cur.fetchone()
+                if result:
+                    return result
+            
+            # search account by mac_history
+            if mac:
+                sql = '''select bd_account.*, account.mobile as amobile from bd_account 
+                left join mac_history on bd_account.user=mac_history.user 
+                left join account on bd_account.user=cast(account.id as char) 
+                where mac_history.mac="{}" order by account.ctime'''.format(mac)
+                cur.execute(sql)
+                return cur.fetchone()
+
+            return None
+
         
     def add_user(self, user, password, appid='', tid='', mobile='', ends=2**5):
         '''
@@ -186,6 +211,7 @@ class Store():
             cur.execute(sql)
             user = cur.fetchone()
             conn.commit()
+
             return user
 
     def get_bd_user(self, user, password=None, ismac=False):
@@ -260,6 +286,18 @@ class Store():
 
             conn.commit()
 
+    def get_account(self, uuid):
+        '''
+            get account's info
+        '''
+        with Cursor(self.dbpool) as cur:
+            sql = '''select bd_account.*, account.mask as amask, account.realname, account.address
+            from bd_account 
+            left join account on bd_account.user=cast(account.id as char)  
+            where account.uuid="{}"'''.format(uuid)
+            cur.execute(sql)
+            return cur.fetchone()
+
     def get_weixin_user(self, openid, appid, mac):
         '''
             1. get weixin account by openid & appid
@@ -325,6 +363,11 @@ class Store():
                 modify_str = ', '.join(['{}="{}"'.format(key,value) for key,value in kwargs.items()])
                 sql = 'update account set {} where id={}'.format(modify_str, _id)
                 cur.execute(sql)
+
+                mobile = kwargs.get('mobile', '')
+                if mobile:
+                    sql = 'update bd_account set mobile={} where user="{}"'.format(mobile, _id)
+                    cur.execute(sql)
                 conn.commit()
 
     def check_pn_privilege(self, pn, user):
@@ -648,9 +691,54 @@ class Store():
             results = cur.fetchall()
             return results if results else []
 
+    # ************************************************
+    #
+    # app version operator
+    #
+    # ************************************************ 
+    def add_app_version(self, pt, version, note):
+        '''
+        '''
+        with Connect(self.dbpool) as conn:
+            cur = conn.cursor(MySQLdb.cursors.DictCursor)
+            sql = 'insert into app_ver (pt, newest, least, note) values("{}", "{}", "{}", "{}")'.format(pt, version, version, note)
+            cur.execute(sql)
+            conn.commit()
 
+    def update_app_version(self, pt, **kwargs):
+        '''
+        '''
+        with Connect(self.dbpool) as conn:
+            cur = conn.cursor(MySQLdb.cursors.DictCursor)
+            modify_str = ', '.join('{} = "{}"'.format(key, value) for key,value in kwargs.iteritems())
+            sql = 'update app_ver set {} where pt = {}'.format(modify_str, pt)
+            cur.execute(sql)
+            conn.commit()
 
+    def get_app_version(self, pt):
+        with Cursor(self.dbpool) as cur:
+            cur.execute('select * from app_ver where pt="{}"'.format(pt))
+            return cur.fetchone()
 
+    def query_avaiable_pns(self, user, mobile):
+        '''
+        '''
+        with Cursor(self.dbpool) as cur:
+            sql = '''select pn_policy.* from pn_policy 
+            right join information_schema.tables on concat('pn_', `pn`) = information_schema.tables.table_name 
+            where pn_policy.policy&2
+            '''
+            cur.execute(sql)
+            tables = cur.fetchall()
+
+            results = []
+            for item in tables:
+                sql = 'select id from pn_{} where mobile="{}"'.format(item['pn'], mobile)
+                cur.execute(sql)
+                if cur.fetchone():
+                    results.append(item)
+
+            return results
 
 
     def add_ticket(self, ticket):

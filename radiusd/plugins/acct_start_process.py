@@ -44,7 +44,7 @@ def process(req=None,user=None,runstat=None,**kwargs):
     )
 
     account.add_online(online)
-    _location=user['profile'].get('_location', ''),
+    _location=user['profile'].get('_location', '')
     if _location.startswith('29946'):
         account.add_online_record(online['user'], online['mac_addr'], 
                                   online['ap_mac'], online['ssid'])

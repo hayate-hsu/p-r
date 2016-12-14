@@ -215,6 +215,36 @@ def get_current_billing_policy(**kwargs):
     profile = get_billing_policy(kwargs['ac_ip'], kwargs['ap_mac'], kwargs['ssid'])
     return profile
 
+def check_account_by_mobile_or_mac(mobile, mac):
+    '''
+        1. first check mac_history 
+         
+        2. check user has been register?
+               mobile : 
+               mac : android register by mac address 
+    '''
+    _user = store.get_account_by_mobile_or_mac(mobile, mac)
+    if not _user:
+        # register account by mobile
+        password = utility.generate_password()
+        _user = store.add_user(mobile, password, mobile=mobile, ends=2**8)
+        _user['existed'] = 0
+        # _user = {'user':user, 'password':password, 'existed':0}
+    else:
+        if _user['amobile'] != mobile or _user['mobile'] != mobile:
+            store.update_account(_user['user'], mobile=mobile)
+
+        _user['existed'] = 1
+    return _user
+
+def check_app_account(uuid, mask):
+    assert uuid
+    _user = store.get_account(uuid=uuid)
+    if not _user:
+        _user = store.add_user(uuid, utility.generate_password(), ends=mask)
+    return _user
+
+
 def get_bd_user(user, ismac=False):
     '''
         get bd_account user record
@@ -294,6 +324,47 @@ def get_appid(appid):
     APP_PROFILE[appid] = record
     return APP_PROFILE[appid]
 
+def update_version(mask, **kwargs):
+    pt = ''
+    if mask>>6 & 1:
+        pt = 'Android'
+    elif mask>>7 & 1:
+        pt = 'IOS'
+    else:
+        raise HTTPError(400, reason='Unknown platform')
+    db.update_app_version(pt, **kwargs)
+
+def get_version(mask):
+    pt = ''
+    if mask>>6 & 1:
+        pt = 'Android'
+    elif mask>>7 & 1:
+        pt = 'IOS'
+    else:
+        raise HTTPError(400, reason='Unknown platform')
+    return db.get_app_version(pt)
+
+def create_version(ver, mask, note):
+    '''
+        create app version
+    '''
+    pt = ''
+    if mask>>6 & 1:
+        pt = 'Android'
+    elif mask>>7 & 1:
+        pt = 'IOS'
+    else:
+        raise HTTPError(400, reason='Unknown platform')
+    record = get_version(mask)
+    if record:
+        db.update_app_version(pt, newest=ver, least=ver, note=note)
+    else:
+        db.add_app_version(pt, ver, note)
+
+def query_avaiable_pns(user, mobile):
+    '''
+    '''
+    return db.query_avaiable_pns(user, mobile)
 
 @utility.check_codes
 def create_portal_tmp(name, title='羊城晚报社', h5_pic='/images/nsimgs/bg_tpl.jpg', 

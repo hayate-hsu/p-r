@@ -51,7 +51,7 @@ def process(req=None,user=None,runstat=None,**kwargs):
     else:
         # update records 
         # {user, ap_mac, ssid, _location, tiemstamp, }
-        _location=user['profile'].get('_location', ''),
+        _location=user['profile'].get('_location', '')
         if _location.startswith('29946'):
             account.update_online_record(online['user'], online['mac_addr'], 
                                          online['ap_mac'], online['ssid'])

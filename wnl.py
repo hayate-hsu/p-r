@@ -724,6 +724,9 @@ class PortalHandler(BaseHandler):
     '''
         dispatcher portal request
     '''
+    def options(self, name=''):
+        pass
+
     def get(self, name=''):
         results = account.get_portal_tmp(name)
         if name:
@@ -771,6 +774,7 @@ class PortalHandler(BaseHandler):
         account.delete_portal_tmp(name)
         self.render_json_response(Code=200, Msg='OK')
 
+
 class ImageHandler(BaseHandler):
     '''
         1. user upload image & update databse
@@ -807,8 +811,10 @@ class ImageHandler(BaseHandler):
             with open(file_path, 'wb') as f:
                 f.write(meta['body'])
             break
-
-        self.render_json_response(url='/images/tpl/'+_id, Code=200, Msg='OK')
+        url = '/images/tpl/' + _id
+        if self.request.host in ('112.94.162.4', '172.31.1.200'):
+            url = 'http://{}:9898/images/tpl/{}'.format(self.request.host, _id)
+        self.render_json_response(url=url, Code=200, Msg='OK')
         
     
 #***************************************************

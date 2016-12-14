@@ -26,7 +26,7 @@ import utility
 from radiusd.store import store
 from bd_err import bd_errs
 
-import mongo
+# import mongo
 
 _REQUESTES_ = {}
 

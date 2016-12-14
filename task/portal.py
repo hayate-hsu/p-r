@@ -213,7 +213,7 @@ def ack_logout(ac_ip, user_ip, user_mac, serial):
     # deesn't wait response, directo return
     sock.close()
 
-@celery.task(ignore_result=True)
+@celery.task(ignore_result=True, throws=(HTTPError,))
 def mac_existed(user, ac_ip, user_ip, user_mac, serial, existed):
     ver = 0x01
     errcode = 0 if existed else 1

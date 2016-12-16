@@ -24,7 +24,6 @@ import utility
 # import settings
 # import config
 from radiusd.store import store
-from bd_err import bd_errs
 
 # import mongo
 
@@ -63,7 +62,9 @@ def get_billing_policy(ac_ip, ap_mac, ssid):
         if profile and int(time.time()) < profile['expired']:
             return profile, ap_groups
 
-    if ac_ip in ('172.201.2.251', '172.201.2.252') or ssid.startswith('BD_TEST'):
+    # if ac_ip in ('172.201.2.251', '172.201.2.252') or ssid.startswith('BD_TEST'):
+
+    if (not ap_mac) or ssid.startwith('BD_TEST'):
         if ssid and ssid in PN_PROFILE:
             profile = PN_PROFILE[ssid]
             if profile and int(time.time()) < profile['expired']:
@@ -113,12 +114,12 @@ def get_billing_policy(ac_ip, ap_mac, ssid):
             AP_MAPS[ap_mac] = {'pn':profile['pn'], 'ap_groups':ap_groups}
             PN_PROFILE[profile['pn']][profile['ssid']] = profile
             return profile, ap_groups
-    else:
-        # ap_mac is False, query by nas_addr
-        profile = store.get_gw_pn_policy(ac_ip)
+    # else:
+    #     # ap_mac is False, query by nas_addr
+    #     profile = store.get_gw_pn_policy(ac_ip)
 
-        if profile:
-            return profile, ''
+    #     if profile:
+    #         return profile, ''
             
     raise HTTPError(400, reason='Abnormal, query pn failed, {} {}'.format(ap_mac, ssid))
 
@@ -133,7 +134,7 @@ def check_account_privilege(user, profile):
     # check private network
     err = None
     if user['mask']>>30 & 1:
-        raise HTTPError(433, reason=bd_errs[433])
+        raise HTTPError(431)
 
     holder = user.get('holder', '')
 
@@ -158,7 +159,7 @@ def check_account_privilege(user, profile):
     # check account has billing? 
     if not (profile['policy'] & 1):
         if check_account_balance(user):
-            raise HTTPError(403, reason=bd_errs[450])
+            raise HTTPError(435)
 
     return err
 
@@ -177,11 +178,12 @@ def check_pn_privilege(pn, user):
     except:
         record = None
     if not record:
-        return False, HTTPError(427, reason='{} can\'t access private network : {}'.format(user, pn))
+        access_log.warning('{} can\'t access private network : {}'.format(user, pn))
+        return False, HTTPError(427)
 
     mask = int(record.get('mask', 0))
     if mask>>30 & 1:
-        return False, HTTPError(433, reason=bd_errs[433])
+        return False, HTTPError(431)
 
     return True, record 
 
@@ -251,6 +253,9 @@ def get_bd_user(user, ismac=False):
     '''
     return store.get_bd_user(user, ismac=ismac)
     # return store.get_bd_user(user, ismac=ismac) or store.get_bd_user2(user, ismac=ismac)
+
+def get_pn_user(user, mobile):
+    pass
 
 def update_bd_user(user, **kwargs):
     if kwargs:
@@ -332,7 +337,7 @@ def update_version(mask, **kwargs):
         pt = 'IOS'
     else:
         raise HTTPError(400, reason='Unknown platform')
-    db.update_app_version(pt, **kwargs)
+    store.update_app_version(pt, **kwargs)
 
 def get_version(mask):
     pt = ''
@@ -342,7 +347,7 @@ def get_version(mask):
         pt = 'IOS'
     else:
         raise HTTPError(400, reason='Unknown platform')
-    return db.get_app_version(pt)
+    return store.get_app_version(pt)
 
 def create_version(ver, mask, note):
     '''
@@ -357,14 +362,14 @@ def create_version(ver, mask, note):
         raise HTTPError(400, reason='Unknown platform')
     record = get_version(mask)
     if record:
-        db.update_app_version(pt, newest=ver, least=ver, note=note)
+        store.update_app_version(pt, newest=ver, least=ver, note=note)
     else:
-        db.add_app_version(pt, ver, note)
+        store.add_app_version(pt, ver, note)
 
 def query_avaiable_pns(user, mobile):
     '''
     '''
-    return db.query_avaiable_pns(user, mobile)
+    return store.query_avaiable_pns(user, mobile)
 
 @utility.check_codes
 def create_portal_tmp(name, title='羊城晚报社', h5_pic='/images/nsimgs/bg_tpl.jpg', 

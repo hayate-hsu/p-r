@@ -774,7 +774,6 @@ class PortalHandler(BaseHandler):
         account.delete_portal_tmp(name)
         self.render_json_response(Code=200, Msg='OK')
 
-
 class ImageHandler(BaseHandler):
     '''
         1. user upload image & update databse
@@ -816,7 +815,6 @@ class ImageHandler(BaseHandler):
             url = 'http://{}:9898/images/tpl/{}'.format(self.request.host, _id)
         self.render_json_response(url=url, Code=200, Msg='OK')
         
-    
 #***************************************************
 #
 #   

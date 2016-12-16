@@ -62,7 +62,6 @@ import template
 
 from task import portal 
 
-from bd_err import bd_errs
 
 portal_config = config['portal_config']
 
@@ -142,6 +141,8 @@ class BaseHandler(tornado.web.RequestHandler):
 
     RESPONSES = {}
     RESPONSES.update(tornado.httputil.responses)
+    from bd_err import portal_responses
+    RESPONSES.update(portal_responses)
 
     def initialize(self, lookup=LOOK_UP):
         '''
@@ -587,7 +588,7 @@ class PageHandler(BaseHandler):
                 response, self.task_resp = self.task_resp, None
                 if response.status in ('SUCCESS', ):
                     _user = response.result
-                elif isinstance(response.result, HTTPError) and response.result.status_code in (435,):
+                elif isinstance(response.result, HTTPError) and response.result.status_code in (440,):
                     _user = self.user
                 else:
                     access_log.info('weixin auth failed, {}'.format(response.result))
@@ -682,7 +683,7 @@ class PageHandler(BaseHandler):
             # user mac address 
             mac = self.get_argument('mac', '') or self.get_argument('wlanstamac', '') 
             if not mac:
-                raise HTTPError(400, 'mac address can\'t be none')
+                raise HTTPError(400, reason='mac address can\'t be None')
             kwargs['user_mac'] = utility.format_mac(mac)
 
             # ap mac address
@@ -740,7 +741,6 @@ class PageHandler(BaseHandler):
             if kwargs['user_mac'] not in onlines and len(onlines) >= _user['ends']:
                 # allow user logout ends 
                 return
-                # raise HTTPError(403, reason='Over the limit ends')
 
         task_id = _user['user'] + '-' + kwargs['user_mac']
 
@@ -752,7 +752,7 @@ class PageHandler(BaseHandler):
         if response.status in ('SUCCESS', ):
             access_log.info('{} auto login successfully, mac:{}'.format(_user['user'], kwargs['user_mac']))
             self._add_online_by_bas(kwargs['ac_ip'], kwargs['ap_mac'], kwargs['user_mac'], kwargs['user_ip'])
-        elif isinstance(response.result, HTTPError) and response.result.status_code in (435,):
+        elif isinstance(response.result, HTTPError) and response.result.status_code in (440,):
             access_log.info('{} has been authed, mac:{}'.format(_user['user'], kwargs['user_mac']))
         else:
             access_log.info('{} auto login failed, {}'.format(_user['user'], response.result))
@@ -780,7 +780,7 @@ class PageHandler(BaseHandler):
         result = json_decoder(response.body)
         if 'openid' not in result:
             access_log.error('Get weixin account\'s openid failed, msg: {}'.format(result))
-            raise HTTPError(500)
+            raise HTTPError(400)
 
         openid =  result['openid']
 
@@ -788,12 +788,12 @@ class PageHandler(BaseHandler):
         user, password = '', ''
         _user = account.check_weixin_user(openid, appid=self.profile['appid'], mac=kwargs['user_mac'])
         if not _user:
-            raise HTTPError(401, reason='Should subscribe first')
+            raise HTTPError(432)
 
         self.user = _user
         # user unsubscribe, the account will be forbid
         if _user['mask']>>31 & 1:
-            raise HTTPError(403, reason='Account has been frozen')
+            raise HTTPError(431)
             
         # check ac ip
         if kwargs['ac_ip'] not in AC_CONFIGURE:
@@ -814,7 +814,7 @@ class PageHandler(BaseHandler):
 
         if response.status in ('SUCCESS', ):
             access_log.info('{} weixin login successfully, mac:{}'.format(self.user['user'], kwargs['user_mac']))
-        elif isinstance(response.result, HTTPError) and response.result.status_code in (435,):
+        elif isinstance(response.result, HTTPError) and response.result.status_code in (440,):
             access_log.info('{} has been authed, mac:{}'.format(self.user['user'], kwargs['user_mac']))
         else:
             access_log.info('{}auto login failed, {}'.format(self.user['user'], response.result))
@@ -914,6 +914,32 @@ class PortalHandler(BaseHandler):
         self.is_weixin = False
         self.is_third = False
         self.response_kwargs = {}
+        self.token = None
+
+    def write_error(self, status_code, **kwargs):
+        '''
+            Customer error return format
+        '''
+        if self.settings.get('Debug') and 'exc_info' in kwargs:
+            self.set_header('Content-Type', 'text/plain')
+            import traceback
+            for line in traceback.format_exception(*kwargs['exc_info']):
+                self.write(line)
+            self.finish()
+        else:
+            responses = {'Code':status_code, 'Msg':self.RESPONSE.get(status_code, 'Unknown Error'), 
+                         'pn':self.profile['pn']}
+            if status_code in (428, ):
+                downmacs = 0 
+                if self.profile['pn'] in (15914, 59484):
+                    downmacs = 1
+                responses['downMacs'] = downmacs
+                responses['macs'] = self.responses_kwargs['macs']
+            
+            if self.token:
+                responses['token'] = self.token
+
+            self.render_json_response(**responses)
 
     def _check_app_sign(self):
         '''
@@ -931,7 +957,7 @@ class PortalHandler(BaseHandler):
 
             md5 = utility.md5(data.encode('utf-8')).hexdigest()
             if sign != md5:
-                raise HTTPError(403, reason='app sign check failed')
+                raise HTTPError(400, reason='app sign check failed')
 
 
     # @_trace_wrapper
@@ -958,7 +984,7 @@ class PortalHandler(BaseHandler):
         user, password = '',''
         _user = account.check_weixin_user(openid, appid=kwargs['appid'], tid=tid, mac=user_mac)
         if not _user:
-            raise HTTPError(401, reason='Should subscribe first')
+            raise HTTPError(432)
         
         self.user = _user
 
@@ -985,7 +1011,7 @@ class PortalHandler(BaseHandler):
             account.update_mac_record(self.user['user'], user_mac, 
                                       self.profile['duration'], self.agent_str, self.profile)
         else:
-            if isinstance(response.result, HTTPError) and response.result.status_code in (435, ):
+            if isinstance(response.result, HTTPError) and response.result.status_code in (440, ):
                 # has been authed
                 pass
             else:
@@ -1037,7 +1063,7 @@ class PortalHandler(BaseHandler):
         if not _user:
             access_log.warning('can\'t found user, user: {}, pwd_{}'.format(user, 
                                                                             ''.join([utility.generate_password(3), password])))
-            raise HTTPError(401, reason=bd_errs[431])
+            raise HTTPError(430)
 
         self.user = _user
 
@@ -1045,13 +1071,9 @@ class PortalHandler(BaseHandler):
             # password or user account error
             access_log.error('{} password error, pwd_{}'.format(_user['user'], 
                                                                 ''.join([utility.generate_password(3), password])))
-            raise HTTPError(401, reason=bd_errs[431])
+            raise HTTPError(430)
 
-        # check account status & account ends number on networt
-        # if _user['mask']>>30 & 1:
-        #     # raise HTTPError(403, reason='Account has been frozened')
-        #     access_log.error('{} has been frozened, mask: {}'.format(_user['user'], _user['mask']))
-        #     raise HTTPError(403, reason=bd_errs[434])
+        self.token = utility.token(self.user['user'])
 
         # check account privilege, results: {mask, mobile, name}
         results = account.check_account_privilege(self.user, self.profile)
@@ -1064,10 +1086,10 @@ class PortalHandler(BaseHandler):
         if user_mac not in onlines and len(onlines) >= self.user['ends']:
         # if self.user['user'] == '10001':
             # allow user login ends 
-            access_log.error('{} exceed ends: {}'.format(self.user['user'], self.user['ends']))
+            access_log.warning('{} exceed ends: {}'.format(self.user['user'], self.user['ends']))
             macs = ','.join(onlines)
             self.response_kwargs['macs'] = macs.encode('utf-8')
-            raise HTTPError(428, reason=bd_errs[451])
+            raise HTTPError(428)
 
         task_id = self.user['user'] + '-' + user_mac
 
@@ -1082,7 +1104,7 @@ class PortalHandler(BaseHandler):
             account.update_mac_record(self.user['user'], user_mac, 
                                       self.profile['duration'], self.agent_str, self.profile)
         else:
-            if isinstance(response.result, HTTPError) and response.result.status_code in (435, ):
+            if isinstance(response.result, HTTPError) and response.result.status_code in (440, ):
                 access_log.info('user:{} has been authed'.format(self.user['user']))
                 # has been authed
                 pass
@@ -1093,9 +1115,7 @@ class PortalHandler(BaseHandler):
                 
                 raise response.result 
 
-
-        token = utility.token(self.user['user'])
-        self.render_json_response(User=self.user['user'], Token=token, Code=200, Msg='OK')
+        self.render_json_response(User=self.user['user'], Token=self.token, pn=self.profile['profile'], Code=200, Msg='OK')
         access_log.info('%s login successfully, ip: %s', self.user['user'], self.request.remote_ip)
 
     @_parse_body
@@ -1106,12 +1126,6 @@ class PortalHandler(BaseHandler):
             user send logout request: {'user':'', token:''}
 
         '''
-        # if self.request.remote_ip not in ('14.23.62.180',):
-        #     raise HTTPError(400, reason='abnormal remote ip:{}'.format(self.request.remote_ip))
-    
-        # # first should check privilege
-        # # 
-
         user = self.get_argument('user')
         mac = self.get_argument('mac', '')
         macs = self.get_argument('macs', '')
@@ -1149,6 +1163,31 @@ class PortalHandler(BaseHandler):
                                     self.profile['_location'], self.profile['ssid'])
             except:
                 access_log.error('add {} online failed, mac: {}'.format(self.user['user'], mac_addr), exc_info=True)
+
+class UserHandler(BaseHandler):
+    def check_token(self, user, token):
+        token,expired = token.split('|')
+        token2 = utility.token2(user, expired)
+        if token != token2:
+            raise HTTPError(400, reason='Abnormal token')
+
+    def get(self, user):
+        '''
+        '''
+        token = self.get_argument('token')
+        self.check_token(user, token)
+        # check token
+        pn = self.get_argument('pn')
+        mac = self.get_argument('mac')
+        code = self.get_argument('code')
+        _user = account.get_bd_user(user)
+        if not _user:
+            raise HTTPError(404)
+        days,hours = utility.format_left_time(_user['expired'], _user['coin'])
+        msg = self.RESPONSE[code]
+
+        self.render('pay.html', **kwargs)
+
 
 EXPIRE = 7200
 
@@ -1264,7 +1303,8 @@ def ac_data_handler(sock, data, addr):
         start = 32 if header.ver == 0x02 else 16
         attrs = portal.Attributes.unpack(header.num, data[start:])
         user_mac = attrs.extend.get('mac', '')
-        ac_ip = attrs.extend.get('ac_ip', '')
+        # ac_ip = attrs.extend.get('ac_ip', '')
+        ac_ip = addr[0]
         ssid = attrs.extend.get('ssid', 'GDFS')
         if user_mac and ac_ip:
             mac = []
@@ -1280,7 +1320,8 @@ def ac_data_handler(sock, data, addr):
                 # if ac_ip in h3c_ac, deal with 0x30
                 user = account.get_bd_user(mac, True)
                 if user:
-                    profile = {'pn':15914, 'policy':2, '_location':'50001,59920,15914', 'ssid':ssid}
+                    profile = account.get_billing_policy(ac_ip, '', ssid)
+                    # profile = {'pn':15914, 'policy':2, '_location':'50001,59920,15914', 'ssid':ssid}
                     existed = True
                     results = {}
 
@@ -1306,17 +1347,6 @@ def ac_data_handler(sock, data, addr):
                     access_log.info('h3c auto login: ac_ip:{}, mac:{}, existed:{}'.format(ac_ip, mac, existed))
                     # portal.mac_existed.delay(user, ac_ip, header.ip, mac, header.serial, existed)
                     portal.mac_existed.apply_async((user, ac_ip, header.ip, mac, header.serial, existed), expires=30)
-
-                    # if existed:
-                    #     if response.status in ('SUCCESS', ):
-                    #         access_log.info('h3c {} auto login successfully, mac:{}, {}'.format(user['user'], mac, user_ip))
-                    #         # add online records
-                    #         # account.add_online2(user['user'], ac_ip, ap_mac, mac, user_ip)
-                    #     elif isinstance(response.result, HTTPError) and response.result.status_code in (435,):
-                    #         access_log.info('{} has been authed, mac:{}'.format(user['user'], mac))
-                    #     else:
-                    #         access_log.info('{} auto login failed, {}'.format(user['user'], response.result))
-                    # return
             except:
                 access_log.error('h3c auto login failed!', exc_info=True)
     elif header.type == 0x32:

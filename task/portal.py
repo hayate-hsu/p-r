@@ -16,8 +16,6 @@ import socket
 # sys.path.insert(0, '/web/radius')
 
 import utility
-# import settings
-from bd_err import bd_errs
 
 # celery application
 from celery.utils.log import get_task_logger
@@ -68,7 +66,7 @@ def login(_user, ac_ip, user_ip, user_mac):
         # timeout(sock, ac_ip, header, user_mac)
         sock.close()
         # raise HTTPError(400, reason='challenge timeout, retry')
-        raise HTTPError(408, reason=bd_errs[530])
+        raise HTTPError(408)
 
     header = Header.unpack(data)
     if header.type != 0x02 or header.err:
@@ -79,20 +77,19 @@ def login(_user, ac_ip, user_ip, user_mac):
             logger.info('user: {} has been authed, mac:{}'.format(user, ':'.join(_mac)))
             # if self.is_weixin:
             #     return
-            raise HTTPError(435, reason=bd_errs[435])
+            raise HTTPError(440)
         elif header.err == 0x03:
             # user's previous link has been verifring 
             logger.info('user: {}\'s previous has been progressing, mac:{}'.format(user, ':'.join(_mac)))
-            raise HTTPError(436, reason=bd_errs[436])
+            raise HTTPError(441)
         # raise HTTPError(400, reason='challenge timeout, retry')
-        raise HTTPError(531, reason=bd_errs[531])
+        raise HTTPError(531)
     # parse challenge value
     attrs = Attributes.unpack(header.num, data[start:])
     if not attrs.challenge:
         logger.warning('Abnormal challenge value, 0x{:x}, 0x{:x}'.format(header.err, header.num))
         sock.close()
-        # raise HTTPError(400, reason='abnormal challenge value')
-        raise HTTPError(531, reason=bd_errs[531])
+        raise HTTPError(400, reason='abnormal challenge value')
     if attrs.mac:
         assert user_mac == attrs.mac
 
@@ -116,7 +113,7 @@ def login(_user, ac_ip, user_ip, user_mac):
         timeout(sock, ac_ip, header, user_mac)
         sock.close()
         # raise HTTPError(408, reason='auth timeout, retry')
-        raise HTTPError(408, reason=bd_errs[530])
+        raise HTTPError(408)
         # return self.render_json_response(Code=408, Msg='auth timeout, retry')
     header = Header.unpack(data)
     if header.type != 0x04 or header.err:
@@ -127,14 +124,12 @@ def login(_user, ac_ip, user_ip, user_mac):
             logger.info('user: {} has been authed, mac:{}'.format(user, ':'.join(_mac)))
             # if self.is_weixin:
             #     return
-            raise HTTPError(435, reason=bd_errs[435])
+            raise HTTPError(440)
         elif header.err == 0x03:
             # user's previous link has been verifring 
             logger.info('user: {}\'s previous has been progressing, mac:{}'.format(user, ':'.join(_mac)))
-            raise HTTPError(436, reason=bd_errs[436])
-        # attrs = Attributes.unpack(header.num, data[start:])
-        # raise HTTPError(403, reason='auth error')
-        raise HTTPError(531, reason=bd_errs[531])
+            raise HTTPError(441)
+        raise HTTPError(531)
 
     # send aff_ack_auth to ac 
     header.type = 0x07
@@ -145,9 +140,7 @@ def login(_user, ac_ip, user_ip, user_mac):
     sock.close()
 
     # self.update_mac_record(user, _user_mac)
-    # time.sleep(1)
     time.sleep(1)
-    # sleep(1)
 
     return _user
 

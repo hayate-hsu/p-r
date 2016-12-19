@@ -34,7 +34,12 @@ def process(req=None, resp=None, user=None, **kwargs):
         # user is not nansha wireless city account
         _now = datetime.datetime.now()
         if user['expired'] > _now:
-            seconds = (user['expired'] - _now).seconds
+            timedelta = user['expired'] - _now
+            seconds = timedelta.seconds
+
+            if time.timedelta.days:
+                seconds = CONFIG['SESSION_TIMEOUT']
+
             session_timeout = CONFIG['SESSION_TIMEOUT'] if seconds > CONFIG['SESSION_TIMEOUT'] else seconds
         else:
             session_timeout = 0

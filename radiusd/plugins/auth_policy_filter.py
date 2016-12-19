@@ -16,10 +16,10 @@ def process(req=None,resp=None,user=None,**kwargs):
     if profile['policy'] & 1:
         return resp
 
-    expired = account.check_account_balance(user)
-    if expired:
-        resp['Framed-Pool'] = 'expire'
-        return error_auth(resp, 'user time_length poor')
+    # expired = account.check_account_balance(user)
+    # if expired:
+    #     resp['Framed-Pool'] = 'expire'
+    #     return error_auth(resp, 'user time_length poor')
     return resp
 
     # acct_policy = user['product_policy'] or PPMonth

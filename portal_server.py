@@ -313,10 +313,6 @@ class BaseHandler(tornado.web.RequestHandler):
                 # assume user platfrom is mobile
                 self.is_mobile = True
 
-            if not self.is_mobile:
-                if ('Android' in self.agent_str) or ('IOS' in self.agent_str):
-                    self.is_mobile = True
-
             if self.is_mobile:
                 if 'Windows NT' in self.agent_str:
                     self.is_mobile = False
@@ -935,14 +931,15 @@ class PortalHandler(BaseHandler):
                 if self.profile['pn'] in (15914, 59484):
                     downmacs = 1
                 responses['downMacs'] = downmacs
-                responses['macs'] = self.responses_kwargs['macs']
+                responses['macs'] = self.response_kwargs['macs']
             
             if self.token:
-                responses['token'] = self.token
+                responses['Token'] = self.token
 
             profile = getattr(self, 'profile', None)
             if profile:
                 responses['pn'] = profile['pn']
+                responses['ssid'] = profile['ssid']
 
             self.render_json_response(**responses)
 
@@ -1122,7 +1119,10 @@ class PortalHandler(BaseHandler):
                 
                 raise response.result 
 
-        self.render_json_response(User=self.user['user'], Token=self.token, pn=self.profile['profile'], Code=200, Msg='OK')
+        self.render_json_response(User=self.user['user'], Token=self.token, 
+                                  pn=self.profile['pn'], ssid=self.profile['ssid'], 
+                                  Code=200, Msg='OK')
+
         access_log.info('%s login successfully, ip: %s', self.user['user'], self.request.remote_ip)
 
     @_parse_body

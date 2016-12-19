@@ -37,7 +37,7 @@ def process(req=None, resp=None, user=None, **kwargs):
             timedelta = user['expired'] - _now
             seconds = timedelta.seconds
 
-            if time.timedelta.days:
+            if timedelta.days:
                 seconds = CONFIG['SESSION_TIMEOUT']
 
             session_timeout = CONFIG['SESSION_TIMEOUT'] if seconds > CONFIG['SESSION_TIMEOUT'] else seconds

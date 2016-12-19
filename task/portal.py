@@ -320,6 +320,9 @@ class Attributes():
         self.chap_id = chap_id
         self.extend = extend
 
+    def __str__(self):
+        return 'user:{}\nextend:{}'.format(self.user, self.extend)
+
     def pack(self):
         '''
             struct data into binary model

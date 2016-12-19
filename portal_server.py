@@ -237,7 +237,7 @@ class BaseHandler(tornado.web.RequestHandler):
                 if self.profile['pn'] in (15914, 59484):
                     downmacs = 1
                 self.render_json_response(Code=status_code, Msg=self.RESPONSES[status_code], 
-                                          downMacs=downmacs, macs=self.response_kwargs['macs'])
+                                          downMacs=downmacs, macs=self.response_kwargs.get('macs', ''))
             else:
                 self.render_json_response(Code=status_code, Msg=self._reason)
 
@@ -504,7 +504,7 @@ class PageHandler(BaseHandler):
         # logger.info(self.request)
         page = page.lower()
 
-        if page in ('nagivation.html', 'niot.html'):
+        if page in ('nagivation.html', 'niot.html', 'win7dhcp.html', 'win10dhcp.html'):
             self.render(page)
             return
 
@@ -925,13 +925,13 @@ class PortalHandler(BaseHandler):
                 self.write(line)
             self.finish()
         else:
-            responses = {'Code':status_code, 'Msg':self.RESPONSES.get(status_code, 'Unknown Error')} 
+            responses = {'Code':status_code, 'Msg':self.RESPONSES.get(status_code, 'Unknown Error').decode('utf-8')} 
             if status_code in (428, ):
                 downmacs = 0 
                 if self.profile['pn'] in (15914, 59484):
                     downmacs = 1
                 responses['downMacs'] = downmacs
-                responses['macs'] = self.response_kwargs['macs']
+                responses['macs'] = self.response_kwargs.get('macs', '')
             
             if self.token:
                 responses['Token'] = self.token
@@ -1190,12 +1190,12 @@ class UserHandler(BaseHandler):
         _user = account.get_bd_user(user, ismac=False)
         if not _user:
             raise HTTPError(404)
-        days,hours = utility.format_left_time(_user['expired'], _user['coin'])
+        # days,hours = utility.format_left_time(_user['expired'], _user['coin'])
         # exchange time
         ex_hours = int(_user['coin']/60)
         msg = self.RESPONSES[code]
 
-        self.render('pay.html', days=days, hours=hours, ex_hours=ex_hours, 
+        self.render('pay.html', ex_hours=ex_hours, 
                     photo='', code=code, msg=msg.decode('utf-8'), **_user)
 
 

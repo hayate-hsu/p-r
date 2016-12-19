@@ -140,7 +140,7 @@ def login(_user, ac_ip, user_ip, user_mac):
     sock.close()
 
     # self.update_mac_record(user, _user_mac)
-    time.sleep(1)
+    # time.sleep(1)
 
     return _user
 

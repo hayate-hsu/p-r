@@ -64,7 +64,7 @@ def get_billing_policy(ac_ip, ap_mac, ssid):
 
     # if ac_ip in ('172.201.2.251', '172.201.2.252') or ssid.startswith('BD_TEST'):
 
-    if (not ap_mac) or ssid.startwith('BD_TEST'):
+    if (not ap_mac) or ssid.startswith('BD_TEST'):
         if ssid and ssid in PN_PROFILE:
             profile = PN_PROFILE[ssid]
             if profile and int(time.time()) < profile['expired']:
@@ -97,13 +97,6 @@ def get_billing_policy(ac_ip, ap_mac, ssid):
             profile = store.query_pn_policy(pn=pn, ssid=ssid)
             # profile = store.query_ap_policy(ap_mac, ssid)
             logger.info('mac:{} ssid:{} ---- {}, {}'.format(ap_mac, ssid, profile, ap_groups))
-
-            # if profile:
-            #     profile['expired'] = int(time.time()) + EXPIRE
-            #     AP_MAPS[ap_mac] = {'pn':profile['pn'], 'ap_groups':ap_groups}
-            #     PN_PROFILE[profile['pn']][profile['ssid']] = profile
-
-            #     return profile, ap_groups
 
         # get pn policy by ssid
         if not profile:
@@ -253,6 +246,9 @@ def get_bd_user(user, ismac=False):
     '''
     return store.get_bd_user(user, ismac=ismac)
     # return store.get_bd_user(user, ismac=ismac) or store.get_bd_user2(user, ismac=ismac)
+
+def get_pn_bd_user(user):
+    return store.get_pn_bd_user(user)
 
 def get_pn_user(user, mobile):
     pass

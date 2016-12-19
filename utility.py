@@ -218,20 +218,21 @@ def format_left_time(expired, coin):
     '''
     expired : datetime %Y-%m-%d %H:%M:%S
     '''
-    days, hours = 0,'00:00'
+    days, hours = 0, 0
     # check current data
     if expired:
         delta = expired - datetime.datetime.now()
         days = delta.days
+        hours = int(delta.seconds/3600) 
         if days < 0:
             days = 0
         else:
             days = days + 1
 
-    if coin>0:
-        # one coin = 3 minutes
-        times = coin*3*60
-        hours = '{:02d}:{:02d}'.format(int(times/3600), int(times%3600/60))
+    # if coin>0:
+    #     # one coin = 3 minutes
+    #     times = coin*60
+    #     hours = '{:02d}:{:02d}'.format(int(times/3600), int(times%3600/60))
 
     return days, hours
 

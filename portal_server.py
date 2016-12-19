@@ -101,6 +101,7 @@ class Application(tornado.web.Application):
     def __init__(self):
         handlers = [
             (r'/account$', PortalHandler),
+            (r'/user/(.*)$', UserHandler),
             (r'/wx_auth$', PortalHandler),
             (r'/(.*?\.html)$', PageHandler),
             # in product environment, use nginx to support static resources
@@ -230,12 +231,12 @@ class BaseHandler(tornado.web.RequestHandler):
         else:
             # self.render('error.html', Code=status_code, Msg=self._reason)
             if status_code in (427,):
-                self.render_json_response(Code=status_code, Msg=bd_errs[status_code], pn=self.profile['pn'])
+                self.render_json_response(Code=status_code, Msg=self.RESPONSES[status_code], pn=self.profile['pn'])
             elif status_code in (428, ):
                 downmacs = 0 
                 if self.profile['pn'] in (15914, 59484):
                     downmacs = 1
-                self.render_json_response(Code=status_code, Msg=bd_errs[status_code], 
+                self.render_json_response(Code=status_code, Msg=self.RESPONSES[status_code], 
                                           downMacs=downmacs, macs=self.response_kwargs['macs'])
             else:
                 self.render_json_response(Code=status_code, Msg=self._reason)
@@ -559,6 +560,7 @@ class PageHandler(BaseHandler):
                 if _user:
                     self._add_online_by_bas(kwargs['ac_ip'], kwargs['ap_mac'], 
                                             kwargs['user_mac'], kwargs['user_ip'])
+                    yield tornado.gen.sleep(0.2)
                     if accept.startswith('application/json'):
                         token = utility.token(self.user['user'])
                         self.render_json_response(User=self.user['user'], Token=token, Mask=self.user['mask'], 
@@ -927,8 +929,7 @@ class PortalHandler(BaseHandler):
                 self.write(line)
             self.finish()
         else:
-            responses = {'Code':status_code, 'Msg':self.RESPONSE.get(status_code, 'Unknown Error'), 
-                         'pn':self.profile['pn']}
+            responses = {'Code':status_code, 'Msg':self.RESPONSES.get(status_code, 'Unknown Error')} 
             if status_code in (428, ):
                 downmacs = 0 
                 if self.profile['pn'] in (15914, 59484):
@@ -938,6 +939,10 @@ class PortalHandler(BaseHandler):
             
             if self.token:
                 responses['token'] = self.token
+
+            profile = getattr(self, 'profile', None)
+            if profile:
+                responses['pn'] = profile['pn']
 
             self.render_json_response(**responses)
 
@@ -1010,6 +1015,7 @@ class PortalHandler(BaseHandler):
             self._add_online_by_bas(ac_ip, ap_mac, user_mac, user_ip)
             account.update_mac_record(self.user['user'], user_mac, 
                                       self.profile['duration'], self.agent_str, self.profile)
+            yield tornado.gen.sleep(0.2)
         else:
             if isinstance(response.result, HTTPError) and response.result.status_code in (440, ):
                 # has been authed
@@ -1058,7 +1064,7 @@ class PortalHandler(BaseHandler):
 
         self.profile, self.ap_groups = account.get_billing_policy(ac_ip, ap_mac, ssid)
 
-        _user = account.get_bd_user(user)
+        _user = account.get_bd_user(user, ismac=False)
 
         if not _user:
             access_log.warning('can\'t found user, user: {}, pwd_{}'.format(user, 
@@ -1103,6 +1109,7 @@ class PortalHandler(BaseHandler):
             self._add_online_by_bas(ac_ip, ap_mac, user_mac, user_ip)
             account.update_mac_record(self.user['user'], user_mac, 
                                       self.profile['duration'], self.agent_str, self.profile)
+            yield tornado.gen.sleep(0.2)
         else:
             if isinstance(response.result, HTTPError) and response.result.status_code in (440, ):
                 access_log.info('user:{} has been authed'.format(self.user['user']))
@@ -1178,15 +1185,18 @@ class UserHandler(BaseHandler):
         self.check_token(user, token)
         # check token
         pn = self.get_argument('pn')
-        mac = self.get_argument('mac')
-        code = self.get_argument('code')
-        _user = account.get_bd_user(user)
+        # mac = self.get_argument('mac')
+        code = int(self.get_argument('code'))
+        _user = account.get_bd_user(user, ismac=False)
         if not _user:
             raise HTTPError(404)
         days,hours = utility.format_left_time(_user['expired'], _user['coin'])
-        msg = self.RESPONSE[code]
+        # exchange time
+        ex_hours = int(_user['coin']/60)
+        msg = self.RESPONSES[code]
 
-        self.render('pay.html', **kwargs)
+        self.render('pay.html', days=days, hours=hours, ex_hours=ex_hours, 
+                    photo='', code=code, msg=msg.decode('utf-8'), **_user)
 
 
 EXPIRE = 7200

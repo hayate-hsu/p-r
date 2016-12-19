@@ -248,6 +248,13 @@ class Store():
                         user['ends'] = ret['ends']
             return user
 
+    # def get_pn_bd_user(self, user, pn):
+    #     with Cursor(self.dbpool) as cur:
+    #         sql = 'select * from bd_account where user = "{}"'.format(user)
+    #         cur.execute(sql)
+    #         user = cur.fetchone()
+
+
     def get_bd_user2(self, user, password=None, ismac=False):
         '''
             support auto login, user may be mac address or user account

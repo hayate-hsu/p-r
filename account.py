@@ -99,14 +99,14 @@ def get_billing_policy(ac_ip, ap_mac, ssid):
             logger.info('mac:{} ssid:{} ---- {}, {}'.format(ap_mac, ssid, profile, ap_groups))
 
         # get pn policy by ssid
-        if not profile:
-            profile = store.query_pn_policy(ssid=ssid)
+    if not profile:
+        profile = store.query_pn_policy(ssid=ssid)
 
-        if profile:
-            profile['expired'] = int(time.time()) + EXPIRE
-            AP_MAPS[ap_mac] = {'pn':profile['pn'], 'ap_groups':ap_groups}
-            PN_PROFILE[profile['pn']][profile['ssid']] = profile
-            return profile, ap_groups
+    if profile:
+        profile['expired'] = int(time.time()) + EXPIRE
+        AP_MAPS[ap_mac] = {'pn':profile['pn'], 'ap_groups':ap_groups}
+        PN_PROFILE[profile['pn']][profile['ssid']] = profile
+        return profile, ap_groups
     # else:
     #     # ap_mac is False, query by nas_addr
     #     profile = store.get_gw_pn_policy(ac_ip)

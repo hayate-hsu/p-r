@@ -652,6 +652,10 @@ class PageHandler(BaseHandler):
         if '77201' in groups:
             groups = 10003
 
+
+        if profile['pn'] ==206386:
+            self.is_mobile = True
+
         self.render(page, openid='', policy=profile['policy'], groups=groups, ap_groups=ap_groups,  
                     pn=profile['pn'], note=profile['note'], image=profile['logo'],  
                     appid=profile['appid'], shopid=profile['shopid'], secret=profile['secret'], 
@@ -1207,13 +1211,15 @@ class PnHandler(BaseHandler):
         # query user
         record = account.get_pn_user(pn, name, mobile)
         if not record:
-            raise HTTPError(404, reason='can\'t found pn:{} user: {},{}'.format(pn, name, mobile))
+            raise HTTPError(404, reason=u'can\'t found pn:{} user: {},{}'.format(pn, name, mobile))
 
         # check account, if not create
         # user = account.check_pn_account_by_mobile(mobile, pn)
         # access_log.info('user: {}'.format(user))
 
-        self.render_json_response(department=record['department'], Code=200, Msg='OK')
+        self.render_json_response(department=record['department'], 
+                                  # user=user['user'], password=user['password'], 
+                                  Code=200, Msg='OK')
 
 EXPIRE = 7200
 

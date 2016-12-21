@@ -180,6 +180,10 @@ def check_pn_privilege(pn, user):
 
     return True, record 
 
+@utility.check_codes
+def get_pn_user(pn, name, mobile):
+    return store.get_pn_user(pn, name, mobile)
+
 def _check_expire_date(_user): 
     '''
     '''
@@ -232,6 +236,18 @@ def check_account_by_mobile_or_mac(mobile, mac):
         _user['existed'] = 1
     return _user
 
+def check_pn_account_by_mobile(mobile, pn):
+    assert mobile
+    _user = store.get_account_by_mobile(mobile, '')
+    if not _user:
+        # register account by mobile
+        password = utility.generate_password()
+        _user = store.add_renter(mobile, password, pn, mobile=mobile)
+    else:
+        if _user['mobile'] != mobile:
+            store.update_account(_user['user'], mobile=mobile)
+    return _user
+
 def check_app_account(uuid, mask):
     assert uuid
     _user = store.get_account(uuid=uuid)
@@ -249,9 +265,6 @@ def get_bd_user(user, ismac=False):
 
 def get_pn_bd_user(user):
     return store.get_pn_bd_user(user)
-
-def get_pn_user(user, mobile):
-    pass
 
 def update_bd_user(user, **kwargs):
     if kwargs:

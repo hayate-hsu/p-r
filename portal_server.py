@@ -102,6 +102,7 @@ class Application(tornado.web.Application):
         handlers = [
             (r'/account$', PortalHandler),
             (r'/user/(.*)$', UserHandler),
+            (r'/pn/(.*)$', PnHandler),
             (r'/wx_auth$', PortalHandler),
             (r'/(.*?\.html)$', PageHandler),
             # in product environment, use nginx to support static resources
@@ -623,7 +624,7 @@ class PageHandler(BaseHandler):
                                       logo=profile['logo'], **kwargs)
             return
 
-        if isinstance(profile['portal'], str) and not profile['portal'].endswith('.html'):
+        if isinstance(profile['portal'], basestring) and not profile['portal'].endswith('.html'):
             # query portal template profile
             results = account.get_portal_tmp(profile['portal'])
             if results:
@@ -1198,6 +1199,21 @@ class UserHandler(BaseHandler):
         self.render('pay.html', ex_hours=ex_hours, 
                     photo='', code=code, msg=msg.decode('utf-8'), **_user)
 
+class PnHandler(BaseHandler):
+    def get(self, pn):
+        name = self.get_argument('name')
+        mobile = self.get_argument('mobile')
+        # pn = self.get_argument('pn')
+        # query user
+        record = account.get_pn_user(pn, name, mobile)
+        if not record:
+            raise HTTPError(404, reason='can\'t found pn:{} user: {},{}'.format(pn, name, mobile))
+
+        # check account, if not create
+        # user = account.check_pn_account_by_mobile(mobile, pn)
+        # access_log.info('user: {}'.format(user))
+
+        self.render_json_response(department=record['department'], Code=200, Msg='OK')
 
 EXPIRE = 7200
 
@@ -1322,7 +1338,7 @@ def ac_data_handler(sock, data, addr):
                 mac.append('{:02X}'.format(ord(b)))
             mac = ':'.join(mac)
 
-            ac_ip = socket.inet_ntoa(ac_ip)
+            # ac_ip = socket.inet_ntoa(ac_ip)
             user_ip = socket.inet_ntoa(header.ip)
 
             # if ac_ip in ('172.16.0.252',):
@@ -1330,8 +1346,7 @@ def ac_data_handler(sock, data, addr):
                 # if ac_ip in h3c_ac, deal with 0x30
                 user = account.get_bd_user(mac, True)
                 if user:
-                    profile = account.get_billing_policy(ac_ip, '', ssid)
-                    # profile = {'pn':15914, 'policy':2, '_location':'50001,59920,15914', 'ssid':ssid}
+                    profile, ap_groups = account.get_billing_policy(ac_ip, '', ssid)
                     existed = True
                     results = {}
 

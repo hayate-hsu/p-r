@@ -53,8 +53,11 @@ def process(req=None,user=None,runstat=None,**kwargs):
         # {user, ap_mac, ssid, _location, tiemstamp, }
         _location=user['profile'].get('_location', '')
         if _location.startswith('29946'):
+            called_stationid = req.get_called_stationid()
+            ap_mac,ssid = called_stationid.split(':')
+            ap_mac = utils.format_mac(ap_mac)
             account.update_online_record(online['user'], online['mac_addr'], 
-                                         online['ap_mac'], online['ssid'])
+                                         ap_mac, ssid)
         pass
 
     log.msg('%s Accounting update request, update online'%req.get_user_name(),level=logging.INFO)

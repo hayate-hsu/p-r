@@ -142,6 +142,31 @@ class Store():
 
             return None
 
+    def get_account_by_mobile(self, mobile, mac):
+        with Cursor(self.dbpool) as cur:
+            # mask = 2**1 + 2**8 + 2**9
+            sql = 'select * from bd_account where mobile="{}"'.format(mobile)
+            
+            cur.execute(sql)
+
+            return cur.fetchone()
+
+    def add_renter(self, user, password, holder, mobile=''):
+        with Connect(self.dbpool) as conn:
+            cur = conn.cursor(MySQLdb.cursors.DictCursor)
+            mask = 1+ 2**9 + 2**10
+
+            sql = '''insert into bd_account (user, password, mobile, mask, coin, holder, ends) 
+            values("{}", "{}", "{}", {}, 0, {}, 2)
+            '''.format(user, password, mobile, mask, holder)
+
+            cur.execute(sql)
+            sql = 'select * from bd_account where user="{}"'.format(user)
+            cur.execute(sql)
+            record = cur.fetchone()
+            cur.commit()
+
+            return record
         
     def add_user(self, user, password, appid='', tid='', mobile='', ends=2**5):
         '''
@@ -377,6 +402,14 @@ class Store():
                     cur.execute(sql)
                 conn.commit()
 
+    def update_bd_account(self, user, mobile):
+        with Connect(self.dbpool) as conn:
+            cur = conn.cursor(MySQLdb.cursors.DictCursor)
+            sql = 'update bd_account set mobile={} where user="{}"'.format(mobile, user)
+            cur.execute(sql)
+            conn.commit()
+
+
     def check_pn_privilege(self, pn, user):
         '''
         '''
@@ -411,6 +444,14 @@ class Store():
 
             cur.execute(sql)
             return cur.fetchone()
+
+    def get_pn_user(self, pn, name, mobile):
+        with Cursor(self.dbpool) as cur:
+            sql = 'select * from pn_{} where name="{}" and mobile="{}"'.format(pn, name, mobile)
+            cur.execute(sql)
+
+            return cur.fetchone()
+
 
     def get_user_mac_record(self, user, mac):
         '''

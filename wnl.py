@@ -588,6 +588,7 @@ class MobileHandler(BaseHandler):
         verify mobile and send verify code
     '''
     URL = 'http://14.23.171.10/'
+    HZ_URL = 'http://127.0.0.1/'
     BY_URL = 'http://120.27.144.245:9999/smshttp?act=sendmsg&unitid=101063&username=gzzt&passwd=5690dddfa28ae085d23518a035707282&msg={}&phone={}&port=&sendtime='
     WEIMI_URL = 'http://api.weimi.cc/2/sms/send.html'
 
@@ -603,12 +604,16 @@ class MobileHandler(BaseHandler):
         if not self.check_mobile(mobile):
             raise HTTPError(400, reason='invalid mobile number')
         ssid, is_by, is_pynx = '', False, False
+        is_hz = False
         pn = self.get_argument('pn', '')
         if pn == '29475':
             is_by = True
+        elif pn == '206386':
+            is_hz = True
         elif pn in ('15914', '59484') or self.request.remote_ip == '58.248.228.170' or self.request.remote_ip.startswith('14.215.'):
             is_pynx = True
             pass
+
 
 
         verify = utility.generate_verify_code()
@@ -640,7 +645,8 @@ class MobileHandler(BaseHandler):
             request = tornado.httpclient.HTTPRequest(MobileHandler.WEIMI_URL, method='POST', body=bdata)
         else:
             data = json_encoder({'mobile':mobile, 'code':verify})
-            request = tornado.httpclient.HTTPRequest(MobileHandler.URL, method='POST', 
+            url = MobileHandler.HZ_URL if is_hz else MobileHandler.URL
+            request = tornado.httpclient.HTTPRequest(url, method='POST', 
                                                      headers={'Content-Type':'application/json'}, 
                                                      body=data)
 

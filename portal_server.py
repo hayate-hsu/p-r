@@ -652,11 +652,10 @@ class PageHandler(BaseHandler):
         if '77201' in groups:
             groups = 10003
 
+        if profile['pn'] in (206386,):
+            self.is_mobile=True
 
-        if profile['pn'] ==206386:
-            self.is_mobile = True
-
-        self.render(page, openid='', policy=profile['policy'], groups=groups, ap_groups=ap_groups,  
+        self.render(page, ismobile=platform, openid='', policy=profile['policy'], groups=groups, ap_groups=ap_groups,  
                     pn=profile['pn'], note=profile['note'], image=profile['logo'],  
                     appid=profile['appid'], shopid=profile['shopid'], secret=profile['secret'], 
                     logo=profile['logo'],

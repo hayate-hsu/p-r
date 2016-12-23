@@ -182,6 +182,7 @@ def check_pn_privilege(pn, user):
 
 @utility.check_codes
 def get_pn_user(pn, name, mobile):
+    assert mobile
     return store.get_pn_user(pn, name, mobile)
 
 def _check_expire_date(_user): 

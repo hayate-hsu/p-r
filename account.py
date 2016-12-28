@@ -131,20 +131,7 @@ def check_account_privilege(user, profile):
 
     holder = user.get('holder', '')
 
-    if profile['pn'] in (15914,):
-        # if account is nvxiao teacher, allow his access 15914
-        ret, err = check_pn_privilege(59484, user['user'])
-        if ret:
-            user['is_teacher'] = 1 
-            return err
-
-        err = None
-
-        if holder in (59484,):
-            user['is_teacher'] = 1
-            return err
-
-    if profile['policy'] & 2:
+    if profile['policy'] & 2 and holder not in (profile['pn'],):
         ret, err = check_pn_privilege(profile['pn'], user['user'])
         if not ret:
             raise err

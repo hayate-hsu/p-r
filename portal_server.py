@@ -135,11 +135,11 @@ class BaseHandler(tornado.web.RequestHandler):
                                          output_encoding='utf-8',
                                          input_encoding='utf-8',
                                          encoding_errors='replace')
-    LOOK_UP_MOBILE = mako.lookup.TemplateLookup(directories=[MOBILE_TEMPLATE_PATH, ], 
-                                                module_directory='/tmp/mako_mobile/portal',
-                                                output_encoding='utf-8',
-                                                input_encoding='utf-8',
-                                                encoding_errors='replace')
+    # LOOK_UP_MOBILE = mako.lookup.TemplateLookup(directories=[MOBILE_TEMPLATE_PATH, ], 
+    #                                             module_directory='/tmp/mako_mobile/portal',
+    #                                             output_encoding='utf-8',
+    #                                             input_encoding='utf-8',
+    #                                             encoding_errors='replace')
 
     RESPONSES = {}
     RESPONSES.update(tornado.httputil.responses)
@@ -158,10 +158,11 @@ class BaseHandler(tornado.web.RequestHandler):
             pass request handler environment to template engine
         '''
         try:
-            if not self.is_mobile:
-                template = self.LOOK_UP.get_template(filename)
-            else:
-                template = self.LOOK_UP_MOBILE.get_template(filename)
+            template = self.LOOK_UP.get_template(filename)
+            # if not self.is_mobile:
+            #     template = self.LOOK_UP.get_template(filename)
+            # else:
+            #     template = self.LOOK_UP_MOBILE.get_template(filename)
             env_kwargs = dict(
                 handler = self,
                 request = self.request,
@@ -188,12 +189,12 @@ class BaseHandler(tornado.web.RequestHandler):
         '''
             Render the template with the given arguments
         '''
-        directory = TEMPLATE_PATH
-        if self.is_mobile:
-            directory = MOBILE_TEMPLATE_PATH
+        # directory = TEMPLATE_PATH
+        # if self.is_mobile:
+        #     directory = MOBILE_TEMPLATE_PATH
 
-        if not os.path.exists(os.path.join(directory, filename)):
-            raise HTTPError(404, 'File Not Found')
+        # if not os.path.exists(os.path.join(directory, filename)):
+        #     raise HTTPError(404, 'File Not Found')
 
         self.finish(self.render_string(filename, **kwargs))
 

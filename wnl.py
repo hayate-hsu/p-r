@@ -102,6 +102,7 @@ class Application(tornado.web.Application):
             (r'/version', VersionHandler),
 
             # get mobile verify code
+            (r'/mobile/(.*)/(.*)$', NotifyHandler),
             (r'/mobile$', MobileHandler),
             (r'/sms$', SmsHandler),
 
@@ -614,8 +615,6 @@ class MobileHandler(BaseHandler):
             is_pynx = True
             pass
 
-
-
         verify = utility.generate_verify_code()
         mask = int(self.get_argument('mask', 0))
         # mask: 4 - web portal platform 
@@ -651,6 +650,46 @@ class MobileHandler(BaseHandler):
                                                      body=data)
 
         access_log.info('send verify code: {} to mobile: {}, pn: {}'.format(verify, mobile, pn))
+        http_client = tornado.httpclient.AsyncHTTPClient() 
+        response = yield http_client.fetch(request)
+        access_log.info('response: {}'.format(response))
+        if response.code != 200:
+            raise response.error
+
+class NotifyHandler(BaseHandler):
+    '''
+    '''
+    WEIMI_URL = 'http://api.weimi.cc/2/sms/send.html'
+    @_trace_wrapper
+    @tornado.gen.coroutine
+    @_parse_body
+    def post(self, mobile, action):
+        if not self.check_mobile(mobile):
+            raise HTTPError(400, reason='invalid mobile number')
+
+        # mobile = self.get_argument('mobile')
+        user = self.get_argument('user')
+        password = self.get_argument('password')
+
+        if action in ('notify',):
+            data = {
+                'uid':'3SSrNGX5O2eA',
+                'pas':'yq3skay4',
+                'mob': mobile,
+                # 'con': _const['notify'].format(user, password),
+                'cid':'LHqLxcqYIU1L',
+                'p1':user,
+                'p2':password,
+                'type':'json',
+            }
+            bdata = urllib.urlencode(data).encode('utf-8')
+            access_log.info('hello: {}'.format(bdata))
+            request = tornado.httpclient.HTTPRequest(MobileHandler.WEIMI_URL, method='POST', body=bdata)
+
+        elif action in ('verify',):
+            request = ''
+            pass
+
         http_client = tornado.httpclient.AsyncHTTPClient() 
         response = yield http_client.fetch(request)
         access_log.info('response: {}'.format(response))

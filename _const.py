@@ -5,6 +5,7 @@ message = {
 453:u'非房东账号',
 
 'account':'上网账号: {}\n账号密码： {}\n\n',
+'notify':'上网账号: {}, 账号密码： {}, 请妥善保管.',
 
 'welcome':'欢迎关注壁咚无线!\n\n上网账号:    {}\n上网密码:    {}\n\n<a href="http://wnl.bidongwifi.com:9899/help.html">上网帮助，请点这里</a>\n\n',
 

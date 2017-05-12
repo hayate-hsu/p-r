@@ -84,9 +84,8 @@ LOGIN = 0
 LOGOUT = 1
 
 CURRENT_PATH = os.path.abspath(os.path.dirname(__file__))
-STATIC_PATH = '/www/bidong'
-TEMPLATE_PATH = '/www/portal'
-MOBILE_TEMPLATE_PATH = os.path.join(TEMPLATE_PATH, 'm')
+STATIC_PATH = '/www/bidong/portal'
+TEMPLATE_PATH = '/www/bidong/portal/html'
 
 PN_PROFILE = collections.defaultdict(dict)
 AP_MAPS = {}
@@ -135,11 +134,6 @@ class BaseHandler(tornado.web.RequestHandler):
                                          output_encoding='utf-8',
                                          input_encoding='utf-8',
                                          encoding_errors='replace')
-    # LOOK_UP_MOBILE = mako.lookup.TemplateLookup(directories=[MOBILE_TEMPLATE_PATH, ], 
-    #                                             module_directory='/tmp/mako_mobile/portal',
-    #                                             output_encoding='utf-8',
-    #                                             input_encoding='utf-8',
-    #                                             encoding_errors='replace')
 
     RESPONSES = {}
     RESPONSES.update(tornado.httputil.responses)
@@ -189,10 +183,6 @@ class BaseHandler(tornado.web.RequestHandler):
         '''
             Render the template with the given arguments
         '''
-        # directory = TEMPLATE_PATH
-        # if self.is_mobile:
-        #     directory = MOBILE_TEMPLATE_PATH
-
         # if not os.path.exists(os.path.join(directory, filename)):
         #     raise HTTPError(404, 'File Not Found')
 
@@ -272,8 +262,9 @@ class BaseHandler(tornado.web.RequestHandler):
                 args = ([value.status_code, self._request_summary()] + list(value.args))
                 access_log.warning(format, *args)
 
-        access_log.error('Exception: %s\n%r', self._request_summary(), 
-                     self.request, exc_info=(typ, value, tb))
+        access_log.error('Exception: %s\n%s\n%r', self._request_summary(), 
+                         self.request, self.request.arguments, 
+                         exc_info=(typ, value, tb))
     
 
     def render_exception(self, ex):
@@ -506,7 +497,7 @@ class PageHandler(BaseHandler):
         # logger.info(self.request)
         page = page.lower()
 
-        if page in ('nagivation.html', 'niot.html', 'win7dhcp.html', 'win10dhcp.html'):
+        if page in ('nagivation.html', 'niot.html', 'help.html'):
             self.render(page)
             return
 
@@ -610,6 +601,9 @@ class PageHandler(BaseHandler):
         # get policy
         kwargs['user'] = ''
         kwargs['password'] = ''
+        if self.profile['_location'].startswith('318922'): 
+            kwargs['user'] = '55532'
+            kwargs['password'] = '987012'
 
         # render portal page
         self.render_portal(self.is_mobile, accept, self.profile, self.ap_groups, self.wx_wifi, **kwargs)
@@ -704,7 +698,8 @@ class PageHandler(BaseHandler):
         else:
             # bas mask == 1
             kwargs['vlan'] = ''
-            kwargs['ssid'] = 'BD_TEST'
+            # kwargs['ssid'] = 'BD_TEST'
+            kwargs['ssid'] = self.get_argument('ssid', 'BD_TEST')
             kwargs['user_ip'] = self.get_argument('wlanuserip', '') or self.get_argument('userip', '')
             mac = self.get_argument('usermac', '') or self.get_argument('wlanusermac', '')
             kwargs['user_mac'] = utility.format_mac(mac)
@@ -1126,6 +1121,7 @@ class PortalHandler(BaseHandler):
 
         self.render_json_response(User=self.user['user'], Token=self.token, 
                                   pn=self.profile['pn'], ssid=self.profile['ssid'], 
+                                  location=self.profile['_location'],
                                   Code=200, Msg='OK')
 
         access_log.info('%s login successfully, ip: %s', self.user['user'], self.request.remote_ip)
@@ -1190,6 +1186,7 @@ class UserHandler(BaseHandler):
         self.check_token(user, token)
         # check token
         pn = self.get_argument('pn')
+        ssid = self.get_argument('ssid', 'Bidong')
         # mac = self.get_argument('mac')
         code = int(self.get_argument('code'))
         _user = account.get_bd_user(user, ismac=False)
@@ -1201,7 +1198,8 @@ class UserHandler(BaseHandler):
         msg = self.RESPONSES[code]
 
         self.render('pay.html', ex_hours=ex_hours, 
-                    photo='', code=code, msg=msg.decode('utf-8'), **_user)
+                    photo='', code=code, ssid=ssid, 
+                    msg=msg.decode('utf-8'), **_user)
 
 class PnHandler(BaseHandler):
     def get(self, pn):
@@ -1396,9 +1394,10 @@ def ac_data_handler(sock, data, addr):
             mac.append('{:02X}'.format(ord(b)))
         mac = ':'.join(mac)
         user_ip = socket.inet_ntoa(header.ip)
+        profile, ap_groups = account.get_billing_policy(ac_ip, '', ssid)
 
         access_log.info('h3c {} auto login notify, mac:{}, {}'.format(name, mac, user_ip))
-        account.add_online2(name, ac_ip, '', mac, user_ip, '50001,59920,15914', ssid)
+        account.add_online2(name, ac_ip, '', mac, user_ip, profile['_location'], ssid)
     elif header.type == 0x34:
         start = 32 if header.ver == 0x02 else 16
         attrs = portal.Attributes.unpack(header.num, data[start:])

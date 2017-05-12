@@ -10,12 +10,13 @@ reload(sys)
 sys.setdefaultencoding('utf-8')
 
 import os
+import os.path
 import radiusd.auth_server
 import config
 import account
 
 if __name__ == '__main__':
-    with open('/var/run/auth_radius.pid', 'w') as f:
+    with open(os.path.join(config['pid_path'], 'auth_radius.pid'), 'w') as f:
         f.write('{}'.format(os.getpid()))
     account.setup(config['database'])
     radiusd.auth_server.run(config)

@@ -206,6 +206,10 @@ class RADIUSAccess(RADIUS):
         if user:
             self.user_trace.push(user['user'],req)
 
+        log.msg("user: %s"%(user),level=logging.INFO)
+
+
+
         # middleware execute
         for plugin in auth_plugins:
             self.midware.process(plugin,req=req,resp=reply,user=user)

@@ -18,5 +18,6 @@ if __name__ == '__main__':
     with open(os.path.join(config['pid_path'], 'acct_radius.pid'), 'w') as f:
         f.write('{}'.format(os.getpid()))
     account.setup(config['database'])
+    config['logfile'] = config['acct_logfile']
     radiusd.acct_server.run(config)
 

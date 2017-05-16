@@ -20,17 +20,8 @@ import tornado.httputil
 
 from tornado.util import errno_from_exception
 from tornado.platform.auto import set_close_exec
-
-from tornado.options import define, options
-
-#
-define('port', default=8890, help='running on the given port', type=int)
-
 from tornado.log import access_log, gen_log, app_log
-# log configuration
-define('log_file_prefix', type=str, default='/var/log/wnl/portal_8890.log')
-define('log_rotate_mode', type=str, default='time', help='time or size')
-define('log_file_num_backups', type=int, default=3, help='number of log files to keep')
+
 
 import errno
 import os
@@ -1056,9 +1047,16 @@ def add_udp_handler(sock, servers, io_loop=None):
     io_loop.add_handler(sock.fileno(), udp_handler, tornado.ioloop.IOLoop.READ)
 
 def main():
+    from tornado.options import define, options
+    define('port', default=8890, help='running on the given port', type=int)
+
+    # log configuration
+    define('log_file_prefix', type=str, default=os.path.join(config['log_path'], 'wnl/8890.log'))
+    define('log_rotate_mode', type=str, default='time', help='time or size')
+    define('log_file_num_backups', type=int, default=3, help='number of log files to keep')
     tornado.options.parse_command_line()
 
-    bidong_pid = os.path.join('/var/run/', 'wnl.pid'.format(options.port))
+    bidong_pid = os.path.join(config['pid_path'], 'wnl/p_{}.pid'.format(options.port))
     with open(bidong_pid, 'w') as f:
         f.write('{}'.format(os.getpid()))
 

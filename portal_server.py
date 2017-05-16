@@ -19,23 +19,9 @@ from tornado.platform.auto import set_close_exec
 from tornado.log import access_log, gen_log, app_log
 # from tornado.concurrent import Future
 
-from tornado.options import define, options
-
-define('port', default=8880, help='running on the given port', type=int)
-define('index', default=0, help='portal start index, used for serial number range', type=int)
-define('total', default=1, help='portal server total number , used for serial number range', type=int)
-define('udp_listen', default=0, help='portal server listen on 50100? 1 : 0', type=int)
-define('portal_listen', default=50100, help='portal server listening port', type=int)
-
-# log configuration
-define('log_file_prefix', type=str, default='/var/log/radiusd/portal_8880.log')
-define('log_rotate_mode', type=str, default='time', help='time or size')
-define('log_file_num_backups', type=int, default=3, help='number of log files to keep')
-
 import errno
 import os
 import sys
-import re
 
 import time
 
@@ -83,9 +69,8 @@ PORTAL_PORT = 50100
 LOGIN = 0
 LOGOUT = 1
 
-CURRENT_PATH = os.path.abspath(os.path.dirname(__file__))
-STATIC_PATH = '/www/bidong/portal'
-TEMPLATE_PATH = '/www/bidong/portal/html'
+WWW_PATH = config['www_path']
+
 
 PN_PROFILE = collections.defaultdict(dict)
 AP_MAPS = {}
@@ -106,18 +91,18 @@ class Application(tornado.web.Application):
             (r'/(.*?\.html)$', PageHandler),
             # in product environment, use nginx to support static resources
             (r'/(.*\.(?:css|jpg|js|png))$', tornado.web.StaticFileHandler, 
-             {'path':STATIC_PATH}),
+             {'path':WWW_PATH}),
             (r'/test$', TestHandler),
             # (r'/weixin', WeiXinHandler),
         ]
         settings = {
             'cookie_secret':utility.sha1('portal_server').hexdigest(), 
-            'static_path':TEMPLATE_PATH,
+            'static_path':WWW_PATH,
             # 'static_url_prefix':'resource/',
             'debug':False,
             'autoreload':True,
             'autoescape':'xhtml_escape',
-            'i18n_path':os.path.join(CURRENT_PATH, 'resource/i18n'),
+            'i18n_path':os.path.join(WWW_PATH, 'resource/i18n'),
             # 'login_url':'',
             'xheaders':True,    # use headers like X-Real-IP to get the user's IP address instead of
                                 # attributeing all traffic to the balancer's IP address.
@@ -129,7 +114,8 @@ class BaseHandler(tornado.web.RequestHandler):
         BaseHandler
         override class method to adapt special demands
     '''
-    LOOK_UP = mako.lookup.TemplateLookup(directories=[TEMPLATE_PATH, ], 
+    HTML_PATH = os.path.join(config['www_path'], 'html')
+    LOOK_UP = mako.lookup.TemplateLookup(directories=[HTML_PATH, ], 
                                          module_directory='/tmp/mako/portal',
                                          output_encoding='utf-8',
                                          input_encoding='utf-8',
@@ -650,6 +636,8 @@ class PageHandler(BaseHandler):
         if profile['pn'] in (206386,):
             self.is_mobile=True
 
+        access_log.info('pn profile: %s', profile)
+
         self.render(page, ismobile=platform, openid='', policy=profile['policy'], groups=groups, ap_groups=ap_groups,  
                     pn=profile['pn'], note=profile['note'], image=profile['logo'],  
                     appid=profile['appid'], shopid=profile['shopid'], secret=profile['secret'], 
@@ -784,7 +772,8 @@ class PageHandler(BaseHandler):
 
         access_log.info('openid: {} login by weixin'.format(openid))
         user, password = '', ''
-        _user = account.check_weixin_user(openid, appid=self.profile['appid'], mac=kwargs['user_mac'])
+        # _user = account.check_weixin_user(openid, appid=self.profile['appid'], mac=kwargs['user_mac'])
+        _user = account.get_weixin_user(openid, self.profile['appid'], '', kwargs['user_mac'])
         if not _user:
             raise HTTPError(432)
 
@@ -984,51 +973,58 @@ class PortalHandler(BaseHandler):
         user_ip = kwargs['user_ip']
 
         user, password = '',''
-        _user = account.check_weixin_user(openid, appid=kwargs['appid'], tid=tid, mac=user_mac)
-        if not _user:
-            raise HTTPError(432)
+
+        record = account.get_online2(ac_ip, user_mac)
+        if not record:
+            access_log.warning('cant\'t found online record: %s, %s', ac_ip, user_mac)
+            _user = (openid, kwargs['appid'])
+            # _user = account.check_weixin_user(openid, appid=kwargs['appid'], tid=tid, mac=user_mac)
+            # if not _user:
+            #     raise HTTPError(432)
+        else:
+            _user = account.check_weixin_user(record['user'], user_mac, openid, appid=kwargs['appid'], tid=tid)
         
         self.user = _user
 
-        # vlanId = self.get_argument('vlan')
-        ssid = kwargs['ssid']
-        self.profile, self.ap_groups = account.get_billing_policy(ac_ip, ap_mac, ssid)
+        # # vlanId = self.get_argument('vlan')
+        # ssid = kwargs['ssid']
+        # self.profile, self.ap_groups = account.get_billing_policy(ac_ip, ap_mac, ssid)
 
-        # check account privilege
-        results = account.check_account_privilege(self.user, self.profile)
-        if results:
-            name = results['name'] if results['name'] else results['mobile']
-            self.user['name'] = name if name else u''
+        # # check account privilege
+        # results = account.check_account_privilege(self.user, self.profile)
+        # if results:
+        #     name = results['name'] if results['name'] else results['mobile']
+        #     self.user['name'] = name if name else u''
 
-        task_id = self.user['user'] + '-' + user_mac
-        
-        response = yield tornado.gen.Task(portal.login.apply_async, 
-                                          args=[self.user,  ac_ip, user_ip, user_mac], 
-                                          expires=30) 
-                                          # task_id=task_id)
+        # task_id = self.user['user'] + '-' + user_mac
+        # 
+        # response = yield tornado.gen.Task(portal.login.apply_async, 
+        #                                   args=[self.user,  ac_ip, user_ip, user_mac], 
+        #                                   expires=30) 
+        #                                   # task_id=task_id)
 
-        if response.successful() and self.profile:
-            # login successfully 
-            self._add_online_by_bas(ac_ip, ap_mac, user_mac, user_ip)
-            account.update_mac_record(self.user['user'], user_mac, 
-                                      self.profile['duration'], self.agent_str, self.profile)
-            yield tornado.gen.sleep(0.2)
-        else:
-            if isinstance(response.result, HTTPError) and response.result.status_code in (440, ):
-                # has been authed
-                pass
-            else:
-                access_log.error('Auth failed, {}'.format(response.traceback))
-                raise response.result
-        
-        token = utility.token(self.user['user'])
-        
-        if 'WeChat' not in self.agent_str:
-            # auth by other pc 
-            self.redirect(config['bidong'] + 'account/{}?token={}'.format(self.user['user'], token))
-        else:
-            self.render_json_response(Code=200, Msg='OK', user=self.user['user'], token=token)
-        access_log.info('%s login successfully, ip: %s', self.user['user'], self.request.remote_ip)
+        # if response.successful() and self.profile:
+        #     # login successfully 
+        #     self._add_online_by_bas(ac_ip, ap_mac, user_mac, user_ip)
+        #     account.update_mac_record(self.user['user'], user_mac, 
+        #                               self.profile['duration'], self.agent_str, self.profile)
+        #     yield tornado.gen.sleep(0.2)
+        # else:
+        #     if isinstance(response.result, HTTPError) and response.result.status_code in (440, ):
+        #         # has been authed
+        #         pass
+        #     else:
+        #         access_log.error('Auth failed, {}'.format(response.traceback))
+        #         raise response.result
+        # 
+        # token = utility.token(self.user['user'])
+        # 
+        # if 'WeChat' not in self.agent_str:
+        #     # auth by other pc 
+        #     self.redirect(config['bidong'] + 'account/{}?token={}'.format(self.user['user'], token))
+        # else:
+        #     self.render_json_response(Code=200, Msg='OK', user=self.user['user'], token=token)
+        access_log.info('%s login successfully, ip: %s', self.user, self.request.remote_ip)
 
     # @_trace_wrapper
     @_parse_body
@@ -1058,10 +1054,15 @@ class PortalHandler(BaseHandler):
 
         # vlanId = self.get_argument('vlan')
         ssid = self.get_argument('ssid')
-
+        wx = self.get_argument('wx', 1)
         self.profile, self.ap_groups = account.get_billing_policy(ac_ip, ap_mac, ssid)
 
-        _user = account.get_bd_user(user, ismac=False)
+        if wx:
+            # check account ,if not existed,create new accout by mac
+            _user = account.check_account_by_mac(user_mac)
+            user, password = _user['user'], _user['password']
+        else:
+            _user = account.get_bd_user(user, ismac=False)
 
         if not _user:
             access_log.warning('can\'t found user, user: {}, pwd_{}'.format(user, 
@@ -1106,7 +1107,7 @@ class PortalHandler(BaseHandler):
             self._add_online_by_bas(ac_ip, ap_mac, user_mac, user_ip)
             account.update_mac_record(self.user['user'], user_mac, 
                                       self.profile['duration'], self.agent_str, self.profile)
-            yield tornado.gen.sleep(0.2)
+            yield tornado.gen.sleep(0.5)
         else:
             if isinstance(response.result, HTTPError) and response.result.status_code in (440, ):
                 access_log.info('user:{} has been authed'.format(self.user['user']))
@@ -1425,11 +1426,24 @@ def get_bas():
     AC_CONFIGURE = {item['ip']:item for item in results}
 
 def main():
+    from tornado.options import define, options
+
+    define('port', default=8880, help='running on the given port', type=int)
+    define('index', default=0, help='portal start index, used for serial number range', type=int)
+    define('total', default=1, help='portal server total number , used for serial number range', type=int)
+    define('udp_listen', default=0, help='portal server listen on 50100? 1 : 0', type=int)
+    define('portal_listen', default=50100, help='portal server listening port', type=int)
+
+    # log configuration
+    define('log_file_prefix', type=str, default=os.path.join(config['log_path'], 'portal/8880.log'))
+    define('log_rotate_mode', type=str, default='time', help='time or size')
+    define('log_file_num_backups', type=int, default=3, help='number of log files to keep')
+
     tornado.options.parse_command_line()
 
     # init_log(config['log_folder'], config['logging_config'], options.port)
 
-    portal_pid = os.path.join(config['RUN_PATH'], 'portal/p_{}.pid'.format(options.port))
+    portal_pid = os.path.join(config['pid_path'], 'portal/p_{}.pid'.format(options.port))
     with open(portal_pid, 'w') as f:
         f.write('{}'.format(os.getpid()))
 

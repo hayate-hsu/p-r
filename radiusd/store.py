@@ -138,7 +138,16 @@ class Store():
                 left join account on bd_account.user=cast(account.id as char) 
                 where mac_history.mac="{}" order by account.ctime'''.format(mac)
                 cur.execute(sql)
-                return cur.fetchone()
+                result = cur.fetchone()
+                if result: 
+                    return result
+                # check uuid
+                cur.execute('select bd_account.*, account.mobile as amobile from bd_account \
+                            right join account on bd_account.user=cast(account.id as char) \
+                            where account.uuid=%s', (mac,))
+                result = cur.fetchone()
+                return result
+
 
             return None
 
@@ -150,6 +159,22 @@ class Store():
             cur.execute(sql)
 
             return cur.fetchone()
+
+    def get_account_by_mac(self, mac):
+        with Cursor(self.dbpool) as cur:
+            cur.execute('select account.* from account where uuid=%s', (mac,))
+            _account = cur.fetchone()
+            if not _account:
+                cur.execute('select account.* from account \
+                            left join mac_history on mac_history.user=cast(account.id as char) \
+                            where mac_history.mac=%s', (mac,))
+                _account = cur.fetchone()
+
+            if _account:
+                cur.execute('select * from bd_account where user=%s', (str(_account['id']),))
+                return cur.fetchone()
+
+            return None
 
     def add_renter(self, user, password, holder, mobile=''):
         with Connect(self.dbpool) as conn:
@@ -330,6 +355,12 @@ class Store():
             cur.execute(sql)
             return cur.fetchone()
 
+    def get_account2(self, _id):
+        with Cursor(self.dbpool) as cur:
+            cur.execute('select * from account where id=%s', (_id,))
+            return cur.fetchone()
+
+
     def get_weixin_user(self, openid, appid, mac):
         '''
             1. get weixin account by openid & appid
@@ -434,6 +465,13 @@ class Store():
             cur.execute(sql)
             conn.commit()
 
+    def delete_mac_record(self, user, mac):
+        with Connect(self.dbpool) as conn:
+            cur = conn.cursor()
+            cur.execute('delete from mac_history where user="%s" or mac="%s"', user, mac)
+            conn.commit()
+
+
     def query_pn_policy(self, **kwargs):
         '''
             query network profile
@@ -501,6 +539,11 @@ class Store():
             sql = 'select * from online where \
                     nas_addr = "{}" and acct_session_id = "{}"'.format(nas_addr, acct_session_id)
             cur.execute(sql)
+            return cur.fetchone()
+
+    def get_online2(self, nas_addr, user_mac):
+        with Cursor(self.dbpool) as cur:
+            cur.execute('select * from online where nas_addr=%s and mac_addr=%s', (nas_addr, user_mac))
             return cur.fetchone()
 
     def add_unauth_online(self, nas_addr, user, user_mac):

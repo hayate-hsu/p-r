@@ -214,15 +214,25 @@ def check_account_by_mobile_or_mac(mobile, mac):
     if not _user:
         # register account by mobile
         password = utility.generate_password()
-        _user = store.add_user(mobile, password, mobile=mobile, ends=2**8)
+        if mobile:
+            _user = store.add_user(mobile, password, mobile=mobile, ends=2**8)
         _user['existed'] = 0
         # _user = {'user':user, 'password':password, 'existed':0}
     else:
-        if _user['amobile'] != mobile or _user['mobile'] != mobile:
+        if mobile and (_user['amobile'] != mobile or _user['mobile'] != mobile):
             store.update_account(_user['user'], mobile=mobile)
 
         _user['existed'] = 1
     return _user
+
+def check_account_by_mac(mac):
+    _user = store.get_account_by_mac(mac)
+    if not _user:
+        password = utility.generate_password()
+        _user = store.add_user(mac, password, ends=2**6)
+
+    return _user
+
 
 def check_pn_account_by_mobile(mobile, pn):
     assert mobile
@@ -258,35 +268,53 @@ def update_bd_user(user, **kwargs):
     if kwargs:
         store.update_bd_user(user, **kwargs)
 
-def check_weixin_user(openid, appid='', tid='', mobile='', mac='', ends=2**5):
+def get_weixin_user(openid, appid, tid, mac):
+   _user = store.get_weixin_user(openid, appid, mac)
+   return _user
+
+
+def check_weixin_user(user, mac, openid, appid, tid):
     '''
         check account existes?
         if existes: return existed account
         else: create new
     '''
     # first get user by mac address
-    _user = store.get_weixin_user(openid, appid, mac)
-    if _user:
-        if _user['weixin']:
-            kwargs = {}
-            if tid and _user['tid']!=tid:
-                kwargs['tid'] = tid
-            if (not _user['appid']) and _user['weixin'] == openid :
-                kwargs['appid'] = appid
-            if kwargs:
-                store.update_account(_user['user'], **kwargs)
-        else:
-            # found previous account by mac, update account's weixin
-            kwargs = {'weixin':openid, 'appid':appid}
-            if tid:
-                kwargs['tid'] = tid
-            store.update_account(_user['user'], **kwargs)
+    _account = store.get_account2(int(user))
 
-        return _user
+    if not _account['weixin']:
+        kwargs =  {'weixin':openid, 'tid':tid, 'appid':appid}
+        kwargs['mask'] = _account['mask'] + 2**5
+        try:
+            store.update_account(_account['id'], **kwargs)
+        except IntegrityError:
+            # user's weixin account has been registered
+            pass
 
-    _user = store.add_user(openid, utility.generate_password(), appid=appid, 
-                           tid=tid, mobile=mobile, ends=ends)
-    return _user
+    return _account 
+
+   #  _user = store.get_weixin_user(openid, appid, mac)
+   #  if _user:
+   #      if _user['weixin']:
+   #          kwargs = {}
+   #          if tid and _user['tid']!=tid:
+   #              kwargs['tid'] = tid
+   #          if (not _user['appid']) and _user['weixin'] == openid :
+   #              kwargs['appid'] = appid
+   #          if kwargs:
+   #              store.update_account(_user['user'], **kwargs)
+   #      else:
+   #          # found previous account by mac, update account's weixin
+   #          kwargs = {'weixin':openid, 'appid':appid}
+   #          if tid:
+   #              kwargs['tid'] = tid
+   #          store.update_account(_user['user'], **kwargs)
+
+   #      return _user
+
+   #  _user = store.add_user(openid, utility.generate_password(), appid=appid, 
+   #                         tid=tid, mobile=mobile, ends=ends)
+   #  return _user
 
 def get_onlines(user, macs='', onlymac=True):
     results = store.get_onlines(user, macs)
@@ -310,6 +338,12 @@ def update_mac_record(user, mac, duration, agent, profile):
     except IntegrityError:
         # duplicate entry
         pass
+
+def delete_mac_record(user, mac):
+    '''
+        delete user or mac records
+    '''
+    store.delete_mac_record(user, mac)
 
 def get_appid(appid):
     assert appid
@@ -447,6 +481,9 @@ def add_online2(user, nas_addr, ap_mac, mac, user_ip, _location, ssid):
 
 def get_online(nas_addr, session_id):
     return store.get_online(nas_addr, session_id)
+
+def get_online2(nas_addr, user_mac):
+    return store.get_online2(nas_addr, user_mac)
 
 def del_online(nas_addr, session_id):
     store.del_online(nas_addr, session_id)

@@ -1054,7 +1054,7 @@ class PortalHandler(BaseHandler):
 
         # vlanId = self.get_argument('vlan')
         ssid = self.get_argument('ssid')
-        wx = self.get_argument('wx', 1)
+        wx = self.get_argument('wx', 0)
         self.profile, self.ap_groups = account.get_billing_policy(ac_ip, ap_mac, ssid)
 
         if wx:

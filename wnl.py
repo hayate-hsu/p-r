@@ -59,10 +59,9 @@ import _const
 json_encoder = utility.json_encoder
 json_decoder = utility.json_decoder
 
-CURRENT_PATH = os.path.abspath(os.path.dirname(__file__))
-TEMPLATE_PATH = '/www/bidong'
-PAGE_PATH = os.path.join(TEMPLATE_PATH, 'm')
-IMAGE_PATH = os.path.join(TEMPLATE_PATH, 'images/tpl')
+STATIC_PATH = config['www_path']
+TEMPLATE_PATH = os.path.join(config['www_path'], 'bidong/html')
+IMAGE_PATH = os.path.join(STATIC_PATH, 'images/tpl')
 IMAGE_PREFIX = '/images/tpl'
 
 
@@ -88,6 +87,7 @@ class Application(tornado.web.Application):
 
             # register account
             (r'/register', RegisterHandler),
+            (r'/stat$', StatHandler),
 
             # check version
             (r'/version', VersionHandler),
@@ -851,6 +851,26 @@ class ImageHandler(BaseHandler):
             url = 'http://{}:9898/images/tpl/{}'.format(self.request.host, _id)
         self.render_json_response(url=url, Code=200, Msg='OK')
         
+class StatHandler(BaseHandler):
+    STAT = {}
+    @_trace_wrapper
+    def get(self):
+        nums = sum(self.STAT.values())
+        self.STAT.clear()
+        self.render_json_response(nums=nums, **OK)
+
+    @_trace_wrapper
+    def post(self):
+        # ip = self.get_argument('ip')
+        nums = int(self.get_argument('nums'))
+        ip = self.request.remote_ip
+
+        if ip in self.STAT:
+            nums += self.STAT[ip]
+
+        self.STAT[ip] = nums
+        self.render_json_response(nums=nums, **OK)
+
 #***************************************************
 #
 #   

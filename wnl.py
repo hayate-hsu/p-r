@@ -60,7 +60,7 @@ json_encoder = utility.json_encoder
 json_decoder = utility.json_decoder
 
 STATIC_PATH = config['www_path']
-TEMPLATE_PATH = os.path.join(config['www_path'], 'bidong/html')
+TEMPLATE_PATH = os.path.join(config['www_path'], 'html')
 IMAGE_PATH = os.path.join(STATIC_PATH, 'images/tpl')
 IMAGE_PREFIX = '/images/tpl'
 

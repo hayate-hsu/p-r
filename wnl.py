@@ -123,7 +123,7 @@ class Application(tornado.web.Application):
             'debug':False,
             'autoreload':True,
             'autoescape':'xhtml_escape',
-            'i18n_path':os.path.join(CURRENT_PATH, 'resource/i18n'),
+            'i18n_path':os.path.join(STATIC_PATH, 'i18n'),
             # 'login_url':'',
             'xheaders':True,    # use headers like X-Real-IP to get the user's IP address instead of
                                 # attributeing all traffic to the balancer's IP address.
@@ -140,11 +140,6 @@ class BaseHandler(tornado.web.RequestHandler):
                                          output_encoding='utf-8',
                                          input_encoding='utf-8',
                                          encoding_errors='replace')
-    LOOK_UP_MOBILE = mako.lookup.TemplateLookup(directories=[PAGE_PATH, ], 
-                                                module_directory='/tmp/wnl/mako_mobile',
-                                                output_encoding='utf-8',
-                                                input_encoding='utf-8',
-                                                encoding_errors='replace')
 
     RESPONSES = {}
     RESPONSES.update(tornado.httputil.responses)
@@ -210,11 +205,6 @@ class BaseHandler(tornado.web.RequestHandler):
         '''
             Render the template with the given arguments
         '''
-        template = TEMPLATE_PATH
-        if self.is_mobile():
-            template = PAGE_PATH
-        if not os.path.exists(os.path.join(template, filename)):
-            raise HTTPError(404, 'File Not Found')
         self.finish(self.render_string(filename, **kwargs))
 
     def set_status(self, status_code, reason=None):

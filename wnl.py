@@ -950,14 +950,17 @@ class WIFIHandler(BaseHandler):
     @_parse_body
     def get(self, ssid):
         '''
+            used for app to check network
+            server by bidong
         '''
-        mac = self.get_argument('mac').upper()
-        isys, record = account.check_ssid(ssid, mac)
+        return self.render_json_response(isys=0, ispri=0, Code=200, Msg='OK')
+        # mac = self.get_argument('mac').upper()
+        # isys, record = account.check_ssid(ssid, mac)
 
-        if not record:
-            return self.render_json_response(isys=isys, ispri=0, Code=200, Msg='OK')
-        else:
-            return self.render_json_response(isys=isys, Code=200, Msg='OK', **record)
+        # if not record:
+        #     return self.render_json_response(isys=isys, ispri=0, Code=200, Msg='OK')
+        # else:
+        #     return self.render_json_response(isys=isys, Code=200, Msg='OK', **record)
 
 class CIDHandler(BaseHandler):
     '''

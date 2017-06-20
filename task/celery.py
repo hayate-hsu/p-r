@@ -21,6 +21,7 @@ celery.conf.update(
 
     # disable rate limits globally
     CELERY_DISABLE_RATE_LIMITS = True,
+    TCELERY_RESULT_NOWAIT = False,
     CELERY_TIMEZONE = 'Asia/Shanghai', 
     CELERY_ENABLE_UTC = True,
 #     CELERY_REDIRECT_STDOUTS = True,

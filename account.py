@@ -79,18 +79,19 @@ def get_billing_policy(ac_ip, ap_mac, ssid):
             return profile, ''
 
 
+    profile, ap_groups = '',''
     if ap_mac:
         # get pn by ap mac
-        result = {}
-        client = tornado.httpclient.HTTPClient()
-        try:
-            response = client.fetch('http://mp.bidongwifi.com/ap/{}'.format(ap_mac))
-            result = utility.json_decoder(response.buffer.read())
-        except:
-            pass
-        profile, ap_groups = '',''
+        result = query_ap(ap_mac)
+        # result = {}
+        # client = tornado.httpclient.HTTPClient()
+        # try:
+        #     response = client.fetch('http://mp.bidongwifi.com/ap/{}'.format(ap_mac))
+        #     result = utility.json_decoder(response.buffer.read())
+        # except:
+        #     pass
 
-        if result and '_location' in result and result['_location']:
+        if result and result['_location']:
             pn = result['_location'].split(',')[-1]
             ap_groups = result.get('ap_groups', '')
             # get pn policy by ap mac & ssid
@@ -233,6 +234,8 @@ def check_account_by_mac(mac):
 
     return _user
 
+def check_ssid(ssid, mac=None):
+    return db.check_ssid(ssid, mac)
 
 def check_pn_account_by_mobile(mobile, pn):
     assert mobile
@@ -260,6 +263,9 @@ def get_bd_user(user, ismac=False):
     '''
     return store.get_bd_user(user, ismac=ismac)
     # return store.get_bd_user(user, ismac=ismac) or store.get_bd_user2(user, ismac=ismac)
+
+def query_ap(ap_mac):
+    return store.query_ap(ap_mac)
 
 def get_pn_bd_user(user):
     return store.get_pn_bd_user(user)
@@ -323,18 +329,19 @@ def get_onlines(user, macs='', onlymac=True):
 
     return results
 
-def update_mac_record(user, mac, duration, agent, profile):
+def update_mac_record(user, mac, duration, agent, device, profile):
+    '''
+        agent : user agents
+        device: client device's type (IPhone|IPad|Android|Windows NT)
+    '''
     is_update = False
-    if profile['pn']==29946:
-        expired = utility.now('%Y-%m-%d', hours=duration) + ' 23:59:59'
-    else:
-        expired = utility.now('%Y-%m-%d', days=duration) + ' 23:59:59'
+    expired = utility.now('%Y-%m-%d %H:%M:%S', hours=duration)
 
     record = store.get_user_mac_record(user, mac)
     if record:
         is_update = True
     try:
-        store.update_mac_record(user, mac, expired, agent, profile['ssid'], is_update)
+        store.update_mac_record(user, mac, expired, agent, device, profile['ssid'], is_update)
     except IntegrityError:
         # duplicate entry
         pass

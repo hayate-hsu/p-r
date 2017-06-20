@@ -139,10 +139,6 @@ class BaseHandler(tornado.web.RequestHandler):
         '''
         try:
             template = self.LOOK_UP.get_template(filename)
-            # if not self.is_mobile:
-            #     template = self.LOOK_UP.get_template(filename)
-            # else:
-            #     template = self.LOOK_UP_MOBILE.get_template(filename)
             env_kwargs = dict(
                 handler = self,
                 request = self.request,
@@ -287,14 +283,11 @@ class BaseHandler(tornado.web.RequestHandler):
             try:
                 self.agent = user_agents.parse(self.agent_str)
                 self.is_mobile = self.agent.is_mobile
-            except UnicodeDecodeError:
-                access_log.warning('Unicode decode error, agent str: {}'.format(self.agent_str))
+                self.brand = self.agent.device.brand if self.agent.device.brand else 'Other'
+            except:
                 # assume user platfrom is mobile
                 self.is_mobile = True
-
-            if self.is_mobile:
-                if 'Windows NT' in self.agent_str:
-                    self.is_mobile = False
+                self.brand = 'Other'
 
 
     def check_app(self):
@@ -448,25 +441,29 @@ class TestHandler(BaseHandler):
     '''
     # def get(self):
     #     self.render_json_response(Code=200, Msg='OK')
+    # @tornado.gen.coroutine
+    # def get(self):
+    #     print('in : {}'.format(self.request))
+
+    #     return 'Success'
+
+    #     try:
+    #         response = yield template.get_portal('10001', 'h5') 
+    #     except template.PortalConfig as portal_config:
+    #         access_log.info('portal_config: {}'.format(portal_config.value), exc_info=True)
+    #         print(portal_config.value)
+    #     except:
+    #         access_log.info('exception', exc_info=True)
+
+    #     
+    #     self.render_json_response(Code=200, Msg='OK')
+
     @tornado.gen.coroutine
     def get(self):
-        print('in : {}'.format(self.request))
-
-        try:
-            response = yield template.get_portal('10001', 'h5') 
-        except template.PortalConfig as portal_config:
-            access_log.info('portal_config: {}'.format(portal_config.value), exc_info=True)
-            print(portal_config.value)
-        except:
-            access_log.info('exception', exc_info=True)
-
-        
-        self.render_json_response(Code=200, Msg='OK')
-
-    # @tornado.gen.coroutine
-    # def test(self):
-    #     response = yield tornado.gen.Task(portal.sleep.apply_async, args=[3,])
-    #     self.response =  response
+        access_log.info('hello world')
+        response = yield tornado.gen.Task(portal.add.apply_async, args=[3,5], expires=20)
+        access_log.info('response: %s', response)
+        self.finish('Success')
 
 class PageHandler(BaseHandler):
     '''
@@ -580,7 +577,7 @@ class PageHandler(BaseHandler):
                     
                     if self.profile:
                         account.update_mac_record(self.user['user'], kwargs['user_mac'], 
-                                                  self.profile['duration'], self.agent_str, self.profile)
+                                                  self.profile['duration'], self.agent_str, self.brand, self.profile)
 
                     return
 
@@ -632,9 +629,6 @@ class PageHandler(BaseHandler):
         groups = profile['_location']
         if '77201' in groups:
             groups = 10003
-
-        if profile['pn'] in (206386,):
-            self.is_mobile=True
 
         access_log.info('pn profile: %s', profile)
 
@@ -732,7 +726,7 @@ class PageHandler(BaseHandler):
 
         response = yield tornado.gen.Task(portal.login.apply_async, 
                                           args=[_user, kwargs['ac_ip'], kwargs['user_ip'], kwargs['user_mac']], 
-                                          expires=30) 
+                                          expires=20) 
                                           # task_id=task_id)
 
         if response.status in ('SUCCESS', ):
@@ -796,7 +790,7 @@ class PageHandler(BaseHandler):
         response = yield tornado.gen.Task(portal.login.apply_async, 
                                           args=[self.user, kwargs['ac_ip'], 
                                                 kwargs['user_ip'], kwargs['user_mac']], 
-                                          expires=30) 
+                                          expires=20) 
                                           # task_id=task_id)
 
         if response.status in ('SUCCESS', ):
@@ -983,47 +977,49 @@ class PortalHandler(BaseHandler):
             #     raise HTTPError(432)
         else:
             _user = account.check_weixin_user(record['user'], user_mac, openid, appid=kwargs['appid'], tid=tid)
+
+            # update online records
         
         self.user = _user
 
-        # # vlanId = self.get_argument('vlan')
-        # ssid = kwargs['ssid']
-        # self.profile, self.ap_groups = account.get_billing_policy(ac_ip, ap_mac, ssid)
+        # vlanId = self.get_argument('vlan')
+        ssid = kwargs['ssid']
+        self.profile, self.ap_groups = account.get_billing_policy(ac_ip, ap_mac, ssid)
 
-        # # check account privilege
-        # results = account.check_account_privilege(self.user, self.profile)
-        # if results:
-        #     name = results['name'] if results['name'] else results['mobile']
-        #     self.user['name'] = name if name else u''
+        # check account privilege
+        results = account.check_account_privilege(self.user, self.profile)
+        if results:
+            name = results['name'] if results['name'] else results['mobile']
+            self.user['name'] = name if name else u''
 
-        # task_id = self.user['user'] + '-' + user_mac
-        # 
-        # response = yield tornado.gen.Task(portal.login.apply_async, 
-        #                                   args=[self.user,  ac_ip, user_ip, user_mac], 
-        #                                   expires=30) 
-        #                                   # task_id=task_id)
+        task_id = self.user['user'] + '-' + user_mac
+        
+        response = yield tornado.gen.Task(portal.login.apply_async, 
+                                          args=[self.user,  ac_ip, user_ip, user_mac], 
+                                          expires=30) 
+                                          # task_id=task_id)
 
-        # if response.successful() and self.profile:
-        #     # login successfully 
-        #     self._add_online_by_bas(ac_ip, ap_mac, user_mac, user_ip)
-        #     account.update_mac_record(self.user['user'], user_mac, 
-        #                               self.profile['duration'], self.agent_str, self.profile)
-        #     yield tornado.gen.sleep(0.2)
-        # else:
-        #     if isinstance(response.result, HTTPError) and response.result.status_code in (440, ):
-        #         # has been authed
-        #         pass
-        #     else:
-        #         access_log.error('Auth failed, {}'.format(response.traceback))
-        #         raise response.result
-        # 
-        # token = utility.token(self.user['user'])
-        # 
-        # if 'WeChat' not in self.agent_str:
-        #     # auth by other pc 
-        #     self.redirect(config['bidong'] + 'account/{}?token={}'.format(self.user['user'], token))
-        # else:
-        #     self.render_json_response(Code=200, Msg='OK', user=self.user['user'], token=token)
+        if response.successful() and self.profile:
+            # login successfully 
+            self._add_online_by_bas(ac_ip, ap_mac, user_mac, user_ip)
+            account.update_mac_record(self.user['user'], user_mac, 
+                                      self.profile['duration'], self.agent_str, self.profile)
+            yield tornado.gen.sleep(0.2)
+        else:
+            if isinstance(response.result, HTTPError) and response.result.status_code in (440, ):
+                # has been authed
+                pass
+            else:
+                access_log.error('Auth failed, {}'.format(response.traceback))
+                raise response.result
+        
+        token = utility.token(self.user['user'])
+        
+        if 'WeChat' not in self.agent_str:
+            # auth by other pc 
+            self.redirect(config['bidong'] + 'account/{}?token={}'.format(self.user['user'], token))
+        else:
+            self.render_json_response(Code=200, Msg='OK', user=self.user['user'], token=token)
         access_log.info('%s login successfully, ip: %s', self.user, self.request.remote_ip)
 
     # @_trace_wrapper
@@ -1047,16 +1043,15 @@ class PortalHandler(BaseHandler):
         user_mac = self.get_argument('user_mac')
         user_ip = self.get_argument('user_ip')
 
-        if ac_ip in ('172.201.2.251', '172.201.2.252'):
-            if user_ip != self.request.remote_ip:
-                access_log.warning('user ip conflict: user_ip: {}, remote_ip: {}'.format(user_ip, self.request.remote_ip))
+        if user_ip != self.request.remote_ip:
+            access_log.warning('user ip conflict: user_ip: {}, remote_ip: {}'.format(user_ip, self.request.remote_ip))
                 # user_ip = self.request.remote_ip
 
         # vlanId = self.get_argument('vlan')
         ssid = self.get_argument('ssid')
-        wx = self.get_argument('wx', 0)
         self.profile, self.ap_groups = account.get_billing_policy(ac_ip, ap_mac, ssid)
 
+        wx = self.get_argument('wx', 0)
         if wx:
             # check account ,if not existed,create new accout by mac
             _user = account.check_account_by_mac(user_mac)
@@ -1099,14 +1094,16 @@ class PortalHandler(BaseHandler):
 
         response = yield tornado.gen.Task(portal.login.apply_async, 
                                           args=[self.user,  ac_ip, user_ip, user_mac], 
-                                          expires=30) 
+                                          expires=20) 
+
+        access_log.info('response: %s', response)
                                           # task_id=task_id)
 
         if response.status in ('SUCCESS', ) and self.profile:
             # login successfully 
             self._add_online_by_bas(ac_ip, ap_mac, user_mac, user_ip)
             account.update_mac_record(self.user['user'], user_mac, 
-                                      self.profile['duration'], self.agent_str, self.profile)
+                                      self.profile['duration'], self.agent_str, self.brand, self.profile)
             yield tornado.gen.sleep(0.5)
         else:
             if isinstance(response.result, HTTPError) and response.result.status_code in (440, ):

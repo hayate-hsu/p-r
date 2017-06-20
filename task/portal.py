@@ -160,6 +160,7 @@ def sleep(seconds):
 
 @celery.task
 def add(x,y):
+    time.sleep(3)
     return x+y
 
 @celery.task(ignore_result=True)

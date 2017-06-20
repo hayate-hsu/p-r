@@ -451,18 +451,24 @@ class Store():
             cur.execute(sql)
             return cur.fetchone()
 
-    def update_mac_record(self, user, mac, expired, agent, ssid, isupdate=True):
+    def update_mac_record(self, user, mac, expired, agent, device, ssid, isupdate=True):
         with Connect(self.dbpool) as conn:
             cur = conn.cursor()
             # now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            sql = ''
             if isupdate:
-                sql = '''update mac_history set expired="{}", platform = "{}", ssid="{}"  
-                where user = "{}" and mac = "{}"'''.format(expired, agent, ssid, user, mac)
+                sql = 'update mac_history set expired=%s, platform=%s, phone_type=%s, ssid=%s where user=%s and mac=%s'
+                args = (expired, agent, device, ssid, user, mac)
             else:
-                sql = '''insert into mac_history (user, mac, expired, platform, ssid) 
-                values("{}", "{}", "{}", "{}", "{}")'''.format(user, mac, expired, agent, ssid)
-            cur.execute(sql)
+                sql = 'insert into mac_history (user, mac, expired, platform, phone_type, ssid) values(%s, %s, %s, %s, %s, %s)'
+                args = (user, mac, expired, agent, device, ssid)
+            # if isupdate:
+            #     sql = '''update mac_history set expired="{}", platform = "{}", device="{}", ssid="{}"  
+            #     where user = "{}" and mac = "{}"'''.format(expired, agent, ssid, user, mac)
+            # else:
+            #     sql = '''insert into mac_history (user, mac, expired, platform, phone_type, ssid) 
+            #     values("{}", "{}", "{}", "{}", "{}")'''.format(user, mac, expired, agent, device, ssid)
+            # cur.execute(sql)
+            cur.execute(sql, args)
             conn.commit()
 
     def delete_mac_record(self, user, mac):
@@ -481,6 +487,14 @@ class Store():
             sql = 'select * from pn_policy where {}'.format(query_str)
 
             cur.execute(sql)
+            return cur.fetchone()
+
+    def query_ap(self, ap_mac):
+        '''
+        '''
+        with Cursor(self.dbpool) as cur:
+            assert ap_mac
+            cur.execute('select `_location` from ap where `mac` = %s', (ap_mac,))
             return cur.fetchone()
 
     def get_pn_user(self, pn, name, mobile):

@@ -299,28 +299,29 @@ def check_weixin_user(user, mac, openid, appid, tid):
 
     return _account 
 
-   #  _user = store.get_weixin_user(openid, appid, mac)
-   #  if _user:
-   #      if _user['weixin']:
-   #          kwargs = {}
-   #          if tid and _user['tid']!=tid:
-   #              kwargs['tid'] = tid
-   #          if (not _user['appid']) and _user['weixin'] == openid :
-   #              kwargs['appid'] = appid
-   #          if kwargs:
-   #              store.update_account(_user['user'], **kwargs)
-   #      else:
-   #          # found previous account by mac, update account's weixin
-   #          kwargs = {'weixin':openid, 'appid':appid}
-   #          if tid:
-   #              kwargs['tid'] = tid
-   #          store.update_account(_user['user'], **kwargs)
+def check_weixin_user2(openid, appid='', tid='', mobile='', mac='', ends=2**5):
+    _user = store.get_weixin_user(openid, appid, mac)
+    if _user:
+        if _user['weixin']:
+            kwargs = {}
+            if tid and _user['tid']!=tid:
+                kwargs['tid'] = tid
+            if (not _user['appid']) and _user['weixin'] == openid :
+                kwargs['appid'] = appid
+            if kwargs:
+                store.update_account(_user['user'], **kwargs)
+        else:
+            # found previous account by mac, update account's weixin
+            kwargs = {'weixin':openid, 'appid':appid}
+            if tid:
+                kwargs['tid'] = tid
+            store.update_account(_user['user'], **kwargs)
 
-   #      return _user
+        return _user
 
-   #  _user = store.add_user(openid, utility.generate_password(), appid=appid, 
-   #                         tid=tid, mobile=mobile, ends=ends)
-   #  return _user
+    _user = store.add_user(openid, utility.generate_password(), appid=appid, 
+                           tid=tid, mobile=mobile, ends=ends)
+    return _user
 
 def get_onlines(user, macs='', onlymac=True):
     results = store.get_onlines(user, macs)

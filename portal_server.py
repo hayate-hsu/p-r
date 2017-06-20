@@ -968,17 +968,18 @@ class PortalHandler(BaseHandler):
 
         user, password = '',''
 
-        record = account.get_online2(ac_ip, user_mac)
-        if not record:
-            access_log.warning('cant\'t found online record: %s, %s', ac_ip, user_mac)
-            _user = (openid, kwargs['appid'])
-            # _user = account.check_weixin_user(openid, appid=kwargs['appid'], tid=tid, mac=user_mac)
-            # if not _user:
-            #     raise HTTPError(432)
-        else:
-            _user = account.check_weixin_user(record['user'], user_mac, openid, appid=kwargs['appid'], tid=tid)
+		_user = account.check_weixin_user2(openid, appid=kwargs['appid'], tid=tid, mac=user_mac)
+        if not _user:
+             raise HTTPError(432)
+        # record = account.get_online2(ac_ip, user_mac)
+        # if not record:
+        #     access_log.warning('cant\'t found online record: %s, %s', ac_ip, user_mac)
+        #     _user = (openid, kwargs['appid'])
 
-            # update online records
+        # else:
+        #     _user = account.check_weixin_user(record['user'], user_mac, openid, appid=kwargs['appid'], tid=tid)
+
+        #     # update online records
         
         self.user = _user
 
